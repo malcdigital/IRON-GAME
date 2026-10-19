@@ -1,0 +1,168 @@
+import { events } from '../core/events.js';
+
+const fmt = (n, d = 1) => (Number.isFinite(n) ? n.toFixed(d) : '–');
+
+function clock(t) {
+  if (t == null) return '--:--.-';
+  const m = Math.floor(t / 60), s = t - m * 60;
+  return `${String(m).padStart(2, '0')}:${s.toFixed(1).padStart(4, '0')}`;
+}
+
+// The helmet display: flight numbers, part status, objectives, warnings and messages.
+export class Hud {
+  constructor(doc) {
+    this.el = doc.getElementById('hud');
+    this.readout = doc.getElementById('readout');
+    this.systems = doc.getElementById('systems');
+    this.objectives = doc.getElementById('objectives');
+    this.warnings = doc.getElementById('warnings');
+    this.toasts = doc.getElementById('toasts');
+    this.help = doc.getElementById('help');
+    this.rows = new Map();
+    this.lastSlow = 0;
+    this.lastWarn = '';
+    this.glitchUntil = 0;
+
+    events.on('toast', ({ text, kind }) => this.toast(text, kind));
+    events.on('overheat', (c) => this.toast(`${c.label} overheated. Shutting down to cool.`, 'hot'));
+    events.on('restart', (c) => this.toast(`${c.label} back online`));
+    events.on('destroyed', ({ comp }) => this.toast(`${comp.label} destroyed`, 'hot'));
+    events.on('course:start', () => this.toast('Clock started. Follow the bright rings.'));
+    events.on('course:finish', ({ time, record }) => this.toast(`Course done in ${clock(time)}${record ? ' · new best' : ''}`, 'good'));
+    events.on('chase:start', () => this.toast('The drone is running. Stay close to tag it.', 'hot'));
+    events.on('chase:caught', ({ time, record }) => this.toast(`Drone caught in ${clock(time)}${record ? ' · new best' : ''}`, 'good'));
+    events.on('chase:lost', () => this.toast('Lost the drone. It went back to its start point.'));
+    events.on('cargo:delivered', ({ crate }) => this.toast(`${crate.name} delivered to Tower A`, 'good'));
+  }
+
+  show() { this.el.hidden = false; }
+
+  toggleHelp(force) {
+    this.help.hidden = force != null ? !force : !this.help.hidden;
+  }
+
+  toast(text, kind = '') {
+    const t = document.createElement('div');
+    t.className = `toast ${kind}`;
+    t.textContent = text;
+    this.toasts.prepend(t);
+    while (this.toasts.children.length > 4) this.toasts.lastChild.remove();
+    setTimeout(() => t.classList.add('out'), 3200);
+    setTimeout(() => t.remove(), 3700);
+  }
+
+  buildSystems(suit) {
+    this.systems.innerHTML = `
+      <div class="sys-head"><span>System</span><span>Thrust</span><span>Heat</span><span>Condition</span></div>`;
+    this.rows.clear();
+    for (const c of suit.list) {
+      const row = document.createElement('div');
+      row.className = 'sys-row';
+      row.innerHTML = `
+        <span class="sys-name">${c.label}</span>
+        <span class="meter thr">${c.thruster ? '<i></i>' : '<em>–</em>'}</span>
+        <span class="meter heat"><i></i></span>
+        <span class="meter hp"><i></i></span>`;
+      this.systems.appendChild(row);
+      this.rows.set(c.id, {
+        row,
+        thr: row.querySelector('.thr i'),
+        heat: row.querySelector('.heat i'),
+        hp: row.querySelector('.hp i'),
+      });
+    }
+  }
+
+  update(t, time) {
+    this.updateGlitch(t.glitch, time);
+    this.updateWarnings(t);
+    if (time - this.lastSlow < 0.08) return;
+    this.lastSlow = time;
+
+    const mode = t.mode === 'assist' ? 'Hover · assist'
+      : t.mode === 'manual' ? `Hover · manual · ${Math.round(t.throttle * 100)}%`
+      : `Flight · throttle ${Math.round(t.throttle * 100)}%`;
+    const twrClass = t.twr < 1 ? 'bad' : t.twr < 1.15 ? 'warn' : '';
+    this.readout.innerHTML = `
+      <span class="chip ${t.mode}">${mode}</span>
+      <dl>
+        <div><dt>Alt</dt><dd>${fmt(t.alt)}<small>m</small></dd></div>
+        <div><dt>Speed</dt><dd>${Math.round(t.speed * 3.6)}<small>km/h</small></dd></div>
+        ${t.mode === 'flight'
+          ? `<div><dt>G load</dt><dd class="${t.gLoad > 5 ? 'warn' : ''}">${fmt(t.gLoad)}<small>g</small></dd></div>`
+          : `<div><dt>Climb</dt><dd>${t.vs >= 0 ? '+' : ''}${fmt(t.vs)}<small>m/s</small></dd></div>`}
+        <div><dt>Thrust / wt</dt><dd class="${twrClass}">${fmt(t.twr, 2)}</dd></div>
+        <div><dt>Power</dt><dd class="${t.powerLimited ? 'warn' : ''}">${Math.round(t.powerDraw)}<small>/${Math.round(t.powerOut)} kW</small></dd></div>
+        <div><dt>Mass</dt><dd>${Math.round(t.mass)}<small>kg</small></dd></div>
+      </dl>`;
+
+    for (const c of t.components) {
+      const r = this.rows.get(c.id);
+      if (!r) continue;
+      if (r.thr) r.thr.style.width = `${Math.round(c.throttle * 100)}%`;
+      const heat = Math.min(100, c.heat);
+      r.heat.style.width = `${heat}%`;
+      r.heat.dataset.level = c.overheated ? 'over' : heat > 80 ? 'hot' : heat > 55 ? 'warm' : 'ok';
+      const hp = (c.hp / c.maxHp) * 100;
+      r.hp.style.width = `${hp}%`;
+      r.hp.dataset.level = hp <= 0 ? 'dead' : hp < 30 ? 'low' : hp < 65 ? 'mid' : 'ok';
+      r.row.classList.toggle('offline', c.overheated || c.hp <= 0);
+    }
+
+    const co = t.course;
+    const cg = t.cargo;
+    const crates = cg.crates.map((c) => `<li class="${c.delivered ? 'done' : ''}">${c.name} <small>${c.mass} kg</small></li>`).join('');
+    const cargoLine = cg.held
+      ? `Carrying <b>${cg.held.name}</b>. Press <kbd>G</kbd> to drop.`
+      : cg.inRange ? `Press <kbd>G</kbd> to pick up ${cg.inRange}` : 'Fly next to a crate and press <kbd>G</kbd>';
+    const ch = t.chase;
+    const chaseBody = ch.state === 'running'
+      ? `<p class="big">${clock(ch.elapsed)}</p>
+         <p>Drone ${Math.round(ch.distance)} m away${ch.distance < 16 ? ' · <b>tagging</b>' : ''}</p>
+         <div class="tagbar"><i style="width:${Math.round(ch.progress * 100)}%"></i></div>`
+      : ch.state === 'caught'
+        ? `<p>Caught in ${clock(ch.elapsed)}</p>`
+        : `<p>Fly to the red beacon (${Math.round(ch.distance)} m) to start. Best ${clock(ch.best)}</p>`;
+    this.objectives.innerHTML = `
+      <section>
+        <h3>Drone chase</h3>
+        ${chaseBody}
+      </section>
+      <section>
+        <h3>Ring course</h3>
+        <p class="big">${clock(co.elapsed)}</p>
+        <p>${co.running ? `Ring ${co.next + 1} of ${co.total}` : 'Fly through ring 1 to start'} · Best ${clock(co.best)}</p>
+      </section>
+      <section>
+        <h3>Lift test · Tower A pad</h3>
+        <ul>${crates}</ul>
+        <p>${cargoLine}</p>
+      </section>
+      ${t.atWorkshop ? '<p class="note">On the workshop pad. Press <kbd>B</kbd> to swap parts.</p>' : ''}`;
+  }
+
+  updateWarnings(t) {
+    const list = [];
+    for (const c of t.components) {
+      if (c.hp <= 0) list.push([`${c.label} destroyed`, 'bad']);
+      else if (c.overheated) list.push([`${c.label} overheated`, 'bad']);
+      else if (c.heat > 85) list.push([`${c.label} hot`, 'warn']);
+    }
+    if (t.powerLimited) list.push(['Power limit: core can’t keep up', 'warn']);
+    if (t.mode !== 'flight' && t.twr < 1 && t.twr > 0) list.push(['Too heavy to climb', 'bad']);
+    const key = list.map((w) => w[0]).join('|');
+    if (key === this.lastWarn) return;
+    this.lastWarn = key;
+    this.warnings.innerHTML = list.slice(0, 4).map(([w, k]) => `<span class="warn-pill ${k}">${w}</span>`).join('');
+  }
+
+  // A damaged helmet makes the display flicker and jump
+  updateGlitch(level, time) {
+    if (level > 0.35 && time > this.glitchUntil && Math.random() < level * 0.05) {
+      this.glitchUntil = time + 0.06 + Math.random() * 0.12;
+      this.el.style.setProperty('--gx', `${(Math.random() - 0.5) * 14 * level}px`);
+      this.el.style.setProperty('--gy', `${(Math.random() - 0.5) * 6 * level}px`);
+    }
+    this.el.classList.toggle('glitch', time < this.glitchUntil);
+  }
+}
