@@ -150,7 +150,7 @@ export const CONFIG = {
     // this curve (height y against distance forward x, metres; from art/burst_curve.pdf) toward
     // where you face, speeding up to speed m/s over rampTime s, body lined up with the path.
     burst: {
-      jumpAngleDeg: 88, speed: 144, rampTime: 0.6, velGain: 10, posGain: 25, turnRate: 20,
+      jumpAngleDeg: 88, speed: 108, rampTime: 0.6, velGain: 10, posGain: 25, turnRate: 20,
       rolls: 2, rollFromX: 12, rollToX: 75,   // barrel rolls over the top of the curve, between these distances forward (m)   // gains: how tightly it holds the path; turnRate: body turn (rad/s)
       curve: [
         { x: 0, y: 0, in: [0, -13.68564], out: [0, 92.17321] },
@@ -316,7 +316,7 @@ export const CONFIG = {
     },
     // Boosted takeoff: the camera pulls back this much further (m), widens the view by fovMult (0.5 = +50%),
     // and keeps the horizon level, through the curve and for hold s after. spring: how quickly it eases in and out.
-    burst: { distance: 20, fovMult: 0.5, spring: 6, hold: 3 },
+    burst: { distance: 10, fovMult: 0.5, spring: 6, hold: 1.5 },
     // Moments added on top of the shots
     moments: {
       punch: { distance: 0.25, fov: 8, attack: 0.12, release: 0.7 },   // launch burst: push in 25% (and narrow the view 8°), then ease back
