@@ -208,13 +208,24 @@ export const CONFIG = {
   cargo: { grabRange: 2.4, holdOffset: [0, -0.35, -0.65], radius: 0.42 },
 
   camera: {
-    smoothing: 6,
-    flight: { distance: 7.5, height: 1.8, lookAhead: 14, bankFollow: 0.3, smoothing: 8 },
-    fov: { base: 65, perSpeed: 0.32, max: 95, startSpeed: 15 },
-    modes: [
-      { name: 'Chase', offset: [0, 2.2, 7],  look: [0, 0.6, 0] },
-      { name: 'Far',   offset: [0, 5, 17],   look: [0, 1, 0] },
-      { name: 'Side',  offset: [9, 1.8, 0.5], look: [0, 0.4, 0] },
+    // One shot per state. Tune them live with the Camera Studio (K) and paste the copied settings here.
+    //   distance: metres from the suit       orbit: degrees round the suit (0 = behind, + = to your right)
+    //   height: degrees above (- = below)    shoulder: metres to the side (+ = right, over-the-shoulder)
+    //   lookUp: aim point above the suit (m) lookAhead: aim point ahead of the suit (m)
+    //   fov: field of view (°)               bank: how much the horizon leans with your bank (0-1)
+    //   lag: how tightly it follows (higher = tighter)   shake: handheld shake at speed (m)
+    shots: {
+      hover:  { distance: 7.3, orbit: 0, height: 15, shoulder: 0, lookUp: 0.6, lookAhead: 0,  fov: 65, bank: 0,    lag: 6, shake: 0 },
+      flight: { distance: 7.7, orbit: 0, height: 13, shoulder: 0, lookUp: 0,   lookAhead: 14, fov: 65, bank: 0.3,  lag: 8, shake: 0 },
+      boost:  { distance: 9.5, orbit: 0, height: 9,  shoulder: 0, lookUp: 0,   lookAhead: 20, fov: 74, bank: 0.45, lag: 5, shake: 0.05 },
+    },
+    blendRate: 2.5,                // how quickly one shot blends into the next
+    followPitch: 1,                // flight: the camera tilts with dives and climbs (0-1)
+    speedFovFrom: 15, speedFovPer: 0.25, speedFovMax: 15,   // wider view at speed (on top of the shot's fov)
+    modes: [                       // V cycles these
+      { name: 'Cinematic' },
+      { name: 'Far', distanceMult: 1.8 },
+      { name: 'Side', orbit: 80 },
     ],
   },
 
@@ -241,6 +252,7 @@ export const CONFIG = {
       reset: ['KeyR'],
       workshop: ['KeyB'],
       camera: ['KeyV'],
+      studio: ['KeyK'],
       help: ['KeyH'],
     },
 

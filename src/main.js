@@ -19,6 +19,7 @@ import { Workshop } from './ui/Workshop.js';
 import { Input } from './ui/Input.js';
 import { ThreatMarkers } from './ui/ThreatMarkers.js';
 import { prompts } from './ui/prompts.js';
+import { CameraStudio, loadSavedShots } from './ui/CameraStudio.js';
 
 function start(hotData) {
   const loadout = validLoadout(hotData?.loadout ?? storage.get('loadout') ?? STARTER_LOADOUT);
@@ -30,6 +31,7 @@ function start(hotData) {
   suitView.build(game.suit);
   const cargoView = new CargoView(renderer.scene, game.cargo);
   const effects = new Effects(renderer.scene);
+  loadSavedShots();
   const cam = new CameraRig(renderer.camera);
   const speedLines = new SpeedLines(renderer.scene);
   const vapor = new VaporTrails(renderer.scene);
@@ -45,6 +47,9 @@ function start(hotData) {
 
   let started = false;
   let paused = true;
+  let frozen = false;   // Camera Studio: freeze the game while you frame a shot
+  const studio = new CameraStudio(document.getElementById('studio'), document.getElementById('viewport'), { onFreeze: (f) => { frozen = f; } });
+  document.getElementById('btn-studio').addEventListener('click', () => { document.activeElement?.blur(); handleAction('studio'); });
 
   const startEl = document.getElementById('start');
   document.getElementById('btn-start').addEventListener('click', () => {
@@ -118,13 +123,14 @@ function start(hotData) {
     if (a === 'workshop') return toggleWorkshop();
     if (!started || paused) return;
     if (a === 'camera') return hud.toast(`Camera: ${cam.cycle()}`);
+    if (a === 'studio') return studio.toggle(cam);
     if (a === 'help') return hud.toggleHelp();
     game.handleAction(a);
     if (a === 'reset') cam.snap();
   }
 
   // Debug hook for automated tests: open the page with ?debug
-  if (location.search.includes('debug')) window.__scrapjack = { game, cam, hud, CONFIG, input };
+  if (location.search.includes('debug')) window.__scrapjack = { game, cam, hud, CONFIG, input, studio };
 
   // Keep the build when the page is updated while open
   window.claude?.hot?.snapshot?.(() => ({ loadout: game.suit.loadout }));
@@ -141,7 +147,7 @@ function start(hotData) {
     for (const a of input.consumeActions()) handleAction(a);
     const axes = input.axes();
 
-    if (!paused) {
+    if (!paused && !frozen) {
       acc += dt;
       let steps = 0;
       while (acc >= fixed && steps < CONFIG.physics.maxStepsPerFrame) {
@@ -161,7 +167,8 @@ function start(hotData) {
     vapor.update(game, dt);
     missileView.update(dt, clockTime);
     chaseView.update(dt, clockTime);
-    cam.update(game, dt);
+    cam.update(game, dt, axes.boost);
+    studio.update();
     renderer.follow(game.body.pos);
     renderer.render();
     if (started) {

@@ -74,13 +74,15 @@
           <dl class="keys">
             <div><dt><kbd>Shift</kbd></dt><dd>Boost / afterburner (heats fast)</dd></div>
             <div><dt><kbd>G</kbd></dt><dd>Grab / drop crate</dd></div>
-            <div><dt><kbd>V</kbd></dt><dd>Camera</dd></div>
+            <div><dt><kbd>V</kbd></dt><dd>Camera: Cinematic / Far / Side</dd></div>
+            <div><dt><kbd>K</kbd></dt><dd>Camera studio: set up the camera for hover, flight and boost</dd></div>
             <div><dt><kbd>R</kbd></dt><dd>Reset to the start (repairs the suit)</dd></div>
             <div><dt><kbd>B</kbd></dt><dd>Workshop</dd></div>
           </dl>
         </section>
       </div>
       <div class="hud-buttons">
+        <button class="btn ghost" id="btn-studio">Camera <kbd data-key="studio">K</kbd></button>
         <button class="btn ghost" id="btn-reset">Reset <kbd data-key="reset">R</kbd></button>
         <button class="btn ghost" id="btn-help">Controls <kbd data-key="help">H</kbd></button>
         <button class="btn primary" id="btn-workshop">Workshop <kbd data-key="workshop">B</kbd></button>
@@ -92,6 +94,7 @@
   </div>
 
   <section id="workshop" class="workshop" hidden></section>
+  <section id="studio" class="studio panel" aria-label="Camera studio" hidden></section>
 
   <section id="start" class="start">
     <div class="start-card">

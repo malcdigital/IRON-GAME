@@ -35,6 +35,7 @@ function table() {
     workshop: [ka('workshop'), pa('workshop')],
     grab: [ka('grab'), pa('grab')],
     camera: [ka('camera'), pa('camera')],
+    studio: [ka('studio'), ka('studio')],
     autosteer: [ka('autosteer'), pa('autosteer')],
     mode: [ka('mode'), pa('mode')],
     flight: [ka('flight'), pa('flight')],
