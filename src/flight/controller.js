@@ -40,6 +40,7 @@ export class FlightController {
     this._aLean = new THREE.Vector3();
     this._side = new THREE.Vector3();
     this._ff = new THREE.Vector3();
+    this._ffYaw = new THREE.Vector3();
   }
 
   reset(heading = 0) {
@@ -92,6 +93,9 @@ export class FlightController {
     const c = this.cfg.assist, g = this.cfg.physics.gravity, out = this.out;
     this.heading += input.yaw * c.yawRate * dt;
     const h = this.heading;
+    // Turn rate fed straight in, so the body keeps up with the stick instead of lagging behind
+    const ff = this._ffYaw.set(0, input.yaw * c.yawRate, 0);
+    const turnMax = Math.max(this.cfg.attitude.maxRate, c.yawRate * 1.2);
 
     // Wanted horizontal velocity from the stick, turned into a wanted acceleration
     const vmax = input.boost ? c.boostSpeed : c.maxSpeed;
@@ -119,7 +123,7 @@ export class FlightController {
       const walk = input.boost ? c.runSpeed : c.walkSpeed;
       out.walk = this._vDes.copy(this._fwd).multiplyScalar(input.forward * walk).addScaledVector(this._right, input.strafe * walk);
       out.force.set(0, 0, 0);
-      this.attitudeTorque(body, this._qYaw, caps.assistGain, out.torque);
+      this.attitudeTorque(body, this._qYaw, caps.assistGain, out.torque, turnMax, ff);
       out.thrust = false;
       return out;
     }
@@ -144,7 +148,7 @@ export class FlightController {
     this._side.copy(this._aSide).multiplyScalar(body.mass).applyQuaternion(this._qInv);
     out.force.set(this._side.x, Math.max(0, body.mass * this._A.dot(this._up)) + this._side.y, this._side.z);
     out.sideways = true;
-    this.attitudeTorque(body, this._qDes, caps.assistGain, out.torque);
+    this.attitudeTorque(body, this._qDes, caps.assistGain, out.torque, turnMax, ff);
     out.thrust = true;
     return out;
   }

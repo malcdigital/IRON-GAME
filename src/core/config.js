@@ -148,7 +148,7 @@ export const CONFIG = {
     liftReserve: { thrustMult: 1.5, below: 1.0 },   // kicks in when you're sinking more than 1 m/s slower than wanted
     maxTiltDeg: 28, boostTiltDeg: 45,
     velGain: 1.5, climbGain: 5,
-    yawRate: 1.9,
+    yawRate: 2.6,       // hover turn speed (rad/s, ~150°/s)
     upright: true,    // slide around without tilting (hold boost to lean in for speed)
     uprightLeanDeg: 6, // tiny lean allowed in upright mode for snappier moves
     boostLeanDeg: 15,  // a little more lean while boosting (looks fast, still upright)
