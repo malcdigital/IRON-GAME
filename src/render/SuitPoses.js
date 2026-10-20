@@ -106,15 +106,16 @@ export const POSES = {
     LeftLeg: { aim: [-0.06, -0.97, 0.22] }, RightLeg: { aim: [0.06, -0.95, 0.3] },
     LeftFoot: { rot: [-25, 0, 0] }, RightFoot: { rot: [-25, 0, 0] },
   },
-  // Launch: a straight rocket, arms down at the sides with the palms thrusting back, toes pointed
+  // Launch (matches art/takeoff_ref.mp4): straight and upright as the jets lift you, arms down at
+  // the sides a little out, palms to the ground firing straight down, legs together with a soft
+  // knee, toes pointed, head level
   launch: {
-    hands: { Left: { curl: -10, thumb: 0 }, Right: { curl: -10, thumb: 0 } },
-    Head: { rot: [16, 0, 0] }, neck: { rot: [6, 0, 0] },
-    LeftArm: { aim: [-0.14, -0.98, 0.14] }, RightArm: { aim: [0.14, -0.98, 0.14] },
-    LeftForeArm: { aim: [-0.1, -0.98, 0.18] }, RightForeArm: { aim: [0.1, -0.98, 0.18] },
-    LeftHand: { aim: [-0.05, -0.9, 0.42] }, RightHand: { aim: [0.05, -0.9, 0.42] },
-    LeftUpLeg: { aim: [-0.04, -1, 0.03] }, RightUpLeg: { aim: [0.04, -1, 0.03] },
-    LeftLeg: { aim: [-0.03, -1, 0.06] }, RightLeg: { aim: [0.03, -1, 0.06] },
+    hands: { Left: { curl: -15, thumb: -5 }, Right: { curl: -15, thumb: -5 } },
+    LeftArm: { aim: [-0.3, -0.95, 0.02] }, RightArm: { aim: [0.3, -0.95, 0.02] },
+    LeftForeArm: { aim: [-0.34, -0.92, -0.12], twist: 30 }, RightForeArm: { aim: [0.34, -0.92, -0.12], twist: -40 },
+    LeftHand: { aim: [-0.75, -0.6, -0.2], twist: -15 }, RightHand: { aim: [0.75, -0.6, -0.2], twist: -10 },
+    LeftUpLeg: { aim: [-0.05, -1, -0.06] }, RightUpLeg: { aim: [0.05, -1, -0.02] },
+    LeftLeg: { aim: [-0.04, -0.97, 0.22] }, RightLeg: { aim: [0.04, -0.98, 0.16] },
     LeftFoot: { rot: [-45, 0, 0] }, RightFoot: { rot: [-45, 0, 0] },
   },
   // Coming round after a knockout: spread out like a skydiver to face the ground and steady the
@@ -450,8 +451,13 @@ export class SuitPoser {
     // launch and hop: crouch then spring (knees fold, arms swing back, then everything extends)
     const mo = this.mom, sq = Math.max(mo.crouch, mo.hop * 0.7);
     if (sq > 0.01) {
-      for (const sd of ['Left', 'Right']) { add(`${sd}UpLeg`, 40 * sq, 0, 0); add(`${sd}Leg`, -70 * sq, 0, 0); add(`${sd}Foot`, 25 * sq, 0, 0); add(`${sd}Arm`, -30 * sq, 0, 0); }
-      add('Spine02', -18 * sq, 0, 0); add('Head', 10 * sq, 0, 0);
+      // (the wind-up in art/takeoff_ref.mp4: deep crouch, leaning forward, arms swept back and out)
+      // (shins aim in the suit's frame, so they only tip back a little: the knee bend comes from the thighs coming up)
+      for (const sd of ['Left', 'Right']) { add(`${sd}UpLeg`, 65 * sq, 0, 0); add(`${sd}Leg`, -28 * sq, 0, 0); add(`${sd}Foot`, 18 * sq, 0, 0); }
+      add('LeftArm', -55 * sq, 0, -14 * sq); add('RightArm', -55 * sq, 0, 14 * sq);
+      add('Hips', -45 * sq, 0, 0);                                           // whole upper body tips forward
+      for (const sd of ['Left', 'Right']) add(`${sd}UpLeg`, 40 * sq, 0, 0);    // (thighs keep folding up under it)
+      add('Spine02', -12 * sq, 0, 0); add('Spine01', -6 * sq, 0, 0); add('Head', 40 * sq, 0, 0);
     }
     // coming round: a couple of quick head shakes, dying away
     if (mo.recover > 0.01) {
