@@ -349,7 +349,7 @@ export class Game {
             this.autoStep = { shift, time };
             if (!jet.startRoll(m.dir, true)) this.autoStep = null;
             else jet.autoDodgeT = time + av.stepSettle;
-          } else { jet.autoLabelT = 0; jet.lastAutoRoll = 0; }
+          } else { jet.autoLabelT = 0; jet.autoRollT = 0; }
         }
         if (m.type === 'hop' && !pathClear(this.predictShove(Y, m.dv), cols, 2)) { m.type = 'none'; jet.autoLabelT = 0; }
         if (m.type === 'snap' && !this.startSnap(m.side)) jet.autoLabelT = 0;

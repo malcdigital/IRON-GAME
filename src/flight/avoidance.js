@@ -6,6 +6,8 @@ const _right = new THREE.Vector3();
 const _up = new THREE.Vector3();
 const _rel = new THREE.Vector3();
 const _aim = new THREE.Vector3();
+const _side = new THREE.Vector3();
+const _side2 = new THREE.Vector3();
 
 // Distance along a ray to an axis-aligned box grown by `margin` (Infinity if missed).
 // hit.axis is the axis of the face it enters through (x, y or z).
@@ -46,6 +48,8 @@ export class ObstacleSensor {
     plan.urgency = 0;
     const speed = vel.length();
     if (!c.enabled || speed < c.minSpeed) { this.lastTarget = null; return plan; }
+    _dir.copy(vel).divideScalar(speed);
+    plan.inStreet = this.betweenBuildings(pos, colliders);
 
     let best = null;
     _dir.copy(vel).divideScalar(speed);
@@ -61,6 +65,22 @@ export class ObstacleSensor {
     this.lastKind = best.kind;
     plan.active = plan.angle > 0 && plan.urgency > 0;
     return plan;
+  }
+
+  // Buildings close on both your left and right (flying down a street)?
+  betweenBuildings(pos, colliders) {
+    const w = this.cfg.streetWidth;
+    _side.set(-_dir.z, 0, _dir.x);
+    if (_side.lengthSq() < 1e-6) return false;
+    _side.normalize();
+    _side2.copy(_side).negate();
+    let left = false, right = false;
+    for (const col of colliders) {
+      if (!right && rayBox(pos, _side, col.min, col.max, 0, w) < w) right = true;
+      if (!left && rayBox(pos, _side2, col.min, col.max, 0, w) < w) left = true;
+      if (left && right) return true;
+    }
+    return false;
   }
 
   probe(pos, dir, speed, colliders, altitude, maxAccel) {

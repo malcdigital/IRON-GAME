@@ -220,11 +220,13 @@ export class JetFlight {
     this.autoCool = Math.max(0, this.autoCool - dt);
     this.autoRollT = Math.max(0, (this.autoRollT || 0) - dt);
     this.autoDodgeT = Math.max(0, (this.autoDodgeT || 0) - dt);
+    this.streetT = Math.max(0, (this.streetT || 0) - dt);
     this.autoLabelT = Math.max(0, this.autoLabelT - dt);
     const plan = level === 'off' ? this.sensor.plan : this.sensor.scan(body.pos, v, this.direction, caps.colliders, caps.altitude, canPull);
     if (level === 'off') plan.active = false;
     this.avoiding = plan.active && plan.urgency > 0.02 ? plan.kind : null;
     this.avoidPlan = plan;
+    if (plan.inStreet) this.streetT = this.cfg.avoid.streetHold;   // stays 'between buildings' through crossings
     let avoidBrake = false;
     if (this.avoiding && this.flipT <= 0 && this.snapT <= 0) {
       const ground = plan.target === 'ground';
@@ -268,11 +270,12 @@ export class JetFlight {
           move = { type: 'hop', dv: clamp((need / Math.max(plan.ttc, 0.3)) * 1.5 + 3, 4, as.hopMaxSpeed) };
         } else if (plan.kind !== 'up' && need <= as.rollMax) {
           const dir = plan.kind === 'left' ? 1 : -1;
-          const reverse = this.lastAutoRoll && this.lastAutoRoll !== dir && this.autoRollT > 0;
-          if (!reverse) move = { type: 'roll', dir, need, ttc: plan.ttc };
+          // Only one auto roll every few seconds, never between buildings or along a wall
+          // you're skimming. Otherwise the course correction does the work.
+          if (this.autoRollT <= 0 && this.streetT <= 0 && plan.headOn >= as.rollHeadOn) move = { type: 'roll', dir, need, ttc: plan.ttc };
         }
         if (move) {
-          if (move.type === 'roll') { this.lastAutoRoll = move.dir; this.autoRollT = as.rollNoReverse; }
+          if (move.type === 'roll') this.autoRollT = as.rollLockout;
           this.autoMove = move;
           this.autoHandled = plan.target;
           this.autoCool = as.cooldown;

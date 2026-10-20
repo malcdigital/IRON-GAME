@@ -91,7 +91,10 @@ export const CONFIG = {
     nudgeTime: 1.2, nudgeFull: 0.5, // starts this many seconds from impact, full size by nudgeFull
     stepTimeFrac: 0.6, stepTimeMin: 0.3, stepTimeMax: 0.6,  // auto sidestep takes this share of the time to impact
     stepSettle: 0.25,              // then holds the new line this long (no drift into the next building)
-    rollNoReverse: 2.5,            // seconds before an auto roll may go the opposite way
+    rollLockout: 4,                // after an auto roll, no other auto roll for this many seconds
+    rollHeadOn: 0.5,               // auto roll only flying within ~60° of straight at the wall
+    streetHold: 1.5,               // ...and for this long after (so crossings don't count as open)
+    streetWidth: 22,               // buildings this close on both sides = between buildings: no auto rolls
     lookTime: 2.2, lookExtra: 8,   // how far ahead to look: seconds of travel + metres
     margin: 4,                     // clearance kept from walls and rooftops (m)
     groundMargin: 6,               // never plan a path lower than this above the ground (m)
