@@ -150,7 +150,7 @@ export const CONFIG = {
     // this curve (height y against distance forward x, metres; from art/burst_curve.pdf) toward
     // where you face, speeding up to speed m/s over rampTime s, body lined up with the path.
     burst: {
-      jumpAngleDeg: 88, speed: 192, rampTime: 1.0, velGain: 10, posGain: 25, turnRate: 20,
+      jumpAngleDeg: 88, speed: 144, rampTime: 0.6, velGain: 10, posGain: 25, turnRate: 20,
       rolls: 2, rollFromX: 12, rollToX: 75,   // barrel rolls over the top of the curve, between these distances forward (m)   // gains: how tightly it holds the path; turnRate: body turn (rad/s)
       curve: [
         { x: 0, y: 0, in: [0, -13.68564], out: [0, 92.17321] },

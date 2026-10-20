@@ -870,8 +870,8 @@ export class Game {
   stepBurst(dt) {
     const B = CONFIG.launch.burst, r = this.burst, path = this.burstPath, b = this.body, g = CONFIG.physics.gravity;
     r.t += dt;
-    // speed along the path: builds smoothly from launch to burst.speed
-    const u = THREE.MathUtils.smoothstep(r.t, 0, B.rampTime);
+    // speed along the path: a hard kick off the jump that tapers off (ease-out), reaching burst.speed by rampTime
+    const ut = Math.min(1, r.t / B.rampTime), u = 1 - (1 - ut) ** 3;
     const v = r.v0 + (B.speed - r.v0) * u;
     const dNext = r.d + v * dt;
     // where we should be and how we should be moving, now and a moment from now
