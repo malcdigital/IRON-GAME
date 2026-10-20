@@ -387,7 +387,7 @@ export class JetFlight {
     this._aPerp.y = vert;
     this.steerGain = this.carving ? c.carve.turnGain : c.turnGain;
     this.steerMaxA = maxG;
-    const accelCap = (caps.launching ? this.cfg.launch.maxAccelG : 2) * g;
+    const accelCap = (caps.launching ? this.cfg.launch.maxAccelG * (caps.launchPower ?? 1) : 2) * g;
     this._A.copy(d).multiplyScalar(clamp((vTarget - along) * c.speedGain, -2 * g, accelCap)).add(this._aPerp);
     this._A.y += g;
     this.gLoad = this._A.length() / g;

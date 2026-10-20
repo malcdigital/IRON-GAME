@@ -55,7 +55,7 @@ export const CONFIG = {
 
   // Flight mode: fast, nose-first, banked turns. Hover modes are separate.
   flight: {
-    minSpeed: 24, cruiseSpeed: 58, boostSpeed: 95,  // m/s targets (thrust and drag decide what you really get)
+    minSpeed: 24, cruiseSpeed: 58, boostSpeed: 133,  // m/s targets (thrust and drag decide what you really get)
     throttleRamp: 0.6,
     speedGain: 0.8,
     turnRate: 2.2, pitchRate: 1.4,  // rad/s
@@ -132,13 +132,14 @@ export const CONFIG = {
 
   // Launch burst: entering flight mode dumps a stored charge into the thrusters.
   // Works from the ground too (rocket takeoff). Recharges over a few seconds.
-  launch: { time: 1.5, thrustMult: 3, kick: 18, recharge: 5, groundPitch: 0.6, gyroMult: 6, maxAccelG: 2 },
+  launch: { time: 1.5, thrustMult: 3, kick: 18, recharge: 5, groundPitch: 0.6, gyroMult: 6, maxAccelG: 2,
+    boosted: 1.15 },   // hold boost while launching: a launch this much stronger (same 1.5 s)
 
   // Thermal limiter: instead of cutting out at 100%, thrusters and the core
   // taper their output as they get hot, so you sink gently rather than drop.
   thermalLimiter: { enabled: true, start: 74, end: 92, floor: 0.2 },
 
-  boost: { thrustMult: 1.45, heatMult: 1.7 },
+  boost: { thrustMult: 2.2, heatMult: 1.7, powerMult: 2 },   // boost overclocks the core (powerMult) for ~40% more top speed
 
   // Assisted flight: the suit holds altitude, levels itself and brakes when you let go.
   assist: {
@@ -216,8 +217,8 @@ export const CONFIG = {
     //   lag: how tightly it follows (higher = tighter)   shake: handheld shake at speed (m)
     shots: {
       hover:  { distance: 4.2, orbit: 0, height: 25, shoulder: 0, lookUp: 1,    lookAhead: 0,    fov: 90, bank: 0,    lag: 6, shake: 0 },
-      flight: { distance: 2,   orbit: 0, height: 25, shoulder: 0, lookUp: -0.9, lookAhead: 16.5, fov: 60, bank: 0,    lag: 7, shake: 0 },
-      boost:  { distance: 5.7, orbit: 0, height: 12, shoulder: 0, lookUp: -1.4, lookAhead: 20,   fov: 74, bank: 0.35, lag: 5, shake: 0.03 },
+      flight: { distance: 3.1, orbit: 0, height: 35, shoulder: 0, lookUp: -3,   lookAhead: 20.5, fov: 60, bank: 0,    lag: 7, shake: 0 },
+      boost:  { distance: 6.2, orbit: 0, height: 12, shoulder: 0, lookUp: -1.4, lookAhead: 20,   fov: 74, bank: 0.35, lag: 5, shake: 0.03 },
     },
     modeBlendTime: 1.2,            // seconds to glide between hover and flight shots
     shotBlendTime: 1.0,            // seconds to glide between flight and boost

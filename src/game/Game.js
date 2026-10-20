@@ -97,7 +97,8 @@ export class Game {
   }
 
   // Dump the stored charge into the thrusters for a burst of speed
-  launch() {
+  // boosted: boost held as you launch (R1 + ✕ / Shift + F): a stronger launch for the same time
+  launch(boosted = false) {
     const l = CONFIG.launch;
     if (this.launchCharge < 1) {
       events.emit('toast', { text: `Flight mode. Burst recharging (${Math.round(this.launchCharge * 100)}%)` });
@@ -105,7 +106,9 @@ export class Game {
     }
     this.launchCharge = 0;
     this.launchT = l.time;
-    this.body.vel.addScaledVector(this.controller.jet.direction, l.kick);
+    this.launchPower = boosted ? l.boosted : 1;
+    this.body.vel.addScaledVector(this.controller.jet.direction, l.kick * this.launchPower);
+    if (boosted) events.emit('toast', { text: 'Boosted takeoff' });
     events.emit('launch');
   }
 
@@ -232,7 +235,7 @@ export class Game {
         } else {
           // From the ground, launch upward like a rocket
           this.controller.enterFlight(this.body, this.grounded ? CONFIG.launch.groundPitch : null);
-          this.launch();
+          this.launch(this.boostHeld);
         }
         break;
       case 'flip':
@@ -317,13 +320,15 @@ export class Game {
     if (launching) this.launchT -= dt;
     else this.launchCharge = Math.min(1, this.launchCharge + dt / l.recharge);
     this.caps.launching = launching;
+    this.caps.launchPower = this.launchPower ?? 1;
     this.caps.altitude = body.pos.y - CONFIG.pilot.feetHeight;
     // Hover lift reserve: stop a descent / start a climb quickly (the starter suit is barely stronger than gravity)
     const a = CONFIG.assist;
     const vyWant = input.up * a.climbRate - input.down * a.descendRate;
     this.liftReserve = this.controller.mode === 'assist' && !this.grounded && !launching && !input.boost
       && vyWant - body.vel.y > a.liftReserve.below;
-    const extra = launching ? l.thrustMult : this.liftReserve ? a.liftReserve.thrustMult : 1;
+    this.boostHeld = input.boost;
+    const extra = launching ? l.thrustMult * (this.launchPower ?? 1) : this.liftReserve ? a.liftReserve.thrustMult : 1;
     updateThrusterAvailability(suit, input.boost, dt, extra);
     const thr = suit.thrusters;
     let maxLift = 0, fullDraw = 0;
@@ -333,7 +338,9 @@ export class Game {
     }
     // The core may not be able to run every thruster flat out
     // The burst runs on stored charge, so the core isn't the limit while it lasts
-    const powerOut = suit.powerOutput() * extra * thermalFactor(suit.core.heat);
+    // Boosting in flight overclocks the core (more heat, see boost.heatMult)
+    const overclock = input.boost && this.controller.flying ? CONFIG.boost.powerMult : 1;
+    const powerOut = suit.powerOutput() * extra * overclock * thermalFactor(suit.core.heat);
     if (fullDraw > powerOut) maxLift *= powerOut / fullDraw;
     this.caps.maxLift = maxLift;
     this.caps.assistGain = suit.assistGain();
