@@ -35,7 +35,7 @@ export class CameraRig {
     this.offset = new THREE.Vector3();
     this._pivot = new THREE.Vector3();
     this.lookOff = new THREE.Vector3();
-    this.sp = { zoom: { x: 1, v: 0 }, side: { x: 0, v: 0 }, move: { x: 0, v: 0 } };
+    this.sp = { zoom: { x: 1, v: 0 }, side: { x: 0, v: 0 }, move: { x: 0, v: 0 }, hard: { x: 0, v: 0 } };
     this.punchT = null;
     this.lastLaunch = 0;
     this._ray = new THREE.Vector3();
@@ -124,6 +124,7 @@ export class CameraRig {
     const moving = Math.max(Math.min(1, Math.abs(turn)), this.moveT > 0 ? 1 : 0);
     const zoomWant = 1 + Math.max(m.moveDistance * moving, this.hardT > 0 ? m.hardTurnDistance : 0);
     this.spring('move', moving, m.zoomSpring, dt);
+    this.spring('hard', this.hardT > 0 ? 1 : 0, m.zoomSpring, dt);
     const sideWant = m.turnShoulder * THREE.MathUtils.clamp(turn, -1, 1);
     this.spring('zoom', zoomWant, m.zoomSpring, dt);
     this.spring('side', sideWant, m.shoulderSpring, dt);
@@ -137,7 +138,7 @@ export class CameraRig {
       if (this.punchT > p.attack + p.release) this.punchT = null;
     }
     const zoom = this.sp.zoom.x * (1 - m.punch.distance * punch);
-    const fovMult = 1 + m.moveFov * this.sp.move.x;   // widens with the same easing
+    const fovMult = 1 + m.moveFov * this.sp.move.x + m.hardTurnFov * this.sp.hard.x;   // widens with the same easing
     const shoulder = s.shoulder + this.sp.side.x;
 
     // Frame: hover follows your heading; flight follows where you're actually going.
