@@ -365,7 +365,9 @@ export class SuitPoser {
     // lean into flight: 0 upright -> 1 head first (from the body's actual angle), for the first
     // couple of seconds after an air launch
     const headUp = Math.asin(THREE.MathUtils.clamp(_v3.set(0, 1, 0).applyQuaternion(body.quat).y, -1, 1)) * 180 / Math.PI;
-    mo.lean = airLaunch && flying && mo.airClock < M.leanWindow ? THREE.MathUtils.clamp((80 - headUp) / 65, 0, 1) : (airLaunch && flying ? 1 : 0);
+    const leanNow = THREE.MathUtils.clamp((80 - headUp) / 65, 0, 1);
+    // (only ever forward: pulling out of the dive raises the nose, but he stays in the flight pose)
+    mo.lean = airLaunch && flying && mo.airClock < M.leanWindow ? Math.max(mo.airClock < 0.05 ? 0 : mo.lean, leanNow) : (airLaunch && flying ? 1 : 0);
     mo.leaning = airLaunch && flying && mo.airClock < M.leanWindow;
     this.inBurst = !!game.burst;
     // boosted takeoff: the upright launch pose while the path climbs steeply, easing into flight as it levels

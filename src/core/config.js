@@ -142,8 +142,9 @@ export const CONFIG = {
     // The launch sequence (set it in the Pose Studio's Launch tab): from the ground, crouch until
     // jumpAt s, jump (jumpSpeed m/s, jumpAngleDeg above level, toward where you face), thrusters fire
     // at fireAt s. In the air: fire at airFireAt s.
-    // Launching from a hover: the nose starts startDeg up and arcs over to level flight over tipTime s
-    air: { startDeg: 42, tipTime: 2.4, rampTime: 1.4 },   // (rampTime: the thrust spools up more gently than a ground launch)
+    // Launching from a hover: the nose tips from startDeg over into a dive at diveDeg (diveTime s),
+    // then pulls out to level flight (pullTime s)
+    air: { startDeg: 25, diveDeg: -18, diveTime: 1.0, pullTime: 1.5, rampTime: 1.4 },   // (rampTime: the thrust spools up more gently than a ground launch)
     seq: { jumpAt: 0.35, fireAt: 0.55, jumpSpeed: 8, jumpAngleDeg: 17, airFireAt: 0.3,
       tipRate: 14 },   // during the jump the thrusters are off and the body tips forward (up to tipRate rad/s) to line up with it
     chargeReady: 0.2,   // crouched this long (s) holding L1 + R1? launch skips the wind-up

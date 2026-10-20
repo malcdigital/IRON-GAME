@@ -404,9 +404,9 @@ export class Game {
           this.controller.enterFlight(body, s.ground ? c.pitchDeg * Math.PI / 180 : null);
           if (s.ground) this.launchClimb = { t: 0 };   // ease the nose down over the climb (below)
           else {
-            // from a hover: start steep and arc over into level flight (slow enough to see the lean)
+            // from a hover: tip forward into a dive (nose down), then pull out into level flight
             const A = CONFIG.launch.air;
-            this.launchClimb = { t: 0, air: true, from: A.startDeg, to: this.controller.jet.pitch * 180 / Math.PI, time: A.tipTime };
+            this.launchClimb = { t: 0, air: true, to: this.controller.jet.pitch * 180 / Math.PI, time: A.diveTime + A.pullTime };
             this.airLaunchCount = (this.airLaunchCount ?? 0) + 1;   // (the suit plays its lean into flight)
           }
           this.launch(s.boosted, s.ground ? null : CONFIG.launch.air.rampTime);
@@ -433,9 +433,14 @@ export class Game {
       lc.t += dt;
       if (!this.controller.flying || Math.abs(input.forward ?? 0) > 0.1 || lc.t > (lc.time ?? c.time)) this.launchClimb = null;
       else {
-        const from = lc.air ? lc.from : c.pitchDeg, to = lc.air ? lc.to : c.levelDeg;
-        const u = THREE.MathUtils.smoothstep(lc.t, 0, lc.time ?? c.time);
-        jet.pitch = (from + (to - from) * u) * Math.PI / 180;
+        let deg;
+        if (lc.air) {
+          // two legs: from startDeg over into the dive, then pull out to level
+          const A = CONFIG.launch.air;
+          deg = lc.t < A.diveTime ? A.startDeg + (A.diveDeg - A.startDeg) * THREE.MathUtils.smoothstep(lc.t, 0, A.diveTime)
+            : A.diveDeg + (lc.to - A.diveDeg) * THREE.MathUtils.smoothstep(lc.t - A.diveTime, 0, A.pullTime);
+        } else deg = c.pitchDeg + (c.levelDeg - c.pitchDeg) * THREE.MathUtils.smoothstep(lc.t, 0, c.time);
+        jet.pitch = deg * Math.PI / 180;
         // keep the body lined up head first along the climb as it speeds up
         if (lc.t < c.alignTime && !lc.air) {
           // (along the climb angle being flown, so the thrust carries you up it)
