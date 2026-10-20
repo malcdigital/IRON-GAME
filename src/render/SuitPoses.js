@@ -284,15 +284,17 @@ export class SuitPoser {
     // tilt into where you're going (speed) with an extra lurch when you speed up or brake (push)
     const fwd = clampD(this.lean.y * P.leanPerMs + this.accH.y * H.pushPerMs2, H.tiltMax) * hv;
     const rt = clampD(this.lean.x * P.leanPerMs + this.accH.x * H.pushPerMs2, H.tiltMax) * hv;
-    // sideways: like a pendulum. The thrusters carry the upper body, so the hips and legs swing out
-    // behind (inertia and drag) while the chest stays nearly upright
-    add('Hips', 0, 0, -rt * H.sideHips);                                    // the pelvis and legs swing
-    add('Spine02', -fwd * 0.5, 0, rt * H.sideHips * 0.55); add('Spine01', -fwd * 0.3, 0, rt * H.sideHips * 0.3);   // chest stays near upright
-    add('Head', fwd * 0.45, 0, rt * 0.1);                                   // eyes stay on where you're going
-    for (const n of ['LeftUpLeg', 'RightUpLeg']) add(n, -fwd * H.legTrail, 0, -rt * H.sideTrail);   // legs swing further, together
-    add(rt > 0 ? 'LeftLeg' : 'RightLeg', -Math.abs(rt) * 0.35, 0, 0);                             // the trailing knee folds a touch
+    // sideways (matches art/strafe_ref.png): the thrusters carry the upper body, so the chest and
+    // head stay level while the hips and legs swing out behind as one straight piece (pendulum)
+    const side = Math.abs(rt);
+    add('Hips', 0, 0, -rt * H.sideHips);                                    // pelvis and legs swing
+    add('Spine02', -fwd * 0.5, 0, rt * H.sideHips * 0.6); add('Spine01', -fwd * 0.3, 0, rt * H.sideHips * 0.4);   // chest back to level
+    add('Head', fwd * 0.45, 0, 0);
+    for (const n of ['LeftUpLeg', 'RightUpLeg']) add(n, -fwd * H.legTrail, 0, -rt * H.sideTrail);   // legs together
+    for (const n of ['LeftLeg', 'RightLeg']) add(n, side * H.sideStraight, 0, 0);                  // knees straighten (the joint limit stops them at straight)
+    for (const n of ['LeftFoot', 'RightFoot']) add(n, -side * 0.4, 0, 0);                         // toes point
     for (const n of ['LeftLeg', 'RightLeg']) add(n, -Math.abs(fwd) * 0.5, 0, 0);                 // knees fold as they swing back
-    for (const n of ['LeftArm', 'RightArm']) add(n, -fwd * H.armSweep, 0, -rt * H.armSweep * 0.7);   // arms sweep back
+    for (const n of ['LeftArm', 'RightArm']) add(n, -fwd * H.armSweep, 0, 0);   // arms sweep back (sideways they stay evenly spread)
     // turning: the chest leads into the turn, the hips and legs lag behind
     const yaw = clampD(this.yawRate * H.twistPerRads, H.twistMax) * hv;
     add('Spine01', 0, yaw * 0.6, 0); add('Head', 0, yaw * 0.5, 0);
