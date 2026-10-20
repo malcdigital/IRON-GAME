@@ -85,12 +85,12 @@ export const CONFIG = {
   // Obstacle sensor for flight mode: looks ahead, measures what's in the way, steers round it
   avoid: {
     enabled: true,
-    // Building nudge: only flying nearly straight at a wall, only when close, and only slight
-    nudgeHeadOn: 0.7,              // cos of the angle to the wall (0.7 = within ~45° of straight at it)
-    nudgeDist: 25, nudgeTime: 0.7, // close = within this many metres or seconds
-    // Auto barrel roll: head-on only, never in a street (buildings close on both sides),
-    // and never back the other way soon after
-    streetWidth: 22,               // buildings within this many metres on both sides = a street
+    // Building correction: bends your path just enough to clear, eased in as you get close
+    nudgeMaxDeg: 12,               // never bends more than this; bigger = auto hop / roll instead
+    nudgeEnough: 0.6,              // the suit takes time to swing, so past 60% of that it rolls/hops instead
+    nudgeTime: 1.2, nudgeFull: 0.5, // starts this many seconds from impact, full size by nudgeFull
+    stepTimeFrac: 0.6, stepTimeMin: 0.3, stepTimeMax: 0.6,  // auto sidestep takes this share of the time to impact
+    stepSettle: 0.25,              // then holds the new line this long (no drift into the next building)
     rollNoReverse: 2.5,            // seconds before an auto roll may go the opposite way
     lookTime: 2.2, lookExtra: 8,   // how far ahead to look: seconds of travel + metres
     margin: 4,                     // clearance kept from walls and rooftops (m)
@@ -104,13 +104,9 @@ export const CONFIG = {
     reactTime: 0.3,                // seconds of sink allowed for the suit to react
     groundEarly: 2.4,              // start easing the nose up when room < this x needed
     steerBoost: 3,                 // (ground only) how much harder it steers at full urgency
-    nudgeMax: 0.12,                // buildings: the gentle path bend never goes past this share...
-    emergencyTime: 0.55,           // ...unless still on course to hit within this many seconds
     moveTime: 1.0,                 // seconds from impact when it makes one quick move
     hopMax: 14, hopMaxSpeed: 18,    // hop over a roof edge if it needs at most this many metres (and m/s)
     rollMax: 12,                    // roll-juke past a corner if it needs at most this many metres sideways
-    rollShift: 11,                 // how far a full juke moves you (auto rolls scale down to what's needed)
-    turnTime: 0.8,                 // head-on and too big to hop/roll: hard turn (Full only)
     brakeTime: 0.5,                // last resort brake (Full only)
     cooldown: 1.0,
     hopTime: 0.25,                 // the hop's push lasts this long

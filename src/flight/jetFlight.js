@@ -212,13 +212,14 @@ export class JetFlight {
     // What the suit can really pull right now: air grip at this speed (spread out) plus spare thrust
     const gripNow = ((this.cfg.aero.plates[2] + wingCoeff(this.cfg.aero, c.spread.carve)) * speed * speed * 0.57 + caps.maxLift) / body.mass - 0.5 * g;
     const canPull = clamp(gripNow, 1.5, c.carve.maxG * g);
-    // Auto-steer: smallest move first. Far away: a gentle nudge. Close: one quick move that keeps
-    // your speed (hop over a roof edge, roll-juke past a corner), a hard turn only head-on,
-    // braking only as a last resort. Off / Light / Full via caps.autoSteer.
+    // Auto-steer: smallest move first. Close to a building: a small course correction. If that
+    // can't clear it: one quick move that keeps your speed (hop a roof edge, roll-juke past it).
+    // Full also brakes as a last resort. Off / Light / Full via caps.autoSteer.
     const as = this.cfg.avoid;
     const level = caps.autoSteer || 'full';
     this.autoCool = Math.max(0, this.autoCool - dt);
     this.autoRollT = Math.max(0, (this.autoRollT || 0) - dt);
+    this.autoDodgeT = Math.max(0, (this.autoDodgeT || 0) - dt);
     this.autoLabelT = Math.max(0, this.autoLabelT - dt);
     const plan = level === 'off' ? this.sensor.plan : this.sensor.scan(body.pos, v, this.direction, caps.colliders, caps.altitude, canPull);
     if (level === 'off') plan.active = false;
@@ -228,48 +229,54 @@ export class JetFlight {
     if (this.avoiding && this.flipT <= 0 && this.snapT <= 0) {
       const ground = plan.target === 'ground';
       const w = plan.urgency;
-      // Ground: full strength. Buildings: only a slight nudge, only when you're close and
-      // flying nearly straight at the wall (skimming along a wall gets nothing).
-      const headOn = !ground && plan.headOn >= as.nudgeHeadOn;
-      const close = plan.dist < as.nudgeDist || plan.ttc < as.nudgeTime;
-      const nudge = ground ? w : headOn && close ? Math.min(w, as.nudgeMax) : 0;
+      const away = plan.kind === 'up' ? input.forward < -0.3 : plan.kind === 'left' ? input.strafe < -0.3 : input.strafe > 0.3;
+      // Ground: full strength. Buildings: a small course correction, sized to just clear the
+      // building and eased in as it gets close. It never moves the path more than nudgeMaxDeg
+      // away from where YOU are steering, so it can't build up into a turn.
+      const maxBend = THREE.MathUtils.degToRad(as.nudgeMaxDeg);
+      const ease = 1 - THREE.MathUtils.smoothstep(plan.ttc, as.nudgeFull, as.nudgeTime);
+      let tooBig = false;
       if (plan.kind === 'up') {
-        const want = Math.min(1.3, plan.basePitch + plan.angle);
-        if (want > this.pitch) this.pitch += (want - this.pitch) * nudge;
-        if (ground && w > 0.5) this.groundHold = Math.max(this.pitch, savedPitch);
-      } else {
+        if (ground) {
+          const want = Math.min(1.3, plan.basePitch + plan.angle);
+          if (want > this.pitch) this.pitch += (want - this.pitch) * w;
+          if (w > 0.5) this.groundHold = Math.max(this.pitch, savedPitch);
+        } else if (!away) {
+          const want = plan.basePitch + plan.angle;
+          tooBig = want - savedPitch > maxBend * as.nudgeEnough;
+          const lim = Math.min(want, savedPitch + maxBend);
+          if (lim > this.pitch) this.pitch += (lim - this.pitch) * ease;
+        }
+      } else if (!away && this.autoDodgeT <= 0) {   // (not while an auto sidestep is moving you)
         const sign = plan.kind === 'left' ? 1 : -1;
-        let dy = plan.baseYaw + sign * plan.angle - this.yaw;
-        dy = Math.atan2(Math.sin(dy), Math.cos(dy));
-        if (dy * sign > 0) this.yaw += dy * nudge;
+        let dev = plan.baseYaw + sign * plan.angle - savedYaw;   // wanted change from your heading
+        dev = Math.atan2(Math.sin(dev), Math.cos(dev)) * sign;
+        tooBig = dev > maxBend * as.nudgeEnough;
+        if (dev > 0) this.yaw = savedYaw + sign * Math.min(dev, maxBend) * ease;
       }
       if (ground && w > 0.4) {
         maxG = Math.max(maxG, c.carve.maxG * g);
         this.spread += (c.spread.carve - this.spread) * Math.min(1, c.spread.rate * dt);   // spread out for more lift
       }
 
-      // One quick move per obstacle, unless you're already steering away from it
-      const away = plan.kind === 'up' ? input.forward < -0.3 : plan.kind === 'left' ? input.strafe < -0.3 : input.strafe > 0.3;
-      const need = plan.dist * Math.tan(Math.min(plan.angle, 1.2));   // metres to shift to clear it
-      if (!ground && !away && plan.ttc < as.moveTime && this.autoCool <= 0 && plan.target !== this.autoHandled) {
+      // Only when a small correction can't clear it: one quick move (hop a roof edge, or a
+      // barrel roll with a sidestep sized to clear it). Never a hard turn.
+      const need = plan.dist * Math.tan(clamp(plan.angle - THREE.MathUtils.degToRad(as.extraDeg), 0, 1.2)) + 1;   // metres to shift to clear it
+      if (!ground && !away && tooBig && plan.ttc < as.moveTime && this.autoCool <= 0 && plan.target !== this.autoHandled) {
         let move = null;
         if (plan.kind === 'up' && need <= as.hopMax) {
           move = { type: 'hop', dv: clamp((need / Math.max(plan.ttc, 0.3)) * 1.5 + 3, 4, as.hopMaxSpeed) };
         } else if (plan.kind !== 'up' && need <= as.rollMax) {
-          // Rolls only for walls you're flying straight at, never in a street, never ping-pong
           const dir = plan.kind === 'left' ? 1 : -1;
           const reverse = this.lastAutoRoll && this.lastAutoRoll !== dir && this.autoRollT > 0;
-          if (headOn && !plan.inStreet && !reverse) move = { type: 'roll', dir, need };
-        } else if (level === 'full' && plan.ttc < as.turnTime && headOn) {
-          const side = plan.kind === 'up' ? plan.sideKind : plan.kind;
-          move = { type: 'snap', side: side === 'left' ? 1 : -1 };
+          if (!reverse) move = { type: 'roll', dir, need, ttc: plan.ttc };
         }
         if (move) {
           if (move.type === 'roll') { this.lastAutoRoll = move.dir; this.autoRollT = as.rollNoReverse; }
           this.autoMove = move;
           this.autoHandled = plan.target;
           this.autoCool = as.cooldown;
-          this.autoLabel = { hop: 'auto hop', roll: 'auto roll', snap: 'auto hard turn' }[move.type];
+          this.autoLabel = { hop: 'auto hop', roll: 'auto roll' }[move.type];
           this.autoLabelT = 1;
         }
       }

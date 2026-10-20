@@ -6,8 +6,6 @@ const _right = new THREE.Vector3();
 const _up = new THREE.Vector3();
 const _rel = new THREE.Vector3();
 const _aim = new THREE.Vector3();
-const _side = new THREE.Vector3();
-const _side2 = new THREE.Vector3();
 
 // Distance along a ray to an axis-aligned box grown by `margin` (Infinity if missed).
 // hit.axis is the axis of the face it enters through (x, y or z).
@@ -59,27 +57,10 @@ export class ObstacleSensor {
     }
     if (!best) { this.lastTarget = null; return plan; }
     Object.assign(plan, best);
-    plan.inStreet = this.betweenBuildings(pos, colliders);
     this.lastTarget = best.target;
     this.lastKind = best.kind;
     plan.active = plan.angle > 0 && plan.urgency > 0;
     return plan;
-  }
-
-  // Buildings close on both your left and right (flying down a street)?
-  betweenBuildings(pos, colliders) {
-    const w = this.cfg.streetWidth;
-    _side.set(-_dir.z, 0, _dir.x);
-    if (_side.lengthSq() < 1e-6) return false;
-    _side.normalize();
-    _side2.copy(_side).negate();
-    let left = false, right = false;
-    for (const col of colliders) {
-      if (!right && rayBox(pos, _side, col.min, col.max, 0, w) < w) right = true;
-      if (!left && rayBox(pos, _side2, col.min, col.max, 0, w) < w) left = true;
-      if (left && right) return true;
-    }
-    return false;
   }
 
   probe(pos, dir, speed, colliders, altitude, maxAccel) {
@@ -103,18 +84,7 @@ export class ObstacleSensor {
 
     let result = null;
     if (target) {
-      let upA = -Infinity, leftA = Infinity, rightA = -Infinity;
-      for (let i = 0; i < 8; i++) {
-        _rel.set(
-          (i & 1 ? target.max.x + c.margin : target.min.x - c.margin) - pos.x,
-          (i & 2 ? target.max.y + c.margin : target.min.y - c.margin) - pos.y,
-          (i & 4 ? target.max.z + c.margin : target.min.z - c.margin) - pos.z,
-        );
-        const fwd = Math.max(1, _rel.dot(dir));
-        upA = Math.max(upA, Math.atan2(_rel.dot(_up), fwd));
-        leftA = Math.min(leftA, Math.atan2(_rel.dot(_right), fwd));
-        rightA = Math.max(rightA, Math.atan2(_rel.dot(_right), fwd));
-      }
+      const { upA, leftA, rightA } = cornerAngles(target, pos, dir, c.margin);
       const extra = THREE.MathUtils.degToRad(c.extraDeg);
       const options = { up: (upA + extra) * c.upBias, left: -leftA + extra, right: rightA + extra };
       let kind = null, angle = Infinity;
@@ -167,4 +137,26 @@ export function pathClear(points, colliders, margin = 2.5, groundMin = 1.5) {
     }
   }
   return true;
+}
+
+// Angles (rad) from the suit to a box's corners, as seen looking along dir:
+// highest corner above, furthest left (most negative) and furthest right
+function cornerAngles(box, pos, dir, margin) {
+  _right.crossVectors(dir, Y);
+  if (_right.lengthSq() < 1e-6) _right.set(1, 0, 0);
+  _right.normalize();
+  _up.crossVectors(_right, dir).normalize();
+  let upA = -Infinity, leftA = Infinity, rightA = -Infinity;
+  for (let i = 0; i < 8; i++) {
+    _rel.set(
+      (i & 1 ? box.max.x + margin : box.min.x - margin) - pos.x,
+      (i & 2 ? box.max.y + margin : box.min.y - margin) - pos.y,
+      (i & 4 ? box.max.z + margin : box.min.z - margin) - pos.z,
+    );
+    const fwd = Math.max(1, _rel.dot(dir));
+    upA = Math.max(upA, Math.atan2(_rel.dot(_up), fwd));
+    leftA = Math.min(leftA, Math.atan2(_rel.dot(_right), fwd));
+    rightA = Math.max(rightA, Math.atan2(_rel.dot(_right), fwd));
+  }
+  return { upA, leftA, rightA };
 }

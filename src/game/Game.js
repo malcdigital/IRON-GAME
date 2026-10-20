@@ -111,6 +111,18 @@ export class Game {
   // Sidestep left or right. In flight it rides along with a barrel roll.
   juke(dir, fromRoll = false) {
     const e = CONFIG.evade;
+    if (this.autoStep) {
+      // Auto-steer sidestep: moves exactly the planned distance, then stops (free, no charge)
+      const st = this.autoStep; this.autoStep = null;
+      const fwd = this.controller.jet.direction;
+      const vec = new THREE.Vector3().crossVectors(fwd, Y).normalize();
+      if (dir === 'left') vec.negate();
+      this.jukeShove = { exact: true, vec, shift: st.shift, dur: st.time, t: 0, start: this.body.pos.clone(), vel0: this.body.vel.clone() };
+      this.controller.jet.jink(0);
+      this.controller.jet.jinkT = st.time + CONFIG.avoid.stepSettle;
+      events.emit('maneuver', { name: 'juke', dir });
+      return;
+    }
     if (this.evadeCharge < 1) {
       if (!fromRoll) events.emit('toast', { text: 'Juke recharging' });
       return;
@@ -123,8 +135,7 @@ export class Game {
     right.normalize();
     const shove = dir === 'left' ? right.clone().negate() : right;
     // Spread the sidestep over a short time so it moves with the roll instead of jumping ahead of it
-    const scale = flying ? (this.autoJukeScale ?? 1) : e.hoverJukeScale;
-    this.autoJukeScale = null;
+    const scale = flying ? 1 : e.hoverJukeScale;
     this.jukeShove = { vec: shove, t: 0, dur: flying ? e.jukeSpread : 0.12, scale, fromRoll };
     if (flying) this.controller.jet.jink(fromRoll ? 0 : dir === 'left' ? 1 : -1);
     events.emit('maneuver', { name: 'juke', dir });
@@ -171,9 +182,17 @@ export class Game {
   }
 
   // Where would a sidestep (juke) or hop take us over the next moment?
-  predictShove(vec, dv) {
+  // Predicted path for an exact sidestep of `dist` metres over `time` seconds
+  predictStep(vec, dist, time, horizon) {
     const pts = [], b = this.body;
-    for (let t = 0.05; t <= 0.8; t += 0.05) pts.push(b.pos.clone().addScaledVector(b.vel, t).addScaledVector(vec, dv * Math.min(t, 0.5)));
+    for (let t = 0.05; t <= horizon; t += 0.05) pts.push(b.pos.clone().addScaledVector(b.vel, t).addScaledVector(vec, dist * minJerk(Math.min(1, t / time))));
+    return pts;
+  }
+
+  // Predicted path after a sideways push of dv (m/s), moving you about dv/2 metres
+  predictShove(vec, dv, horizon = 0.8) {
+    const pts = [], b = this.body;
+    for (let t = 0.05; t <= horizon; t += 0.05) pts.push(b.pos.clone().addScaledVector(b.vel, t).addScaledVector(vec, dv * Math.min(t, 0.5)));
     return pts;
   }
 
@@ -215,7 +234,7 @@ export class Game {
         const levels = ['off', 'light', 'full'];
         this.caps.autoSteer = levels[(levels.indexOf(this.caps.autoSteer) + 1) % levels.length];
         storage.set('autoSteer', this.caps.autoSteer);
-        const what = { off: 'Off', light: 'Light (nudges, hops, rolls)', full: 'Full (adds hard turns and braking)' }[this.caps.autoSteer];
+        const what = { off: 'Off', light: 'Light (corrects, hops, rolls)', full: 'Full (adds braking)' }[this.caps.autoSteer];
         events.emit('toast', { text: `Auto-steer: ${what}` });
         break;
       }
@@ -316,14 +335,21 @@ export class Game {
         const m = jet.autoMove; jet.autoMove = null;
         const cols = this.world.colliders;
         if (m.type === 'roll') {
-          // Size the sidestep to what's needed, and only if that path is clear
+          // Smallest sidestep that clears this building without running into the next one:
+          // try growing distances along the predicted path until one is clear
           const right = new THREE.Vector3().crossVectors(jet.direction, Y).normalize();
           const vec = m.dir > 0 ? right.negate() : right;
-          const scale = THREE.MathUtils.clamp(m.need / CONFIG.avoid.rollShift, 0.35, 1);
-          if (pathClear(this.predictShove(vec, CONFIG.evade.jukeSpeed * scale), cols, 2)) {
-            this.autoJukeScale = scale;
-            jet.startRoll(m.dir, true);
-          } else jet.autoLabelT = 0;
+          const av = CONFIG.avoid;
+          const time = THREE.MathUtils.clamp(m.ttc * av.stepTimeFrac, av.stepTimeMin, av.stepTimeMax);
+          let shift = null;
+          for (let d = Math.max(2, m.need); d <= av.rollMax; d += 0.5) {
+            if (pathClear(this.predictStep(vec, d, time, m.ttc + 0.5), cols, 2)) { shift = d; break; }
+          }
+          if (shift != null) {
+            this.autoStep = { shift, time };
+            if (!jet.startRoll(m.dir, true)) this.autoStep = null;
+            else jet.autoDodgeT = time + av.stepSettle;
+          } else { jet.autoLabelT = 0; jet.lastAutoRoll = 0; }
         }
         if (m.type === 'hop' && !pathClear(this.predictShove(Y, m.dv), cols, 2)) { m.type = 'none'; jet.autoLabelT = 0; }
         if (m.type === 'snap' && !this.startSnap(m.side)) jet.autoLabelT = 0;
@@ -392,7 +418,18 @@ export class Game {
     }
 
     // Juke sidestep in progress
-    if (this.jukeShove) {
+    if (this.jukeShove && this.jukeShove.exact) {
+      // Follow a smooth sideways profile, then hold the new line (stops the drift)
+      const j = this.jukeShove, T = j.dur, x = Math.min(1, j.t / T);
+      const sWant = j.shift * minJerk(x);
+      const uWant = x < 1 ? (j.shift * 30 * x * x * (1 - x) * (1 - x)) / T : 0;
+      const aWant = x < 1 ? (j.shift * 60 * x * (1 - x) * (1 - 2 * x)) / (T * T) : 0;
+      const s = this._tmp.copy(body.pos).sub(j.start).addScaledVector(j.vel0, -j.t).dot(j.vec);
+      const u = this._tmp.copy(body.vel).sub(j.vel0).dot(j.vec);
+      body.force.addScaledVector(j.vec, body.mass * (aWant + 40 * (sWant - s) + 12 * (uWant - u)));
+      j.t += dt;
+      if (j.t >= T + CONFIG.avoid.stepSettle) this.jukeShove = null;
+    } else if (this.jukeShove) {
       const j = this.jukeShove, e = CONFIG.evade;
       body.force.addScaledVector(j.vec, (body.mass * e.jukeSpeed * j.scale) / j.dur);
       j.t += dt;
@@ -599,3 +636,6 @@ export class Game {
     };
   }
 }
+
+// Smooth 0..1 ease (minimum jerk)
+function minJerk(x) { return x * x * x * (10 - 15 * x + 6 * x * x); }
