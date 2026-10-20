@@ -215,9 +215,9 @@ export const CONFIG = {
     //   fov: field of view (°)               bank: how much the horizon leans with your bank (0-1)
     //   lag: how tightly it follows (higher = tighter)   shake: handheld shake at speed (m)
     shots: {
-      hover:  { distance: 7.3, orbit: 0, height: 15, shoulder: 0, lookUp: 0.6, lookAhead: 0,  fov: 65, bank: 0,    lag: 6, shake: 0 },
-      flight: { distance: 7.7, orbit: 0, height: 13, shoulder: 0, lookUp: 0,   lookAhead: 14, fov: 65, bank: 0.3,  lag: 8, shake: 0 },
-      boost:  { distance: 9.5, orbit: 0, height: 9,  shoulder: 0, lookUp: 0,   lookAhead: 20, fov: 74, bank: 0.45, lag: 5, shake: 0.05 },
+      hover:  { distance: 4.2, orbit: 0, height: 25, shoulder: 0, lookUp: 1,    lookAhead: 0,    fov: 90, bank: 0,    lag: 6, shake: 0 },
+      flight: { distance: 2,   orbit: 0, height: 25, shoulder: 0, lookUp: -0.9, lookAhead: 16.5, fov: 60, bank: 0,    lag: 7, shake: 0 },
+      boost:  { distance: 5.7, orbit: 0, height: 12, shoulder: 0, lookUp: -1.4, lookAhead: 20,   fov: 74, bank: 0.35, lag: 5, shake: 0.03 },
     },
     blendRate: 2.5,                // how quickly one shot blends into the next
     followPitch: 1,                // flight: the camera tilts with dives and climbs (0-1)
