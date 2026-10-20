@@ -48,6 +48,9 @@ export class JetFlight {
     this.autoMove = null;
     this.autoHandled = null;
     this.autoCool = 0;
+    this.releaseT = 0;
+    this.hold = null;
+    this._own = new THREE.Vector3();
     this.steerDir = new THREE.Vector3(0, 0, -1);
     this.steerGain = 1;
     this.steerMaxA = 50;
@@ -80,6 +83,8 @@ export class JetFlight {
 
   // Start flying in the direction you're already moving (or facing)
   enter(body, heading, pitchOverride = null) {
+    this.hold = null;
+    this.releaseT = 0;
     const v = body.vel, h = Math.hypot(v.x, v.z);
     // Start nearly level: along your horizontal motion, or the way you're facing
     this.yaw = h > 3 ? Math.atan2(-v.x, -v.z) : heading;
@@ -95,6 +100,13 @@ export class JetFlight {
   jink(side) {
     this.jinkT = this.cfg.evade.jinkTime;
     this.jinkSide = side;
+  }
+
+  // Bend the path off your heading for this building (only ever grows while it's the same one)
+  setHold(target, kind, sign, amount) {
+    const h = this.hold;
+    if (h && h.target === target && h.kind === kind && h.sign === sign) h.amount = Math.max(h.amount, amount);
+    else if (!h || amount > h.amount) this.hold = { target, kind, sign, amount };
   }
 
   // Start a barrel roll (which is also the juke)
@@ -119,16 +131,21 @@ export class JetFlight {
   }
 
   // Hard turn: brake, snap 90° toward `side` (+1 left, -1 right), then burst away
-  snap(side, speed) {
+  snap(side, speed, heading) {
     const s = this.cfg.flight.snap;
     if (this.snapT > 0 || this.snapCool > 0 || speed < s.minSpeed) return false;
     // Aim the path at the new heading right away: the suit air-brakes (chest into the wind),
-    // turns while slow, then bursts away once it's lined up
-    this.yaw += side * THREE.MathUtils.degToRad(s.angleDeg);
+    // turns while slow, then bursts away once it's lined up.
+    // 90° from where you're actually moving (mid-turn your aim is already well ahead of that)
+    this.yaw = heading + side * THREE.MathUtils.degToRad(s.angleDeg);
+    this.jinkT = 0;
+    this.hold = null;
+    this.releaseT = 0;
     this.snapT = s.time;
     this.snapSide = side;
     this.snapEntry = speed;
     this.snapCool = s.cooldown;
+    // Stop a roll already going (from the first tap); the suit rights itself fast (recoverRate)
     this.rollT = 0;
     return true;
   }
@@ -176,7 +193,7 @@ export class JetFlight {
     const oldYaw = this.yaw, oldPitch = this.pitch;
     const vDir = speed > 1 ? this._v.copy(v).divideScalar(speed) : null;
     const leadBefore = vDir ? Math.acos(clamp(this.direction.dot(vDir), -1, 1)) : 0;
-    this.yaw -= input.strafe * turnRate * dt;
+    if (!snapping) this.yaw -= input.strafe * turnRate * dt;   // (a hard turn ignores steering until it's done)
     // Slow = shallow dives only (there's no air to pull out of a steep one); full dives once fast
     const minPitch = -(c.slowDive.minDeg + (82 - c.slowDive.minDeg) * THREE.MathUtils.smoothstep(speed, c.slowDive.from, c.slowDive.full)) * Math.PI / 180;
     if (!this.carving) this.pitch = clamp(this.pitch - input.forward * c.pitchRate * dt, minPitch, 1.45);
@@ -189,6 +206,20 @@ export class JetFlight {
       this.snapT -= dt;   // the game swings the motion round; this just keeps the pose sharp
       this.carving = true;
     }
+    // Let go of a turn: the aim stops where you're actually heading (plus the little it still
+    // turns while rolling level), instead of the suit chasing an aim that ran on ahead
+    const vHead = speed > 10 ? Math.atan2(-v.x, -v.z) : null;
+    const headRate = vHead != null && this.prevVHead != null ? Math.atan2(Math.sin(vHead - this.prevVHead), Math.cos(vHead - this.prevVHead)) / dt : 0;
+    if (vHead != null && this.prevSteer > 0.2 && steer < 0.1 && this.flipT <= 0 && !snapping) this.releaseT = c.releaseTime;
+    if (steer >= 0.1 || this.flipT > 0 || snapping) this.releaseT = 0;
+    if (this.releaseT > 0 && vHead != null) {
+      // Follow the real heading while the suit rolls level, then hold it once the turn has stopped
+      let lead = vHead + headRate * c.releaseCarry - this.yaw;
+      this.yaw += Math.atan2(Math.sin(lead), Math.cos(lead));
+      this.releaseT = Math.abs(headRate) < THREE.MathUtils.degToRad(c.releaseStopDeg) ? 0 : this.releaseT - dt;
+    }
+    this.prevSteer = steer;
+    this.prevVHead = vHead;
     // Don't let the aim run too far ahead of where the suit is really going
     if (speed > 10 && this.flipT <= 0 && !snapping) {
       const lead = Math.acos(clamp(this.direction.dot(vDir), -1, 1));
@@ -240,23 +271,26 @@ export class JetFlight {
       const maxBend = THREE.MathUtils.degToRad(as.nudgeMaxDeg);
       const ease = 1 - THREE.MathUtils.smoothstep(plan.ttc, as.nudgeFull, as.nudgeTime);
       let tooBig = false;
+      const need = plan.dist * Math.tan(clamp(plan.angle - THREE.MathUtils.degToRad(as.extraDeg), 0, 1.2)) + 1;   // metres to shift to clear it
       if (plan.kind === 'up') {
         if (ground) {
           const want = Math.min(1.3, plan.basePitch + plan.angle);
           if (want > this.pitch) this.pitch += (want - this.pitch) * w;
           if (w > 0.5) this.groundHold = Math.max(this.pitch, savedPitch);
         } else if (!away) {
-          const want = plan.basePitch + plan.angle;
-          tooBig = want - savedPitch > maxBend * as.nudgeEnough;
-          const lim = Math.min(want, savedPitch + maxBend);
-          if (lim > this.pitch) this.pitch += (lim - this.pitch) * ease;
+          // Roof edge: a gentle climb at the last moment it can still clear (no hop)
+          const want = plan.basePitch + plan.angle - savedPitch;
+          const upMax = THREE.MathUtils.degToRad(as.upMaxDeg);
+          tooBig = want > upMax;
+          const upTime = Math.sqrt((2 * need) / (as.upAccelG * g)) + as.upLead;
+          if (want > 0 && plan.ttc <= upTime) this.setHold(plan.target, 'up', 1, Math.min(want, upMax));
         }
       } else if (!away && this.autoDodgeT <= 0) {   // (not while an auto sidestep is moving you)
         const sign = plan.kind === 'left' ? 1 : -1;
         let dev = plan.baseYaw + sign * plan.angle - savedYaw;   // wanted change from your heading
         dev = Math.atan2(Math.sin(dev), Math.cos(dev)) * sign;
         tooBig = dev > maxBend * as.nudgeEnough;
-        if (dev > 0) this.yaw = savedYaw + sign * Math.min(dev, maxBend) * ease;
+        if (dev > 0 && ease > 0) this.setHold(plan.target, 'side', sign, Math.min(dev, maxBend) * ease);
       }
       if (ground && w > 0.4) {
         maxG = Math.max(maxG, c.carve.maxG * g);
@@ -265,7 +299,6 @@ export class JetFlight {
 
       // Only when a small correction can't clear it: one quick move (hop a roof edge, or a
       // barrel roll with a sidestep sized to clear it). Never a hard turn.
-      const need = plan.dist * Math.tan(clamp(plan.angle - THREE.MathUtils.degToRad(as.extraDeg), 0, 1.2)) + 1;   // metres to shift to clear it
       // A sidestep of `need` metres takes stepTime seconds at the suit's max sideways push;
       // the roll waits until the last moment that still works
       const stepTime = Math.sqrt((5.77 * need) / as.stepMaxAccel);
@@ -292,6 +325,19 @@ export class JetFlight {
     }
     if (!this.avoiding) this.autoHandled = null;
 
+    // A building correction stays on until your own heading would clear that building, then
+    // eases off. (Letting go as soon as the danger passed swung you back at it: back and forth.)
+    const h = this.hold;
+    if (h) {
+      const own = this._own.set(-Math.sin(savedYaw) * Math.cos(savedPitch), Math.sin(savedPitch), -Math.cos(savedYaw) * Math.cos(savedPitch));
+      const stillHits = level !== 'off' && this.sensor.hits(body.pos, own, h.target, speed * as.lookTime + as.lookExtra);
+      const takeOver = h.kind === 'up' ? input.forward < -0.3 : input.strafe * h.sign < -0.3;
+      if (!stillHits || takeOver) h.amount -= THREE.MathUtils.degToRad(as.holdReleaseDeg) * dt;
+      if (h.amount <= 0) this.hold = null;
+      else if (h.kind === 'up') this.pitch = Math.max(this.pitch, savedPitch + h.amount);
+      else this.yaw = savedYaw + h.sign * h.amount;
+    }
+
     const vTargetBase = fast ? c.boostSpeed : c.minSpeed + (c.cruiseSpeed - c.minSpeed) * this.throttle;
     // Carving brakes to cornering speed: slower = tighter. A hard turn brakes harder.
     let vTarget = this.carving ? Math.min(vTargetBase, c.carve.cornerSpeed) : vTargetBase;
@@ -311,7 +357,7 @@ export class JetFlight {
     // (sideways only: height-keeping stays on, so a roll near the ground doesn't sink you into it)
     if (this.jinkT > 0) { this._aPerp.x *= 0.15; this._aPerp.z *= 0.15; }
     // Pulling up away from something gets the full turning budget
-    const vMax = (this.avoiding === 'up' && plan.urgency > 0.3 ? c.carve.maxG : c.verticalMaxG) * g;
+    const vMax = (this.avoiding === 'up' && plan.target === 'ground' && plan.urgency > 0.3 ? c.carve.maxG : this.hold && this.hold.kind === 'up' ? this.cfg.avoid.upAccelG + 1 : c.verticalMaxG) * g;
     const vert = clamp(this._aPerp.y, -vMax, vMax);
     this._aPerp.y = 0;
     this._aPerp.clampLength(0, maxG);
@@ -417,7 +463,10 @@ export class JetFlight {
     this._qPrev.copy(qDes);
     this._hasPrev = true;
 
-    const rate = this.rollT > 0 ? c.rollMaxRate : this.flipT > 0 ? c.flipMaxRate : this.cfg.attitude.maxRate;
+    // Way off the wanted attitude (knocked about, or a move cut short): right yourself fast
+    const off = 2 * Math.acos(Math.min(1, Math.abs(qDes.dot(body.quat))));
+    const recover = c.recoverRate * THREE.MathUtils.smoothstep(off, THREE.MathUtils.degToRad(30), THREE.MathUtils.degToRad(90));
+    const rate = this.rollT > 0 ? c.rollMaxRate : this.flipT > 0 ? c.flipMaxRate : Math.max(this.cfg.attitude.maxRate, recover);
     attitude(body, qDes, caps.assistGain * c.attitudeGain, out.torque, rate, this._ffTotal.copy(this._ffRate).add(this._rollFF));
     out.thrust = true;
     return out;

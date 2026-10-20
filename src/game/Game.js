@@ -176,7 +176,9 @@ export class Game {
     if (sp < 3) return false;
     const pred = this.predictSnap(side);
     if (!pathClear(pred.pts, this.world.colliders, CONFIG.flight.snap.clearance)) return false;
-    if (!this.controller.jet.snap(side, v.length())) return true;   // cooling down: don't queue it
+    if (!this.controller.jet.snap(side, v.length(), Math.atan2(-v.x, -v.z))) return true;   // cooling down: don't queue it
+    // Hold height through the hard turn and the burst (slowing down loses lift)
+    this.rollHold = { y0: this.body.pos.y, vy0: Math.max(0, v.y), t: 0, time: CONFIG.flight.snap.time + CONFIG.flight.snap.holdAfter };
     this.snapState = { t: 0, from: pred.from, to: pred.to, speed: pred.speed };
     this.pendingSnap = null;
     events.emit('maneuver', { name: 'snap' });
@@ -459,7 +461,7 @@ export class Game {
       const err = r.kp * (h.y0 + h.vy0 * h.t - body.pos.y) + r.kd * (h.vy0 - body.vel.y);
       body.force.y += body.mass * THREE.MathUtils.clamp(err, -r.maxG * CONFIG.physics.gravity, r.maxG * CONFIG.physics.gravity);
       h.t += dt;
-      if (h.t >= r.time || !this.controller.flying) this.rollHold = null;
+      if (h.t >= (h.time ?? r.time) || !this.controller.flying) this.rollHold = null;
     }
 
     // A hard turn waiting for room: take it at the first opening

@@ -68,13 +68,16 @@ export const CONFIG = {
     feedForward: 1, feedForwardFrom: 30, feedForwardFull: 50,  // turn anticipation, faded in by speed (m/s)
     gripLearn: 3,                   // how fast the assist corrects for less grip than expected
     maxAoaDeg: 32,                  // best-grip body angle; beyond this you'd stall
+    // Letting go of a turn: the aim follows where you're really heading until the turn stops, then holds
+    recoverRate: 12,               // spin rate (rad/s) allowed to right yourself when far off (>90°)
+    releaseTime: 0.8, releaseStopDeg: 3, releaseCarry: 0.05,
     maxLeadDeg: 35,                 // how far the aim can get ahead of where you're actually going
     rollTime: 0.4, rollRate: 18, rollLeadDeg: 60, dodgeAccel: 16, rollMaxRate: 26,  // barrel roll: spin rate (rad/s), ~0.4 s per turn
     // Hard turn (double-tap Q/E or the right stick): brake, snap round, burst away
     // waitWindow: if there's no room to turn, hold the turn this long and take it at the first opening
-    snap: { waitWindow: 1.5, clearance: 3, checkAfter: 0.4, angleDeg: 90, time: 0.6, cornerFrac: 0.55, exitFrac: 0.85, response: 0.08, maxG: 20, maxGTurn: 16, minSpeed: 15, burstTime: 0.8, cooldown: 1.2 },
+    snap: { waitWindow: 1.5, clearance: 3, checkAfter: 0.4, angleDeg: 90, time: 0.6, cornerFrac: 0.55, exitFrac: 0.85, response: 0.08, maxG: 20, maxGTurn: 16, minSpeed: 15, burstTime: 0.8, holdAfter: 0.6, cooldown: 1.2 },
     flipTime: 0.9, flipMaxG: 10, flipMaxRate: 4.5,  // 180° reverse
-    attitudeGain: 1.8,
+    attitudeGain: 3.5,
     autoExitSpeed: 4,               // touching down slower than this drops back to hover
     slowDive: { minDeg: 18, from: 15, full: 40 },  // steepest dive allowed: 18° when slow, full dive by 40 m/s
     autoLevel: 0.7,                 // how fast the path levels out when you let go of up/down (1/s)
@@ -94,6 +97,11 @@ export const CONFIG = {
     stepLead: 0.12,                // safety margin (s) before the last possible moment
     stepTimeMax: 0.6,              // longest an auto sidestep takes
     stepSettle: 0.25,              // then holds the new line this long (no drift into the next building)
+    // Roof edge: a gentle climb at the last moment instead of a hop
+    upMaxDeg: 20,                  // most it tilts the path up
+    upAccelG: 2,                   // gentle climb (G) used to work out the last moment
+    upLead: 0.3,                   // extra seconds of margin for the suit to swing its nose up
+    holdReleaseDeg: 40,            // once past the building the correction eases off at this many °/s
     rollLockout: 4,                // after an auto roll, no other auto roll for this many seconds
     rollHeadOn: 0.5,               // auto roll only flying within ~60° of straight at the wall
     streetHold: 1.5,               // ...and for this long after (so crossings don't count as open)

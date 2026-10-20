@@ -67,6 +67,11 @@ export class ObstacleSensor {
     return plan;
   }
 
+  // Would a ray from pos along dir hit this building (with the usual clearance)?
+  hits(pos, dir, target, maxDist) {
+    return rayBox(pos, dir, target.min, target.max, this.cfg.margin, maxDist) < maxDist;
+  }
+
   // Buildings close on both your left and right (flying down a street)?
   betweenBuildings(pos, colliders) {
     const w = this.cfg.streetWidth;
