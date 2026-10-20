@@ -117,7 +117,7 @@ export class Game {
 
   // Dump the stored charge into the thrusters for a burst of speed
   // boosted: boost held as you launch (R1 + ✕ / Shift + F): a stronger launch for the same time
-  launch(boosted = false) {
+  launch(boosted = false, rampTime = null) {
     const l = CONFIG.launch;
     if (this.launchCharge < 1) {
       events.emit('toast', { text: `Flight mode. Burst recharging (${Math.round(this.launchCharge * 100)}%)` });
@@ -128,6 +128,7 @@ export class Game {
     this.launchCount = (this.launchCount ?? 0) + 1;   // (the camera punches in on each launch)
     this.launchPower = boosted ? l.boosted : 1;
     // the kick builds smoothly over rampTime (gentle start, strongest mid-way, easing off) instead of all at once
+    this.launchRamp = rampTime ?? l.rampTime;
     this.launchKick = { dv: l.kick * this.launchPower, t: 0 };
     if (boosted) events.emit('toast', { text: 'Boosted takeoff' });
     events.emit('launch');
@@ -402,7 +403,13 @@ export class Game {
         } else {
           this.controller.enterFlight(body, s.ground ? c.pitchDeg * Math.PI / 180 : null);
           if (s.ground) this.launchClimb = { t: 0 };   // ease the nose down over the climb (below)
-          this.launch(s.boosted);
+          else {
+            // from a hover: start steep and arc over into level flight (slow enough to see the lean)
+            const A = CONFIG.launch.air;
+            this.launchClimb = { t: 0, air: true, from: A.startDeg, to: this.controller.jet.pitch * 180 / Math.PI, time: A.tipTime };
+            this.airLaunchCount = (this.airLaunchCount ?? 0) + 1;   // (the suit plays its lean into flight)
+          }
+          this.launch(s.boosted, s.ground ? null : CONFIG.launch.air.rampTime);
         }
       } else {
         // hold still while winding up
@@ -424,12 +431,13 @@ export class Game {
     if (this.launchClimb) {
       const c = CONFIG.launch.climb, lc = this.launchClimb, jet = this.controller.jet;
       lc.t += dt;
-      if (!this.controller.flying || Math.abs(input.forward ?? 0) > 0.1 || lc.t > c.time) this.launchClimb = null;
+      if (!this.controller.flying || Math.abs(input.forward ?? 0) > 0.1 || lc.t > (lc.time ?? c.time)) this.launchClimb = null;
       else {
-        const u = THREE.MathUtils.smoothstep(lc.t, 0, c.time);
-        jet.pitch = (c.pitchDeg + (c.levelDeg - c.pitchDeg) * u) * Math.PI / 180;
+        const from = lc.air ? lc.from : c.pitchDeg, to = lc.air ? lc.to : c.levelDeg;
+        const u = THREE.MathUtils.smoothstep(lc.t, 0, lc.time ?? c.time);
+        jet.pitch = (from + (to - from) * u) * Math.PI / 180;
         // keep the body lined up head first along the climb as it speeds up
-        if (lc.t < c.alignTime) {
+        if (lc.t < c.alignTime && !lc.air) {
           // (along the climb angle being flown, so the thrust carries you up it)
           const q = this._jumpQ.setFromAxisAngle(Y, jet.yaw).multiply(this._qTmp2.setFromAxisAngle(this._xAxis.set(1, 0, 0), -(Math.PI / 2 - jet.pitch)));
           this.spinToward(q, 8, 8);
@@ -456,7 +464,7 @@ export class Game {
     this.takeoffBoostHeld = !!input.takeoffBoost;
     this.lastInput = input;
     // launching: the thrusters spool up to the launch boost over rampTime (no jolt)
-    const spool = launching ? THREE.MathUtils.smoothstep(l.time - this.launchT, 0, l.rampTime) : 0;
+    const spool = launching ? THREE.MathUtils.smoothstep(l.time - this.launchT, 0, this.launchRamp ?? l.rampTime) : 0;
     const extra = launching ? 1 + (l.thrustMult * (this.launchPower ?? 1) - 1) * spool : this.liftReserve ? a.liftReserve.thrustMult : 1;
     updateThrusterAvailability(suit, input.boost, dt, extra);
     const thr = suit.thrusters;
@@ -651,7 +659,7 @@ export class Game {
     // Auto-steer hop in progress (stored charge, straight up)
     // Launch kick, spread over rampTime along the way you're launching
     if (this.launchKick) {
-      const k = this.launchKick, ramp = CONFIG.launch.rampTime, u = k.t / ramp;
+      const k = this.launchKick, ramp = this.launchRamp ?? CONFIG.launch.rampTime, u = k.t / ramp;
       if (u >= 1) this.launchKick = null;
       else body.force.addScaledVector(this.controller.jet.direction, (body.mass * k.dv * 6 * u * (1 - u)) / ramp);
       k.t += dt;

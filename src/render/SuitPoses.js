@@ -353,6 +353,9 @@ export class SuitPoser {
     mo.launch = lc.launch; mo.crouch = lc.crouch;
     // From a hover in mid-air there's no ground launch: a quick tuck before firing, then the body
     // leans over into flight (the pose follows the body's real tip, see below)
+    if (mo.airCount === undefined) mo.airCount = game.airLaunchCount ?? 0;
+    if ((game.airLaunchCount ?? 0) !== mo.airCount) { mo.airCount = game.airLaunchCount ?? 0; mo.airClock = 0; }
+    mo.airClock = (mo.airClock ?? 9) + dt;
     const airLaunch = seqNow ? !seqNow.ground : game.lastLaunchGround === false;
     mo.tuck = 0;
     if (airLaunch) {
@@ -362,8 +365,8 @@ export class SuitPoser {
     // lean into flight: 0 upright -> 1 head first (from the body's actual angle), for the first
     // couple of seconds after an air launch
     const headUp = Math.asin(THREE.MathUtils.clamp(_v3.set(0, 1, 0).applyQuaternion(body.quat).y, -1, 1)) * 180 / Math.PI;
-    mo.lean = airLaunch && flying && mo.launchClock < M.leanWindow ? THREE.MathUtils.clamp((80 - headUp) / 65, 0, 1) : (airLaunch && flying ? 1 : 0);
-    mo.leaning = airLaunch && flying && mo.launchClock < M.leanWindow;
+    mo.lean = airLaunch && flying && mo.airClock < M.leanWindow ? THREE.MathUtils.clamp((80 - headUp) / 65, 0, 1) : (airLaunch && flying ? 1 : 0);
+    mo.leaning = airLaunch && flying && mo.airClock < M.leanWindow;
     this.inBurst = !!game.burst;
     // boosted takeoff: the upright launch pose while the path climbs steeply, easing into flight as it levels
     if (game.burst) mo.launch = THREE.MathUtils.clamp((game.burst.pitch * 180 / Math.PI - 15) / 45, 0, 1);

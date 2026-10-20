@@ -32,6 +32,7 @@ const r2 = (v) => Math.round(v * 100) / 100;
 
 export function loadSavedPoses() {
   const seq = storage.get('launchSeq');
+  if (seq?.airFireAt === 0.15) delete seq.airFireAt;   // (the old default; the mid-air tuck is longer now)
   if (seq) Object.assign(CONFIG.launch.seq, seq);
   const saved = storage.get('suitPoses');
   if (!saved) return;

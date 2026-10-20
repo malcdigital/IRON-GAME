@@ -142,7 +142,9 @@ export const CONFIG = {
     // The launch sequence (set it in the Pose Studio's Launch tab): from the ground, crouch until
     // jumpAt s, jump (jumpSpeed m/s, jumpAngleDeg above level, toward where you face), thrusters fire
     // at fireAt s. In the air: fire at airFireAt s.
-    seq: { jumpAt: 0.35, fireAt: 0.55, jumpSpeed: 8, jumpAngleDeg: 17, airFireAt: 0.15,
+    // Launching from a hover: the nose starts startDeg up and arcs over to level flight over tipTime s
+    air: { startDeg: 42, tipTime: 2.4, rampTime: 1.4 },   // (rampTime: the thrust spools up more gently than a ground launch)
+    seq: { jumpAt: 0.35, fireAt: 0.55, jumpSpeed: 8, jumpAngleDeg: 17, airFireAt: 0.3,
       tipRate: 14 },   // during the jump the thrusters are off and the body tips forward (up to tipRate rad/s) to line up with it
     chargeReady: 0.2,   // crouched this long (s) holding L1 + R1? launch skips the wind-up
     // Climb-out after launching from the ground: nose starts pitchDeg up, eases to levelDeg over time s
@@ -276,7 +278,7 @@ export const CONFIG = {
       spinFling: 32, spinLag: 14,   // boosted takeoff rolls: how far the spin throws the limbs out / how far they trail (degrees)
       pitchFullDeg: 50, legSpring: 14, legDamping: 0.38, fidgetEvery: [2.5, 6], fidgetDeg: 4, flutterDeg: 4, breathPeriod: 3.4, breathDeg: 1.6, glanceDeg: 7 },
     // Moments: hop-off-the-ground length, post-knockout recovery length (s), head shake
-    moments: { leanWindow: 2, leanPush: 1,   // mid-air launch: how long the lean-into-flight blend runs (s), how hard the arms sweep back
+    moments: { leanWindow: 3, leanPush: 1,   // mid-air launch: how long the lean-into-flight blend runs (s), how hard the arms sweep back
       hopTime: 0.35, recoverTime: 1.6, shakeDeg: 28 },
     // Flight body language, from the physics. amount scales it all (0 = off).
     flight: {
