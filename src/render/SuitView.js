@@ -3,6 +3,8 @@ import { CONFIG } from '../core/config.js';
 import { events } from '../core/events.js';
 import { HERO_BUILDERS, buildHeroPilot, PALETTE } from './HeroSuit.js';
 import { loadSuitModel, placeModel } from './ModelSuit.js';
+import { SuitPoser } from './SuitPoses.js';
+import { ThrustTrail } from './ThrustTrails.js';
 
 // Builds the suit's 3D model from its parts and shows heat, damage and thrust.
 // Models are simple boxes so they're cheap to draw and easy to replace later.
@@ -178,6 +180,8 @@ export class SuitView {
 
   build(suit) {
     this.root.clear();
+    for (const f of this.flames) f.trail?.dispose();
+    this.poser = null;
     this.parts = [];
     this.flames = [];
     const useModel = CONFIG.suitStyle === 'model';
@@ -206,11 +210,12 @@ export class SuitView {
       const token = (this.buildToken = (this.buildToken ?? 0) + 1);
       loadSuitModel(CONFIG.suitModel.url).then((gltf) => {
         if (token !== this.buildToken) return;
-        const placed = placeModel(gltf, { ...CONFIG.suitModel, toon: CONFIG.art.style === 'toon' });
+        const placed = placeModel(gltf, { ...CONFIG.suitModel, toon: CONFIG.art.style === 'toon', anime: CONFIG.art.style === 'anime', rim: CONFIG.art.rim });
         this.model = placed;
         this.modelBase = placed.mats.map((m) => m.color.clone());
         this.modelEmissive = placed.mats.map((m) => m.emissive.clone());
         this.root.add(placed.model);
+        this.poser = new SuitPoser(placed.model, placed.bones, this.root);
         for (const b of this.boxes) b.visible = false;
         this.attachFlamesToModel(placed);
       }).catch((err) => {
@@ -250,9 +255,15 @@ export class SuitView {
       } else if (slot === 'back') {
         // Base of the back pods: upper back, just behind the body
         const sp = at('Spine01');
-        if (sp) p = sp.add(new THREE.Vector3(Math.sign(f.basePos.x) * 0.11, 0.02, 0.17));   // (a single centre nozzle stays centred)
+        // with pods: the base of each pod; without (sheet A): the vent between the shoulder blades
+        if (sp) p = sp.add(new THREE.Vector3(placed.pods.length ? Math.sign(f.basePos.x) * 0.11 : Math.sign(f.basePos.x) * 0.04, 0.02, placed.pods.length ? 0.17 : 0.13));   // (a single centre nozzle stays centred)
       }
       if (p) f.holder.position.copy(p);
+      // ride on a bone so the flame follows the poses
+      const boneName = slot === 'gauntlets' && side ? `${side}Hand` : slot === 'boots' && side ? `${side}Foot` : slot === 'back' ? 'Spine01' : null;
+      const bone = boneName && placed.bones[boneName];
+      if (p && bone) { f.bone = bone; f.boneLocal = bone.worldToLocal(this.root.localToWorld(p.clone())); }
+      f.forwardHand = slot === 'gauntlets' && side === 'Right';   // the fist held out front in flight
       // Back flames ride on the pods' nozzles (left flame: left pod; a single centre nozzle: between them)
       if (slot === 'back' && this.pods.length) f.pods = f.basePos.x < 0 ? this.pods.filter((q) => q.side === 'L') : f.basePos.x > 0 ? this.pods.filter((q) => q.side === 'R') : this.pods;
     }
@@ -297,15 +308,26 @@ export class SuitView {
     this.root.add(holder);
     const ion = comp.part.visual.glow != null && CONFIG.suitStyle !== 'hero';
     if (ion) { outer.material.color.setHex(0x5fc9ff); inner.material.color.setHex(0xd8f6ff); }
-    this.flames.push({ comp, holder, outer, inner, basePos });
+    const t = CONFIG.art.trail;
+    const trail = new ThrustTrail(this.scene, { core: ion ? t.ionCore : t.core, edge: ion ? t.ionEdge : t.edge, max: t.max });
+    this.flames.push({ comp, holder, outer, inner, basePos, trail });
   }
 
-  update(game, boost, time) {
+  update(game, boost, time, camera) {
     const b = game.body;
     this.root.position.copy(b.pos);
     this.root.quaternion.copy(b.quat);
     const dt = Math.min(0.1, time - (this.lastTime ?? time));
     this.lastTime = time;
+    // pose the skeleton, then move the flames onto their (posed) bones
+    if (this.poser) {
+      this.poser.update(game, boost, dt);
+      this.root.updateMatrixWorld(true);
+      for (const f of this.flames) {
+        if (!f.bone) continue;
+        f.holder.position.copy(this.root.worldToLocal(f.bone.localToWorld(this._tmpV.copy(f.boneLocal))));
+      }
+    }
     if (this.pods?.length) {
       this.updatePods(game, dt);
       // flames follow the pod nozzles
@@ -319,18 +341,32 @@ export class SuitView {
       }
     }
 
+    const T = CONFIG.art.trail;
+    const flying = game.controller.flying;
+    const camPos = camera?.position;
+    this.root.updateMatrixWorld(true);
     for (const f of this.flames) {
-      const u = f.comp.throttle;
+      // the fist held out front in Superman flight doesn't fire back through the body
+      const hideFwd = f.forwardHand && this.poser ? this.poser.w.flight : 0;
+      const u = f.comp.throttle * (1 - hideFwd);
       const on = u > 0.02 && f.comp.available > 0;
       f.holder.visible = on;
-      if (!on) continue;
-      // Nozzles swivel: point the flame along the real thrust direction
-      if (f.comp.thrustDir) f.holder.quaternion.setFromUnitVectors(UP, f.comp.thrustDir);
-      const flicker = 0.85 + Math.random() * 0.3;
-      const len = (0.15 + u * (boost ? 1.1 : 0.7)) * flicker;
-      const w = 0.6 + u * 0.6;
-      f.outer.scale.set(w, len, w);
-      f.inner.scale.set(w * 0.5, len * 0.55, w * 0.5);
+      if (on) {
+        // Nozzles swivel: point the flame along the real thrust direction
+        if (f.comp.thrustDir) f.holder.quaternion.setFromUnitVectors(UP, f.comp.thrustDir);
+        const flicker = 0.85 + Math.random() * 0.3;
+        const len = (0.15 + u * (boost ? 1.1 : 0.7)) * flicker * T.flameScale;
+        const w = 0.6 + u * 0.6;
+        f.outer.scale.set(w, len, w);
+        f.inner.scale.set(w * 0.5, len * 0.55, w * 0.5);
+        // drop a streak point at the nozzle, drifting out along the exhaust
+        if (dt > 0) {
+          const pos = f.holder.getWorldPosition(this._tmpV);
+          const vel = this._tmpV2.copy(f.comp.thrustDir ?? f.comp.thruster.dir).applyQuaternion(b.quat).multiplyScalar(-T.exhaustSpeed).addScaledVector(b.vel, T.carry);
+          f.trail.emit(pos, vel, flying ? T.life : T.hoverLife, (boost ? T.boostWidth : T.width) * (0.7 + 0.5 * u), Math.min(1, 0.35 + u));
+        }
+      }
+      if (camPos) f.trail.update(dt, camPos);
     }
 
     // The 3D model is one piece: overall damage darkens it, the hottest part sets the glow

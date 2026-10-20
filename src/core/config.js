@@ -217,10 +217,37 @@ export const CONFIG = {
 
   // Suit look: 'hero' (the character sheet: ivory, navy, orange) or 'scrap' (each part its own junk colours)
   // Art style: 'toon' (cel shading and ink outlines, like the character sheet) or 'realistic'
-  art: { style: 'toon', outline: { thickness: 0.004, color: 0x15161c } },
+  // Look: painted sunset sky, low warm sun, lavender haze, glow and a palette grade (see Renderer)
+  art: {
+    style: 'anime',                 // suit shading: 'anime' (soft, warm rim light), 'toon' (hard bands) or 'realistic'
+    exposure: 1.0,
+    sunElevation: 9, sunAzimuth: 35,   // low sun (degrees above the horizon; direction round from -Z)
+    sunColor: 0xffc58a, sunIntensity: 2.6,
+    skyLight: 0xb9a8e0, groundLight: 0x3f8f8c, ambient: 0.95,   // lavender above, teal bounce below
+    haze: 0xd9b3b8, hazeNear: 90, hazeFar: 820,                 // distance haze (warm lavender-pink)
+    sky: { top: 0x2b3266, mid: 0x7a6aa8, horizon: 0xffbe7a, below: 0x5e7c96, sun: 0xffd9a0,
+           cloudLit: 0xffd2a8, cloudShade: 0x6b5f8f },
+    bloom: { strength: 0.35, radius: 0.5, threshold: 0.93 },    // glow on bright things
+    grade: { warm: 0xffeedd, cool: 0xd2dcf4, saturation: 1.12, vignette: 0.28 },
+    rim: { color: 0xffa860, strength: 0.45, power: 3.2 },        // warm edge light on the suit
+    // Thrust streaks: each nozzle leaves a glowing ribbon. life = how long a bit of it lasts (s);
+    // it drifts out of the nozzle at exhaustSpeed (m/s) plus carry × the suit's own speed
+    trail: { life: 0.28, hoverLife: 0.22, exhaustSpeed: 9, carry: 0.15, width: 0.1, boostWidth: 0.15, max: 40,
+      core: 0xfff3d2, edge: 0xff7a2e, ionCore: 0xe2f8ff, ionEdge: 0x3fb0ff, flameScale: 0.38 },
+  },
   suitStyle: 'model',
   // 'model': the 3D model made from the character sheet (falls back to 'hero' if it can't load)
+  // Body language for the 3D suit (poses themselves are in src/render/SuitPoses.js)
+  pose: {
+    blendRate: 5,                   // how quickly it moves into a new pose
+    leanRate: 6, leanPerMs: 1.2, leanMax: 18,     // hover: degrees of lean per m/s of movement (up to leanMax)
+    turnRate: 5, turnPerMs2: 0.5, turnMax: 25,    // flight turns: degrees of lean into the turn per m/s² of turning
+    landSpeedFull: 10, landTime: 0.45, crouchDeg: 35,   // landing crouch: full at this fall speed, back up in landTime s
+    stepsPerMeter: 0.9, walkSwing: 28,            // walking legs
+    groundRoom: 0.25,               // counts as standing when the feet are within this of the ground (m)
+  },
   suitModel: { url: 'assets/suit.json', height: 1.9, feetY: -1.03, turn: Math.PI,
+    pods: false,                    // the winged back pods (sheet A has none: a vent between the shoulders instead)
     podMaxDeg: 35, podRate: 8,      // back pods swing toward the thrust direction (up to podMaxDeg; podRate = how quickly)
     toonSteps: [140, 205, 255], toonNormal: 0.6 },   // cel shading (art.style 'toon'): light bands (0-255), panel-line depth
 

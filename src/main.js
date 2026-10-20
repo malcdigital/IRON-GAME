@@ -159,7 +159,7 @@ function start(hotData) {
       effects.emitFromDamage(game.suit, game.body, dt);
     }
 
-    suitView.update(game, (axes.boost || game.launchT > 0) && !paused, clockTime);
+    suitView.update(game, (axes.boost || game.launchT > 0) && !paused, clockTime, renderer.camera);
     cargoView.update(clockTime);
     worldView.update(game.course, clockTime);
     effects.update(dt);

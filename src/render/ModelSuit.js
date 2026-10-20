@@ -63,6 +63,27 @@ function toonFrom(m, cfg) {
   });
 }
 
+// Soft "anime key art" look: the model's own painted colours, a soft satin finish, and a warm
+// rim light on the edges (like a low sunset sun catching the armour)
+function animeFrom(m, cfg) {
+  const n = m.clone();
+  n.metalness = Math.min(n.metalness ?? 0, 0.15);
+  n.metalnessMap = null;
+  n.roughness = 0.55;
+  n.roughnessMap = m.metalnessMap ?? m.roughnessMap;   // keep the panel detail in the shine
+  if (n.normalScale) n.normalScale.setScalar(cfg.animeNormal ?? 0.7);
+  const rim = cfg.rim;
+  n.onBeforeCompile = (sh) => {
+    sh.uniforms.rimColor = { value: new THREE.Color(rim.color) };
+    sh.uniforms.rimStrength = { value: rim.strength };
+    sh.uniforms.rimPower = { value: rim.power };
+    sh.fragmentShader = 'uniform vec3 rimColor; uniform float rimStrength, rimPower;\n' + sh.fragmentShader.replace(
+      '#include <lights_fragment_begin>',
+      'totalEmissiveRadiance += rimColor * rimStrength * pow(1.0 - saturate(dot(normal, normalize(vViewPosition))), rimPower);\n#include <lights_fragment_begin>');
+  };
+  return n;
+}
+
 // Fit the model to the suit's body: feet at the soles, facing -Z (the game's forward)
 export function placeModel(gltf, cfg) {
   const model = gltf.scene;
@@ -81,7 +102,10 @@ export function placeModel(gltf, cfg) {
     if (o.isMesh) {
       o.castShadow = true;
       o.frustumCulled = false;   // skinned meshes can be culled wrongly
-      if (cfg.toon && o.material) {
+      if (cfg.anime && o.material) {
+        if (!swapped.has(o.material)) swapped.set(o.material, animeFrom(o.material, cfg));
+        o.material = swapped.get(o.material);
+      } else if (cfg.toon && o.material) {
         // Cel look: lighting snaps into a few flat bands (like the character sheet)
         if (!swapped.has(o.material)) swapped.set(o.material, toonFrom(o.material, cfg));
         o.material = swapped.get(o.material);
@@ -93,7 +117,8 @@ export function placeModel(gltf, cfg) {
   const bones = {};
   model.traverse((o) => { if (o.isBone) bones[o.name] = o; });
   // Back thruster pods (separated in Blender, pivot at their base mount)
-  const pods = ['L', 'R'].map((s) => ({ side: s, pod: model.getObjectByName(`pod_${s}`), nozzle: model.getObjectByName(`pod_${s}_nozzle`) }))
+  let pods = ['L', 'R'].map((s) => ({ side: s, pod: model.getObjectByName(`pod_${s}`), nozzle: model.getObjectByName(`pod_${s}_nozzle`) }))
     .filter((p) => p.pod && p.nozzle);
+  if (cfg.pods === false) { for (const p of pods) p.pod.visible = false; pods = []; }
   return { model, mats, bones, pods };
 }
