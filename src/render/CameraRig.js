@@ -147,7 +147,16 @@ export class CameraRig {
     // Charging up (L1 + R1 crouch): punch in, narrow the view, a little shake
     this.spring('charge', game.charging ? 1 : 0, cc.charge.spring, dt);
     const cw = THREE.MathUtils.clamp(this.sp.charge.x, 0, 1.2);
-    const zoom = this.sp.zoom.x * (1 - m.punch.distance * punch);
+    // Mid-air burst into flight: knocked back, wider, shaking; fading fast
+    if ((game.airLaunchCount ?? 0) !== this.lastAir) { this.lastAir = game.airLaunchCount ?? 0; if (!this.snapNext && this.lastAir) { this.blastT = 0; this.punchT = null; } }
+    let blast = 0;
+    const BL = CONFIG.launch.air.blast;
+    if (this.blastT != null) {
+      this.blastT += dt;
+      blast = this.blastT < 0.06 ? this.blastT / 0.06 : Math.max(0, 1 - (this.blastT - 0.06) / BL.time) ** 2;
+      if (this.blastT > BL.time + 0.06) this.blastT = null;
+    }
+    const zoom = this.sp.zoom.x * (1 - m.punch.distance * punch) * (1 + BL.camBack * blast);
     const fovMult = 1 + m.moveFov * this.sp.move.x + m.hardTurnFov * this.sp.hard.x;   // widens with the same easing
     const shoulder = s.shoulder + this.sp.side.x;
 
@@ -220,6 +229,12 @@ export class CameraRig {
       this.camera.position.x += amp * (Math.sin(t * 37.3) + 0.5 * Math.sin(t * 61.7));
       this.camera.position.y += amp * (Math.sin(t * 43.1) + 0.5 * Math.sin(t * 57.9));
     }
+    // the burst's jolt
+    if (blast > 0.01) {
+      const t = this.blastT, amp = CONFIG.launch.air.blast.shake * blast;
+      this.camera.position.x += amp * (Math.sin(t * 71.3) + 0.6 * Math.sin(t * 113.7));
+      this.camera.position.y += amp * (Math.sin(t * 83.1) + 0.6 * Math.sin(t * 97.9));
+    }
     // Handheld shake that grows with speed
     if (s.shake > 0) {
       this.shakeT += dt;
@@ -233,7 +248,7 @@ export class CameraRig {
     this.camera.lookAt(this.look);
 
     // Field of view: the shot's, a little wider at speed
-    const wantFov = s.fov * fovMult * (1 + cc.burst.fovMult * bw) - cc.moments.punch.fov * punch + Math.min(cc.speedFovMax, Math.max(0, speed - cc.speedFovFrom) * cc.speedFovPer);
+    const wantFov = s.fov * fovMult * (1 + cc.burst.fovMult * bw) - cc.moments.punch.fov * punch + CONFIG.launch.air.blast.fov * blast + Math.min(cc.speedFovMax, Math.max(0, speed - cc.speedFovFrom) * cc.speedFovPer);
     this.camera.fov += (wantFov - this.camera.fov) * (this.snapNext ? 1 : Math.min(1, 3 * dt));
     if (bw > 0.01) this.camera.up.copy(Y), this.up.copy(Y);   // (boosted takeoff: horizon held level)
     this.camera.updateProjectionMatrix();

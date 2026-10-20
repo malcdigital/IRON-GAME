@@ -144,7 +144,11 @@ export const CONFIG = {
     // at fireAt s. In the air: fire at airFireAt s.
     // Launching from a hover: the nose tips from startDeg over into a dive at diveDeg (diveTime s),
     // then pulls out to level flight (pullTime s)
-    air: { startDeg: 25, diveDeg: -18, diveTime: 1.0, pullTime: 1.5, rampTime: 1.4 },   // (rampTime: the thrust spools up more gently than a ground launch)
+    air: { startDeg: 25, diveDeg: -18, diveTime: 1.0, pullTime: 1.5,
+      rampTime: 0.25, kickMult: 1.6,   // explosive: the thrust and kick hit almost at once (kick x1.6)
+      // the blast as it fires: flames flare to flame x their length, the camera is knocked back
+      // (camBack of its distance) and widens fov degrees, with a sharp shake; all fading over time s
+      blast: { time: 0.6, flame: 2.6, camBack: 0.3, fov: 12, shake: 0.09 } },   // (rampTime: the thrust spools up more gently than a ground launch)
     seq: { jumpAt: 0.35, fireAt: 0.55, jumpSpeed: 8, jumpAngleDeg: 17, airFireAt: 0.3,
       tipRate: 14 },   // during the jump the thrusters are off and the body tips forward (up to tipRate rad/s) to line up with it
     chargeReady: 0.2,   // crouched this long (s) holding L1 + R1? launch skips the wind-up

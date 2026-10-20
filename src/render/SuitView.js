@@ -351,6 +351,15 @@ export class SuitView {
     const flying = game.controller.flying;
     const camPos = camera?.position;
     this.root.updateMatrixWorld(true);
+    // mid-air burst into flight: the flames flare huge for a moment
+    if ((game.airLaunchCount ?? 0) !== this.lastAir) { this.lastAir = game.airLaunchCount ?? 0; this.blastT = this.lastAir ? 0 : null; }
+    let flare = 1;
+    if (this.blastT != null) {
+      const BL = CONFIG.launch.air.blast;
+      this.blastT += dt;
+      flare = 1 + (BL.flame - 1) * Math.max(0, 1 - this.blastT / BL.time) ** 2;
+      if (this.blastT > BL.time) this.blastT = null;
+    }
     for (const f of this.flames) {
       const u = f.comp.throttle;
       const on = u > 0.02 && f.comp.available > 0 && !this.hideFlames;
@@ -359,8 +368,8 @@ export class SuitView {
         // Nozzles swivel: point the flame along the real thrust direction
         if (f.comp.thrustDir) f.holder.quaternion.setFromUnitVectors(UP, f.comp.thrustDir);
         const flicker = 0.85 + Math.random() * 0.3;
-        const len = (0.15 + u * (boost ? 1.1 : 0.7)) * flicker * T.flameScale;
-        const w = 0.6 + u * 0.6;
+        const len = (0.15 + u * (boost ? 1.1 : 0.7)) * flicker * T.flameScale * flare;
+        const w = (0.6 + u * 0.6) * (1 + (flare - 1) * 0.3);
         f.outer.scale.set(w, len, w);
         f.inner.scale.set(w * 0.5, len * 0.55, w * 0.5);
         // drop a streak point at the nozzle, drifting out along the exhaust

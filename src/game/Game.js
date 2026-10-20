@@ -117,7 +117,7 @@ export class Game {
 
   // Dump the stored charge into the thrusters for a burst of speed
   // boosted: boost held as you launch (R1 + ✕ / Shift + F): a stronger launch for the same time
-  launch(boosted = false, rampTime = null) {
+  launch(boosted = false, rampTime = null, kickMult = 1, sharp = false) {
     const l = CONFIG.launch;
     if (this.launchCharge < 1) {
       events.emit('toast', { text: `Flight mode. Burst recharging (${Math.round(this.launchCharge * 100)}%)` });
@@ -129,7 +129,7 @@ export class Game {
     this.launchPower = boosted ? l.boosted : 1;
     // the kick builds smoothly over rampTime (gentle start, strongest mid-way, easing off) instead of all at once
     this.launchRamp = rampTime ?? l.rampTime;
-    this.launchKick = { dv: l.kick * this.launchPower, t: 0 };
+    this.launchKick = { dv: l.kick * this.launchPower * kickMult, t: 0, sharp };
     if (boosted) events.emit('toast', { text: 'Boosted takeoff' });
     events.emit('launch');
   }
@@ -409,7 +409,7 @@ export class Game {
             this.launchClimb = { t: 0, air: true, to: this.controller.jet.pitch * 180 / Math.PI, time: A.diveTime + A.pullTime };
             this.airLaunchCount = (this.airLaunchCount ?? 0) + 1;   // (the suit plays its lean into flight)
           }
-          this.launch(s.boosted, s.ground ? null : CONFIG.launch.air.rampTime);
+          this.launch(s.boosted, s.ground ? null : CONFIG.launch.air.rampTime, s.ground ? 1 : CONFIG.launch.air.kickMult, !s.ground);
         }
       } else {
         // hold still while winding up
@@ -666,9 +666,16 @@ export class Game {
     if (this.launchKick) {
       const k = this.launchKick, ramp = this.launchRamp ?? CONFIG.launch.rampTime, u = k.t / ramp;
       if (u >= 1) this.launchKick = null;
-      else body.force.addScaledVector(this.controller.jet.direction, (body.mass * k.dv * 6 * u * (1 - u)) / ramp);
+      // (sharp: all at once, then tailing off, for the mid-air burst; otherwise a smooth swell)
+      else {
+        // (the mid-air burst blasts straight ahead, level, so it doesn't fling you upward)
+        const dir = k.sharp ? this._c.set(-Math.sin(this.controller.jet.yaw), 0, -Math.cos(this.controller.jet.yaw)) : this.controller.jet.direction;
+        body.force.addScaledVector(dir, (body.mass * k.dv * (k.sharp ? 2 * (1 - u) : 6 * u * (1 - u))) / ramp);
+      }
       k.t += dt;
     }
+    // mid-air burst: the nozzles hold your height while you tip into the dive (no swoop up)
+    if (this.launchClimb?.air && this.launchClimb.t < CONFIG.launch.air.diveTime && body.vel.y > 0) body.force.y -= body.mass * body.vel.y * 10;
     if (this.hopShove) {
       const h = this.hopShove;
       body.force.y += (body.mass * h.dv) / h.dur;
