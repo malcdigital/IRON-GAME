@@ -231,7 +231,9 @@ export const CONFIG = {
     moments: {
       punch: { distance: 0.25, fov: 8, attack: 0.12, release: 0.7 },   // launch burst: push in 25% (and narrow the view 8°), then ease back
       turnZoom: 0.10,              // pull back 10% while turning or barrel rolling
-      turnShoulder: 0.6,           // slide this far (m) to the side you're turning toward
+      turnShoulder: 0.72,          // slide this far (m) to the side you're turning toward
+      hardTurnZoom: 0.25,          // pull back 25% during a hard turn
+      hardTurnHold: 0.8,           // ...and keep it this long after (through the burst)
       zoomSpring: 6, shoulderSpring: 5,   // how quickly those ease in and out (higher = quicker)
     },
     modeBlendTime: 1.2,            // seconds to glide between hover and flight shots

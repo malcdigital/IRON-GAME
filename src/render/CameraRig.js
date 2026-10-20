@@ -116,7 +116,10 @@ export class CameraRig {
     const jet = ctrl.jet;
     const turn = !inp ? 0 : ctrl.flying ? inp.strafe : -inp.yaw;   // + = turning right
     const rolling = ctrl.flying && (jet.rollT > 0 || jet.jinkT > 0) ? 1 : 0;
-    const zoomWant = 1 + m.turnZoom * Math.max(Math.abs(turn), rolling);
+    // Hard turn: pull well back (held a moment after, through the burst out of it)
+    if (ctrl.flying && jet.snapT > 0) this.hardTurnT = m.hardTurnHold;
+    else this.hardTurnT = Math.max(0, (this.hardTurnT ?? 0) - dt);
+    const zoomWant = Math.max(1 + m.turnZoom * Math.max(Math.abs(turn), rolling), this.hardTurnT > 0 ? 1 + m.hardTurnZoom : 1);
     const sideWant = m.turnShoulder * THREE.MathUtils.clamp(turn, -1, 1);
     this.spring('zoom', zoomWant, m.zoomSpring, dt);
     this.spring('side', sideWant, m.shoulderSpring, dt);
