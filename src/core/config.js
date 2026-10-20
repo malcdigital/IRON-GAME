@@ -249,6 +249,8 @@ export const CONFIG = {
     stepsPerMeter: 0.9, walkSwing: 28,            // walking legs
     limits: true,                   // keep every joint within real human ranges (SuitPoses.js LIMITS)
     groundRoom: 0.25,
+    // Moments: launch crouch length, hop-off-the-ground length, post-knockout recovery length (s), head shake
+    moments: { launchCrouch: 0.22, hopTime: 0.35, recoverTime: 1.6, shakeDeg: 28 },
     // Flight body language, from the physics. amount scales it all (0 = off).
     flight: {
       amount: 1,

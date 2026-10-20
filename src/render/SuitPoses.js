@@ -94,6 +94,40 @@ export const POSES = {
     LeftLeg: { aim: [-0.08, -0.9, 0.42] }, RightLeg: { aim: [0.08, -0.85, 0.5] },
     LeftFoot: { rot: [-20, 0, 0] }, RightFoot: { rot: [-20, 0, 0] },
   },
+  // Braking out of flight into a hover: hands thrust out in front (palms forward), knees up,
+  // leaning back against the stop
+  flare: {
+    hands: { Left: { curl: -25, thumb: -10 }, Right: { curl: -25, thumb: -10 } },
+    Spine02: { rot: [8, 0, 0] }, Spine01: { rot: [6, 0, 0] }, Head: { rot: [-10, 0, 0] },
+    LeftArm: { aim: [-0.35, -0.15, -0.92] }, RightArm: { aim: [0.35, -0.15, -0.92] },
+    LeftForeArm: { aim: [-0.25, 0.05, -0.97] }, RightForeArm: { aim: [0.25, 0.05, -0.97] },
+    LeftHand: { aim: [-0.1, 0.65, -0.75] }, RightHand: { aim: [0.1, 0.65, -0.75] },
+    LeftUpLeg: { aim: [-0.12, -0.4, -0.91] }, RightUpLeg: { aim: [0.12, -0.55, -0.83] },
+    LeftLeg: { aim: [-0.06, -0.97, 0.22] }, RightLeg: { aim: [0.06, -0.95, 0.3] },
+    LeftFoot: { rot: [-25, 0, 0] }, RightFoot: { rot: [-25, 0, 0] },
+  },
+  // Launch: a straight rocket, arms down at the sides with the palms thrusting back, toes pointed
+  launch: {
+    hands: { Left: { curl: -10, thumb: 0 }, Right: { curl: -10, thumb: 0 } },
+    Head: { rot: [16, 0, 0] }, neck: { rot: [6, 0, 0] },
+    LeftArm: { aim: [-0.14, -0.98, 0.14] }, RightArm: { aim: [0.14, -0.98, 0.14] },
+    LeftForeArm: { aim: [-0.1, -0.98, 0.18] }, RightForeArm: { aim: [0.1, -0.98, 0.18] },
+    LeftHand: { aim: [-0.05, -0.9, 0.42] }, RightHand: { aim: [0.05, -0.9, 0.42] },
+    LeftUpLeg: { aim: [-0.04, -1, 0.03] }, RightUpLeg: { aim: [0.04, -1, 0.03] },
+    LeftLeg: { aim: [-0.03, -1, 0.06] }, RightLeg: { aim: [0.03, -1, 0.06] },
+    LeftFoot: { rot: [-45, 0, 0] }, RightFoot: { rot: [-45, 0, 0] },
+  },
+  // Coming round after a knockout: arms and legs spread wide for balance, palms down firing the
+  // hand thrusters to steady the suit (the head shake is added on top)
+  recover: {
+    hands: { Left: { curl: -20, thumb: -10 }, Right: { curl: -20, thumb: -10 } },
+    Spine02: { rot: [-6, 0, 0] },
+    LeftArm: { aim: [-0.85, -0.5, -0.1] }, RightArm: { aim: [0.85, -0.5, -0.1] },
+    LeftForeArm: { aim: [-0.9, -0.42, -0.1] }, RightForeArm: { aim: [0.9, -0.42, -0.1] },
+    LeftUpLeg: { aim: [-0.32, -0.94, -0.05] }, RightUpLeg: { aim: [0.32, -0.94, -0.05] },
+    LeftLeg: { aim: [-0.25, -0.94, 0.22] }, RightLeg: { aim: [0.25, -0.94, 0.22] },
+    LeftFoot: { rot: [-15, 0, 0] }, RightFoot: { rot: [-15, 0, 0] },
+  },
 };
 
 export const STATES = Object.keys(POSES);
@@ -209,6 +243,7 @@ export class SuitPoser {
     this.yawRate = 0;                   // smoothed turning speed, rad/s
     this.vy = 0;                        // smoothed climb speed, m/s
     this.brace = 0;                     // brace-for-impact weight, 0..1
+    this.mom = { flare: 0, launch: 0, crouch: 0, hop: 0, recover: 0, launchCount: null, launchClock: 9, hopClock: 9, recoverClock: 9 };
     this.limp = 0;                      // knocked-out looseness, 0..1
     this.geff = new THREE.Vector3(0, -9.8, 0);   // gravity as the suit feels it (minus its own acceleration), suit frame
     this.limbs = {};                    // knocked-out limb swing: { p: direction, v: velocity }
@@ -229,6 +264,7 @@ export class SuitPoser {
       this.accH.set(0, 0); this.yawRate = 0; this.vy = 0;
       Object.assign(this.flt, { pull: 0, lat: 0, roll: 0, rollAcc: 0 });
       this.brace = 0; this.limp = 0;
+      Object.assign(this.mom, { crouch: 0, hop: 0, recover: 0 });
       return this.apply();
     }
     const P = CONFIG.pose;
@@ -242,11 +278,40 @@ export class SuitPoser {
     this.brace += (braceWant - this.brace) * (1 - Math.exp(-(braceWant ? 18 : 4) * dt));
     const limpWant = game.stunT > 0 ? 1 : 0;
     this.limp += (limpWant - this.limp) * (1 - Math.exp(-(limpWant ? 20 : 2.5) * dt));
-    want.brace = 0;
-    for (const s of STATES) if (s !== 'brace') want[s] *= 1 - this.brace;
-    want.brace = this.brace;
+    // moments: braking into a hover, launching, coming round after a knockout
+    const M = P.moments, mo = this.mom;
+    // braking out of flight (the game's air brake runs for exitBrake.time)
+    const brakeT = game.hoverBrakeT ?? 0, brakeAll = CONFIG.assist.exitBrake.time;
+    const flareWant = brakeT > 0 && !flying ? Math.min(1, brakeT / (brakeAll * 0.35)) : 0;
+    mo.flare += (flareWant - mo.flare) * (1 - Math.exp(-(flareWant > mo.flare ? 14 : 5) * dt));
+    // launch: a quick crouch, then the rocket pose for the burst, easing into flight
+    if (mo.launchCount === null) mo.launchCount = game.launchCount ?? 0;
+    if ((game.launchCount ?? 0) !== mo.launchCount) { mo.launchCount = game.launchCount ?? 0; mo.launchClock = 0; }
+    mo.launchClock += dt;
+    const lt = mo.launchClock, lTime = CONFIG.launch.time;
+    mo.launch = lt < lTime ? Math.min(1, lt / 0.08) * (lt > lTime - 0.5 ? (lTime - lt) / 0.5 : 1) : 0;
+    mo.crouch = lt < M.launchCrouch ? Math.sin(Math.PI * lt / M.launchCrouch) : 0;
+    // hopping off the ground into a hover: a small crouch and spring
+    const nearGround = (game.caps?.room ?? 9) < 0.6;
+    if (this.wasGroundedHop && !flying && body.vel.y > 1.2 && mo.hopClock > M.hopTime) mo.hopClock = 0;
+    this.wasGroundedHop = nearGround && body.vel.y < 0.8;
+    mo.hopClock += dt;
+    mo.hop = mo.hopClock < M.hopTime ? Math.sin(Math.PI * mo.hopClock / M.hopTime) : 0;
+    // knocked out → coming round
+    if (this.wasStunned && !(game.stunT > 0)) mo.recoverClock = 0;
+    this.wasStunned = game.stunT > 0;
+    mo.recoverClock += dt;
+    const rc = mo.recoverClock;
+    mo.recover = rc < M.recoverTime ? Math.min(1, rc / 0.2) * Math.min(1, (M.recoverTime - rc) / 0.5) : 0;
+    const special = { brace: this.brace, flare: mo.flare, launch: mo.launch, recover: mo.recover };
+    let sp = 0;
+    for (const v of Object.values(special)) sp = Math.max(sp, v);
+    for (const s of STATES) if (!(s in special)) want[s] *= 1 - sp;
     const k = 1 - Math.exp(-P.blendRate * dt);
-    for (const s of STATES) this.w[s] += (want[s] - this.w[s]) * (s === 'brace' ? 1 : k);
+    for (const s of STATES) {
+      if (s in special) this.w[s] = special[s] * (sp > 0 ? special[s] / Math.max(1e-6, Object.values(special).reduce((a, b) => a + b, 0)) : 0);
+      else this.w[s] += (want[s] - this.w[s]) * k;
+    }
 
     if (!this.primed) { this.lastVel.copy(game.body.vel); this.primed = true; }
     this.dtLast = dt;
@@ -255,6 +320,8 @@ export class SuitPoser {
     const vL = _v.copy(body.vel).applyQuaternion(qInv);
     const acc = _v2.copy(body.vel).sub(this.lastVel).multiplyScalar(1 / dt).applyQuaternion(qInv);
     this.lastVel.copy(body.vel);
+    // which way we're moving, in the suit's frame (the brake pushes the hands against it)
+    if (vL.lengthSq() > 4) (this.vDir ??= new THREE.Vector3()).copy(vL).normalize();
     const kl = 1 - Math.exp(-P.leanRate * dt);
     this.lean.x += (vL.x - this.lean.x) * kl;
     this.lean.y += (-vL.z - this.lean.y) * kl;
@@ -311,6 +378,21 @@ export class SuitPoser {
     }
     const R = this.byName;
     if (this.limp > 0.01) this.applyLimp();
+    // braking into a hover: hands push against the way you're going, knees come up toward it
+    // (the body swings upright during the brake, so this follows the real direction of travel)
+    if (w.flare > 0.01 && this.vDir) {
+      const d = this.vDir, fw = w.flare;
+      const steer = (name, dx, along, down) => {
+        const b = R[name];
+        if (!b?.dir) return;
+        _v.set(dx, -down, 0).addScaledVector(d, along).normalize();
+        if (!b.hasAim) { b.aim.copy(b.dir); b.hasAim = true; }
+        b.aim.normalize().lerp(_v, fw).normalize();
+      };
+      steer('LeftArm', -0.35, 1, 0.15); steer('RightArm', 0.35, 1, 0.15);
+      steer('LeftForeArm', -0.25, 1, 0); steer('RightForeArm', 0.25, 1, 0);
+      steer('LeftUpLeg', -0.12, 0.9, 0.5); steer('RightUpLeg', 0.12, 0.75, 0.65);
+    }
     // hands: curl each finger joint
     for (const s of STATES) {
       if (w[s] < 1e-3 || !POSES[s].hands) continue;
@@ -352,6 +434,17 @@ export class SuitPoser {
     add('LeftFoot', -climb * 18 + drop * 15, 0, 0); add('RightFoot', -climb * 18 + drop * 15, 0, 0);
     add('LeftUpLeg', drop * 22, 0, 0); add('RightUpLeg', drop * 16, 0, 0);
     add('LeftLeg', -drop * 38, 0, 0); add('RightLeg', -drop * 30, 0, 0);
+    // launch and hop: crouch then spring (knees fold, arms swing back, then everything extends)
+    const mo = this.mom, sq = Math.max(mo.crouch, mo.hop * 0.7);
+    if (sq > 0.01) {
+      for (const sd of ['Left', 'Right']) { add(`${sd}UpLeg`, 40 * sq, 0, 0); add(`${sd}Leg`, -70 * sq, 0, 0); add(`${sd}Foot`, 25 * sq, 0, 0); add(`${sd}Arm`, -30 * sq, 0, 0); }
+      add('Spine02', -18 * sq, 0, 0); add('Head', 10 * sq, 0, 0);
+    }
+    // coming round: a couple of quick head shakes, dying away
+    if (mo.recover > 0.01) {
+      const rc = mo.recoverClock, shake = Math.sin(rc * 22) * Math.exp(-rc * 2.2) * P.moments.shakeDeg * mo.recover;
+      add('neck', 0, shake * 0.6, shake * 0.15); add('Head', 0, shake, -shake * 0.2);
+    }
     // FLIGHT body language, from the physics (CONFIG.pose.flight). The suit flies head first, back up.
     const F = P.flight, fl = (w.flight + w.boost) * F.amount;
     if (fl > 0.01) {
