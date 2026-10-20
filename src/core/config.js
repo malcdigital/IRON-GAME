@@ -276,7 +276,8 @@ export const CONFIG = {
       spinFling: 32, spinLag: 14,   // boosted takeoff rolls: how far the spin throws the limbs out / how far they trail (degrees)
       pitchFullDeg: 50, legSpring: 14, legDamping: 0.38, fidgetEvery: [2.5, 6], fidgetDeg: 4, flutterDeg: 4, breathPeriod: 3.4, breathDeg: 1.6, glanceDeg: 7 },
     // Moments: hop-off-the-ground length, post-knockout recovery length (s), head shake
-    moments: { hopTime: 0.35, recoverTime: 1.6, shakeDeg: 28 },
+    moments: { leanWindow: 2, leanPush: 1,   // mid-air launch: how long the lean-into-flight blend runs (s), how hard the arms sweep back
+      hopTime: 0.35, recoverTime: 1.6, shakeDeg: 28 },
     // Flight body language, from the physics. amount scales it all (0 = off).
     flight: {
       amount: 1,

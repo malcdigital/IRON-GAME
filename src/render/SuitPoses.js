@@ -351,6 +351,19 @@ export class SuitPoser {
     const seqNow = game.launchSeq;
     const lc = launchCurve(seqNow ? seqNow.t : null, seqNow ? seqNow.jumpAt : 0, seqNow ? seqNow.fireAt : 0, mo.launchClock);
     mo.launch = lc.launch; mo.crouch = lc.crouch;
+    // From a hover in mid-air there's no ground launch: a quick tuck before firing, then the body
+    // leans over into flight (the pose follows the body's real tip, see below)
+    const airLaunch = seqNow ? !seqNow.ground : game.lastLaunchGround === false;
+    mo.tuck = 0;
+    if (airLaunch) {
+      if (seqNow) mo.tuck = Math.sin(Math.PI * Math.min(1, seqNow.t / Math.max(0.01, seqNow.fireAt)));
+      mo.launch = 0; mo.crouch = 0;
+    }
+    // lean into flight: 0 upright -> 1 head first (from the body's actual angle), for the first
+    // couple of seconds after an air launch
+    const headUp = Math.asin(THREE.MathUtils.clamp(_v3.set(0, 1, 0).applyQuaternion(body.quat).y, -1, 1)) * 180 / Math.PI;
+    mo.lean = airLaunch && flying && mo.launchClock < M.leanWindow ? THREE.MathUtils.clamp((80 - headUp) / 65, 0, 1) : (airLaunch && flying ? 1 : 0);
+    mo.leaning = airLaunch && flying && mo.launchClock < M.leanWindow;
     this.inBurst = !!game.burst;
     // boosted takeoff: the upright launch pose while the path climbs steeply, easing into flight as it levels
     if (game.burst) mo.launch = THREE.MathUtils.clamp((game.burst.pitch * 180 / Math.PI - 15) / 45, 0, 1);
@@ -380,6 +393,19 @@ export class SuitPoser {
     for (const s of STATES) {
       if (s in special) this.w[s] = special[s] * (sp > 0 ? special[s] / Math.max(1e-6, Object.values(special).reduce((a, b) => a + b, 0)) : 0);
       else this.w[s] += (want[s] - this.w[s]) * k;
+    }
+    // leaning into flight from a hover: hover -> flight follows the body's real tip
+    if (mo.leaning) {
+      const rest = 1 - sp;
+      this.w.hover = (1 - mo.lean) * rest; this.w.flight = mo.lean * rest; this.w.boost = 0; this.w.stand = 0;
+    }
+    // never less than a whole pose (a blend that comes up short would sag toward the bare model)
+    let total = 0;
+    for (const s of STATES) total += this.w[s];
+    if (total < 0.999) {
+      let best = 'hover', bw = -1;
+      for (const s of STATES) if (!(s in special) && want[s] > bw) { bw = want[s]; best = s; }
+      this.w[best] += 1 - total;
     }
 
     if (!this.primed) { this.lastVel.copy(game.body.vel); this.primed = true; }
@@ -518,6 +544,18 @@ export class SuitPoser {
     add('LeftLeg', -drop * 38, 0, 0); add('RightLeg', -drop * 30, 0, 0);
     // coming round: a couple of quick head shakes, dying away
     const mo = this.mom;
+    // mid-air launch: a quick tuck before firing (knees up, arms cock forward), then as the body
+    // tips over, the arms sweep back along it, the legs straighten and trail, the head comes up
+    if (mo.tuck > 0.01) {
+      for (const sd of ['Left', 'Right']) { add(`${sd}UpLeg`, 28 * mo.tuck, 0, 0); add(`${sd}Leg`, -40 * mo.tuck, 0, 0); add(`${sd}Arm`, 22 * mo.tuck, 0, 0); }
+      add('Spine02', -8 * mo.tuck, 0, 0);
+    }
+    if (mo.leaning) {
+      const push = Math.sin(Math.PI * mo.lean) * P.moments.leanPush;
+      for (const sd of ['Left', 'Right']) { add(`${sd}Arm`, -40 * push, 0, 0); add(`${sd}ForeArm`, -20 * push, 0, 0); add(`${sd}Leg`, 15 * push, 0, 0); add(`${sd}Foot`, -20 * push, 0, 0); }
+      add('Head', 15 * push, 0, 0);
+      this.handCurl('Left', -15 * push); this.handCurl('Right', -15 * push);
+    }
     // charged up and tensed: a fine tremble through the body, with a slow sway on top
     if ((mo.charge ?? 0) > 0.01 && !this.preview) {
       const S = P.subtle, a = S.tremble * mo.charge, t = this.t;
@@ -776,7 +814,7 @@ export class SuitPoser {
     this.brace = 0; this.limp = 0; this.crouch = 0; this.walk = 0; this.walkPhase = 0;
     this.lean.set(0, 0); this.side = 0; this.accH.set(0, 0); this.yawRate = 0; this.vy = 0; this.upS = 0; this.upV = 0; this.ay = 0;
     Object.assign(this.flt, { pull: 0, lat: 0, roll: 0, rollAcc: 0, lastRoll: 0 });
-    this.mom = { flare: 0, launch: 0, crouch: 0, hop: 0, recover: 0, charge: 0, launchCount: null, launchClock: 9, hopClock: 9, recoverClock: 9 };
+    this.mom = { flare: 0, launch: 0, crouch: 0, hop: 0, recover: 0, charge: 0, tuck: 0, lean: 0, leaning: false, launchCount: null, launchClock: 9, hopClock: 9, recoverClock: 9 };
     for (const sp of Object.values(this.legSpring)) Object.assign(sp, { x: 0, vx: 0, z: 0, vz: 0 });
     this.limbs = {}; this.handFlex = null; this.fidgetIn = 2; this.pitch = 0;
     this.geff.set(0, -9.8, 0); this._prevVel = null; this.primed = false;

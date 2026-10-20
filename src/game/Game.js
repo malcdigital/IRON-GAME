@@ -393,6 +393,7 @@ export class Game {
       if (s.t >= s.fireAt) {
         this.launchSeq = null;
         const c = CONFIG.launch.climb;
+        this.lastLaunchGround = s.ground;   // (the suit's poses play a ground launch or a mid-air lean into flight)
         if (s.ground && s.jumpBoosted && s.origin) {
           // Boosted takeoff: fly the burst curve (see stepBurst)
           this.startBurst(s.origin);
