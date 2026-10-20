@@ -343,7 +343,9 @@ export class SuitPoser {
     // braking out of flight (the game's air brake runs for exitBrake.time)
     const brakeT = game.hoverBrakeT ?? 0, brakeAll = CONFIG.assist.exitBrake.time;
     const flareWant = brakeT > 0 && !flying ? Math.min(1, brakeT / (brakeAll * 0.35)) : 0;
-    mo.flare += (flareWant - mo.flare) * (1 - Math.exp(-(flareWant > mo.flare ? 14 : 5) * dt));
+    // (relaunching into flight from the brake: the braking pose clears quickly for the tuck)
+    const relaunch = game.launchSeq && !game.launchSeq.ground;
+    mo.flare += (flareWant - mo.flare) * (1 - Math.exp(-(flareWant > mo.flare && !relaunch ? 14 : relaunch ? 25 : 5) * dt));
     // launch: a quick crouch, then the rocket pose for the burst, easing into flight
     if (mo.launchCount === null) mo.launchCount = game.launchCount ?? 0;
     if ((game.launchCount ?? 0) !== mo.launchCount) { mo.launchCount = game.launchCount ?? 0; mo.launchClock = 0; }

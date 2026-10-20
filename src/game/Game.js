@@ -119,11 +119,12 @@ export class Game {
   // boosted: boost held as you launch (R1 + ✕ / Shift + F): a stronger launch for the same time
   launch(boosted = false, rampTime = null, kickMult = 1, sharp = false) {
     const l = CONFIG.launch;
-    if (this.launchCharge < 1) {
+    // (the mid-air burst into flight always fires; only the stored-charge launch recharges)
+    if (this.launchCharge < 1 && !sharp) {
       events.emit('toast', { text: `Flight mode. Burst recharging (${Math.round(this.launchCharge * 100)}%)` });
       return;
     }
-    this.launchCharge = 0;
+    if (!sharp) this.launchCharge = 0;
     this.launchT = l.time;
     this.launchCount = (this.launchCount ?? 0) + 1;   // (the camera punches in on each launch)
     this.launchPower = boosted ? l.boosted : 1;
@@ -267,6 +268,7 @@ export class Game {
           // Launch sequence (CONFIG.launch.seq): wind up, jump, then the thrusters fire.
           // From the ground it's a crouch and a real jump; in the air, a quick tuck and fire.
           const seq = CONFIG.launch.seq, onGround = this.grounded || (this.caps.room ?? 9) < 0.6;
+          this.hoverBrakeT = 0;   // (relaunching while still braking into a hover: the brake stops)
           this.launchSeq = { t: 0, ground: onGround, jumped: !onGround, boosted: this.boostHeld || this.takeoffBoostHeld,
             jumpAt: onGround ? seq.jumpAt : 0, fireAt: onGround ? seq.fireAt : seq.airFireAt };
           // already crouched and charged up (L1 + R1 held): skip the wind-up and jump straight away
