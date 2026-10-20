@@ -142,7 +142,7 @@ export const CONFIG = {
     // The launch sequence (set it in the Pose Studio's Launch tab): from the ground, crouch until
     // jumpAt s, jump (jumpSpeed m/s, jumpAngleDeg above level, toward where you face), thrusters fire
     // at fireAt s. In the air: fire at airFireAt s.
-    seq: { jumpAt: 0.3, fireAt: 0.55, jumpSpeed: 7, jumpAngleDeg: 25, airFireAt: 0.15,
+    seq: { jumpAt: 0.35, fireAt: 0.55, jumpSpeed: 6, jumpAngleDeg: 15, airFireAt: 0.15,
       jumpCarry: 0.7,     // and the jets keep carrying you forward during it (0-1 of full hover speed)
       jumpAssist: 0.25 }, // how hard the jets help the jump (0-1 of a full climb)
     // Climb-out after launching from the ground: nose starts pitchDeg up, eases to levelDeg over time s
