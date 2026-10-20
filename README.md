@@ -53,4 +53,12 @@ It shows up in the workshop, flies, heats and takes damage automatically.
 - Hacking: scan and take over drones or turrets (new `world/hacking.js` + HUD layer)
 - Rescue missions: carry people out of a burning building, catch a falling lift
 - Part progression: unlock parts by salvaging them on missions
+- Breakable world gated by upgrades (Metroid-style): levels full of materials your blasts
+  can't get through yet (reinforced concrete, steel shutters, blast doors, energy shields).
+  Upgrade weapons/core enough and the same blast punches through, opening new routes,
+  shortcuts and secrets in levels you've already played. Each material gets a toughness;
+  each blast gets a power from your parts (core output, gauntlet tier, heat). Hits below
+  the threshold just scorch or dent; above it the wall breaks (debris, dust, physics chunks).
+  Needs: an attack system (repulsor blast, charged shot), destructible colliders in
+  `world/`, a material table in `data/`, and the workshop showing what you can now break.
 - Port the simulation to Godot once the flight feel is right
