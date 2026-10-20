@@ -21,7 +21,7 @@ export class Input {
 
     // Double-tap detection for jukes
     this.tapAxis = new Map();
-    for (const axis of ['left', 'right', 'forward', 'back']) {
+    for (const axis of Object.keys(bindings.doubleTap).filter((k) => k !== 'window')) {
       for (const code of bindings.axes[axis]) this.tapAxis.set(code, axis);
     }
     this.lastTap = {};

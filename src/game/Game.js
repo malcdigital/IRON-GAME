@@ -41,7 +41,7 @@ export class Game {
     this.twr = 0;
     this.launchT = 0;
     this.launchCharge = 1;
-    this.caps = { maxLift: 0, assistGain: 1, aeroAccel: new THREE.Vector3() };
+    this.caps = { maxLift: 0, assistGain: 1, aeroAccel: new THREE.Vector3(), colliders: this.world.colliders };
     this.aero = new THREE.Vector3();
     this._Fsave = new THREE.Vector3();
     this._Tsave = new THREE.Vector3();
@@ -83,6 +83,7 @@ export class Game {
     this.u.fill(0);
     this.mixer?.reset();
     this.caps.aeroAccel.set(0, 0, 0);
+    this.snapState = null;
     this.launchT = 0;
     this.launchCharge = 1;
     this.syncMass();
@@ -102,10 +103,11 @@ export class Game {
   }
 
   // Sharp sidestep: a burst from the stored charge
-  juke(dir) {
+  // Sidestep left or right. In flight it rides along with a barrel roll.
+  juke(dir, fromRoll = false) {
     const e = CONFIG.evade;
     if (this.evadeCharge < 1) {
-      events.emit('toast', { text: 'Juke recharging' });
+      if (!fromRoll) events.emit('toast', { text: 'Juke recharging' });
       return;
     }
     this.evadeCharge -= 1;
@@ -114,9 +116,9 @@ export class Game {
     const right = new THREE.Vector3().crossVectors(fwd, Y);
     if (right.lengthSq() < 1e-4) right.set(1, 0, 0);
     right.normalize();
-    const shove = { left: right.clone().negate(), right, up: Y.clone(), down: Y.clone().negate() }[dir];
+    const shove = dir === 'left' ? right.clone().negate() : right;
     this.body.vel.addScaledVector(shove, e.jukeSpeed);
-    if (flying) this.controller.jet.jink(dir === 'left' ? 1 : dir === 'right' ? -1 : 0);
+    if (flying) this.controller.jet.jink(fromRoll ? 0 : dir === 'left' ? 1 : -1);
     events.emit('maneuver', { name: 'juke', dir });
   }
 
@@ -158,9 +160,27 @@ export class Game {
           events.emit('toast', { text: 'Turning around' });
         }
         break;
-      case 'jukeLeft': case 'jukeRight': case 'jukeUp': case 'jukeDown':
-        this.juke(action.slice(4).toLowerCase());
+      case 'jukeLeft': case 'jukeRight': {
+        const dir = action === 'jukeLeft' ? 'left' : 'right';
+        if (this.controller.flying) this.controller.jet.startRoll(dir === 'left' ? 1 : -1);  // roll + juke
+        else this.juke(dir);
         break;
+      }
+      case 'snapLeft': case 'snapRight': {
+        const side = action === 'snapLeft' ? 1 : -1;
+        if (this.controller.flying) {
+          const v = this.body.vel, sp = Math.hypot(v.x, v.z);
+          if (sp > 3 && this.controller.jet.snap(side, v.length())) {
+            const from = new THREE.Vector3(v.x / sp, 0, v.z / sp);
+            const to = from.clone().applyAxisAngle(Y, side * THREE.MathUtils.degToRad(CONFIG.flight.snap.angleDeg));
+            this.snapState = { t: 0, from, to, speed: sp };
+            events.emit('maneuver', { name: 'snap' });
+          }
+        } else if (this.controller.mode === 'assist') {
+          this.controller.heading += side * Math.PI / 2;   // hover: quick quarter turn
+        }
+        break;
+      }
       case 'flare':
         this.fireFlares();
         break;
@@ -221,6 +241,17 @@ export class Game {
 
     // 2. What does the pilot want?
     const cmd = this.controller.update(body, input, this.caps, this.grounded, dt);
+    const jet = this.controller.jet;
+    if (this.controller.flying) {
+      // A fresh barrel roll carries a juke; a finished hard turn fires a burst
+      if (jet.pendingJuke) { this.juke(jet.pendingJuke > 0 ? 'left' : 'right', true); jet.pendingJuke = 0; }
+      if (jet.burstPending) {
+        jet.burstPending = false;
+        this.launchT = Math.max(this.launchT, CONFIG.flight.snap.burstTime);
+        body.vel.addScaledVector(jet.direction, CONFIG.flight.snap.kick);
+        events.emit('launch');
+      }
+    } else { jet.pendingJuke = 0; jet.burstPending = false; this.snapState = null; }
 
     // 3. Gyro handles what torque it can; thrusters do the rest
     const g = suit.gyroTorque() * (launching ? l.gyroMult : 1) + aeroSteering(body.vel.length(), CONFIG.aero);
@@ -262,6 +293,28 @@ export class Game {
     body.torque.add(this._T.applyQuaternion(body.quat));
 
     body.force.add(this.aero);
+
+    // Hard turn: a stored-charge dump that sheds speed, swings the motion round and fires you out
+    if (this.snapState) {
+      const s = CONFIG.flight.snap, st = this.snapState;
+      st.t += dt;
+      const p = Math.min(1, st.t / s.time);
+      const e = p * p * (3 - 2 * p);
+      const dir = this._tmp.copy(st.from).lerp(st.to, e).normalize();
+      const k = p < 0.5
+        ? THREE.MathUtils.lerp(1, s.cornerFrac, THREE.MathUtils.smoothstep(p, 0, 0.5))
+        : THREE.MathUtils.lerp(s.cornerFrac, s.exitFrac, THREE.MathUtils.smoothstep(p, 0.5, 1));
+      const want = dir.multiplyScalar(st.speed * k);
+      want.y = body.vel.y;
+      const push = this._c.subVectors(want, body.vel).multiplyScalar(body.mass / s.response);
+      push.clampLength(0, body.mass * s.maxG * CONFIG.physics.gravity);
+      body.force.add(push);
+      if (p >= 1) {
+        this.snapState = null;
+        this.launchT = Math.max(this.launchT, s.burstTime);
+        events.emit('launch');
+      }
+    }
 
     updateHeat(suit, dt, input.boost);
     this.applyStance();
@@ -390,6 +443,8 @@ export class Game {
       gLoad: this.controller.flying ? this.controller.jet.gLoad : 1,
       launchCharge: this.launchCharge,
       carving: this.controller.flying && this.controller.jet.carving,
+      avoiding: this.controller.flying ? this.controller.jet.avoiding : null,
+      snapping: this.controller.flying && this.controller.jet.snapT > 0,
       evadeCharge: this.evadeCharge,
       flares: this.flares,
       missiles: {

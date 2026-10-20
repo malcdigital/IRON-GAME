@@ -1,6 +1,7 @@
 import * as THREE from '../lib/three.js';
 import { events } from '../core/events.js';
 import { wingCoeff } from '../physics/aero.js';
+import { ObstacleSensor } from './avoidance.js';
 
 const Y = new THREE.Vector3(0, 1, 0);
 const clamp = THREE.MathUtils.clamp;
@@ -9,7 +10,8 @@ const clamp = THREE.MathUtils.clamp;
 // and air on the body gives lift. The pilot steers where the flight path goes;
 // this works out the attitude (including banking into turns) and the thrust.
 //
-// Maneuvers: Q/E barrel roll (with a sideways dodge), X flips 180°.
+// Maneuvers: Q/E barrel roll (doubles as the juke), double-tap Q/E for a hard 90° turn,
+// X flips 180°. An obstacle sensor steers you over or around buildings and away from the ground.
 export class JetFlight {
   constructor(config) {
     this.cfg = config;
@@ -35,6 +37,15 @@ export class JetFlight {
     this._rateNow = new THREE.Vector3();
     this._ffRate = new THREE.Vector3();
     this.carving = false;
+    this.sensor = new ObstacleSensor(config.avoid);
+    this.avoiding = null;
+    this.snapT = 0;
+    this.snapCool = 0;
+    this.snapSide = 0;
+    this.snapEntry = 0;
+    this.pendingJuke = 0;
+    this.groundHold = null;
+    this.burstPending = false;
 
     this._d = new THREE.Vector3();
     this._v = new THREE.Vector3();
@@ -74,6 +85,30 @@ export class JetFlight {
     this.jinkSide = side;
   }
 
+  // Start a barrel roll (which is also the juke)
+  startRoll(dir) {
+    if (this.rollT > 0) return;
+    this.rollT = this.cfg.flight.rollTime;
+    this.rollDir = dir;
+    this.pendingJuke = dir;
+    events.emit('maneuver', { name: 'roll' });
+  }
+
+  // Hard turn: brake, snap 90° toward `side` (+1 left, -1 right), then burst away
+  snap(side, speed) {
+    const s = this.cfg.flight.snap;
+    if (this.snapT > 0 || this.snapCool > 0 || speed < s.minSpeed) return false;
+    // Aim the path at the new heading right away: the suit air-brakes (chest into the wind),
+    // turns while slow, then bursts away once it's lined up
+    this.yaw += side * THREE.MathUtils.degToRad(s.angleDeg);
+    this.snapT = s.time;
+    this.snapSide = side;
+    this.snapEntry = speed;
+    this.snapCool = s.cooldown;
+    this.rollT = 0;
+    return true;
+  }
+
   flip() {
     if (this.flipT > 0) return false;
     this.flipT = this.cfg.flight.flipTime;
@@ -92,10 +127,9 @@ export class JetFlight {
     // Barrel roll on a fresh Q/E press
     const roll = input.roll || 0;
     // Fresh press = one roll; holding (corkscrew) keeps rolling
-    if (roll !== 0 && this.rollT <= 0 && (this.prevRoll === 0 || this.cfg.evade.corkscrew)) {
-      this.rollT = c.rollTime;
-      this.rollDir = roll;
-      events.emit('maneuver', { name: 'roll' });
+    if (roll !== 0 && this.rollT <= 0 && this.snapT <= 0) {
+      if (this.prevRoll === 0) this.startRoll(roll);            // fresh press: roll + juke
+      else if (this.cfg.evade.corkscrew) { this.rollT = c.rollTime; this.rollDir = roll; }  // held: keep rolling
     }
     this.prevRoll = roll;
 
@@ -104,8 +138,10 @@ export class JetFlight {
     // Carve: steering hard while pulling back. Pull no longer climbs; it tightens the turn.
     const steer = Math.abs(input.strafe);
     this.carving = steer > 0.3 && input.forward < -0.3 && this.flipT <= 0;
-    const turnMaxG = this.carving ? c.carve.maxG : fast ? c.boostMaxG : c.maxG;
-    const maxG = (this.flipT > 0 ? c.flipMaxG : turnMaxG) * g;
+    const snapping = this.snapT > 0;
+    this.snapCool = Math.max(0, this.snapCool - dt);
+    const turnMaxG = snapping ? c.snap.maxGTurn : this.carving ? c.carve.maxG : fast ? c.boostMaxG : c.maxG;
+    let maxG = (this.flipT > 0 ? c.flipMaxG : turnMaxG) * g;
     const rateCap = this.carving ? c.carve.turnRate : c.turnRate;
     const turnRate = Math.min(rateCap, maxG / Math.max(speed, 1));
     // Spread the body to catch air: some when turning, full when carving
@@ -115,13 +151,20 @@ export class JetFlight {
     const vDir = speed > 1 ? this._v.copy(v).divideScalar(speed) : null;
     const leadBefore = vDir ? Math.acos(clamp(this.direction.dot(vDir), -1, 1)) : 0;
     this.yaw -= input.strafe * turnRate * dt;
-    if (!this.carving) this.pitch = clamp(this.pitch - input.forward * c.pitchRate * dt, -1.45, 1.45);
+    // Slow = shallow dives only (there's no air to pull out of a steep one); full dives once fast
+    const minPitch = -(c.slowDive.minDeg + (82 - c.slowDive.minDeg) * THREE.MathUtils.smoothstep(speed, c.slowDive.from, c.slowDive.full)) * Math.PI / 180;
+    if (!this.carving) this.pitch = clamp(this.pitch - input.forward * c.pitchRate * dt, minPitch, 1.45);
+    else this.pitch = Math.max(this.pitch, minPitch);
     if (this.flipT > 0) {
       this.yaw += (Math.PI * dt) / c.flipTime;
       this.flipT -= dt;
     }
+    if (snapping) {
+      this.snapT -= dt;   // the game swings the motion round; this just keeps the pose sharp
+      this.carving = true;
+    }
     // Don't let the aim run too far ahead of where the suit is really going
-    if (speed > 10 && this.flipT <= 0) {
+    if (speed > 10 && this.flipT <= 0 && !snapping) {
       const lead = Math.acos(clamp(this.direction.dot(vDir), -1, 1));
       if (lead > THREE.MathUtils.degToRad(this.carving ? c.carve.maxLeadDeg : c.maxLeadDeg) && lead > leadBefore) {
         this.yaw = oldYaw;
@@ -138,21 +181,60 @@ export class JetFlight {
     // Look ahead: where will we be in a moment at this sink rate?
     const predicted = caps.altitude + Math.min(0, v.y) * ga.lookahead;
     const pitchFloor = predicted < ga.height && input.forward <= 0 ? ga.pitch : -Infinity;
-    const savedPitch = this.pitch;
+    const savedPitch = this.pitch, savedYaw = this.yaw;
     this.pitch = Math.max(this.pitch, pitchFloor);
+
+    // Obstacle sensor: steer over or around whatever is ahead, harder the closer it gets.
+    // This bends this frame's path only; your own heading is restored afterwards.
+    // What the suit can really pull right now: air grip at this speed (spread out) plus spare thrust
+    const gripNow = ((this.cfg.aero.plates[2] + wingCoeff(this.cfg.aero, c.spread.carve)) * speed * speed * 0.57 + caps.maxLift) / body.mass - 0.5 * g;
+    const canPull = clamp(gripNow, 1.5, c.carve.maxG * g);
+    const plan = this.sensor.scan(body.pos, v, this.direction, caps.colliders, caps.altitude, canPull);
+    this.avoiding = plan.active && plan.urgency > 0.02 ? plan.kind : null;
+    this.avoidPlan = plan;
+    let avoidBrake = false;
+    if (this.avoiding && this.flipT <= 0) {
+      const w = plan.urgency;
+      const velYaw = plan.baseYaw;
+      const velPitch = plan.basePitch;
+      if (plan.kind === 'up') {
+        const want = Math.min(1.3, velPitch + plan.angle);
+        if (want > this.pitch) this.pitch += (want - this.pitch) * w;
+        // Near the ground the pull-up sticks: you can't keep diving into it
+        if (plan.target === 'ground' && w > 0.5) this.groundHold = Math.max(this.pitch, savedPitch);
+      } else {
+        const sign = plan.kind === 'left' ? 1 : -1;
+        let dy = velYaw + sign * plan.angle - this.yaw;
+        dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+        if (dy * sign > 0) this.yaw += dy * w;
+      }
+      if (w > 0.4) {
+        maxG = Math.max(maxG, c.carve.maxG * g);
+        this.spread += (c.spread.carve - this.spread) * Math.min(1, c.spread.rate * dt);
+      }
+      avoidBrake = plan.brake && w > 0.3;
+    }
+
     const vTargetBase = fast ? c.boostSpeed : c.minSpeed + (c.cruiseSpeed - c.minSpeed) * this.throttle;
-    // Carving brakes to cornering speed: slower = tighter
-    const vTarget = this.carving ? Math.min(vTargetBase, c.carve.cornerSpeed) : vTargetBase;
+    // Carving brakes to cornering speed: slower = tighter. A hard turn brakes harder.
+    let vTarget = this.carving ? Math.min(vTargetBase, c.carve.cornerSpeed) : vTargetBase;
+    if (avoidBrake) vTarget = Math.min(vTarget, speed * this.cfg.avoid.brakeFrac);
 
     // Wanted acceleration: speed along the path, plus pulling the velocity onto the path
     const d = this.direction;
-    this.pitch = savedPitch;
+    this.pitch = this.groundHold != null ? Math.max(savedPitch, this.groundHold) : savedPitch;
+    this.groundHold = null;
+    this.yaw = savedYaw;
     const along = v.dot(d);
-    this._aPerp.copy(v).addScaledVector(d, -along).multiplyScalar(-(this.carving ? c.carve.turnGain : c.turnGain));
+    // Steer back onto the path; much harder when dodging an obstacle
+    const avoidW = this.avoiding ? plan.urgency : 0;
+    this._aPerp.copy(v).addScaledVector(d, -along).multiplyScalar(-(this.carving ? c.carve.turnGain : c.turnGain) * (1 + this.cfg.avoid.steerBoost * avoidW));
     // Keep height-keeping (vertical) and turning (sideways) on separate budgets
     // During a juke, let the shove carry instead of pulling straight back onto the path
     if (this.jinkT > 0) this._aPerp.multiplyScalar(0.15);
-    const vert = clamp(this._aPerp.y, -c.verticalMaxG * g, c.verticalMaxG * g);
+    // Pulling up away from something gets the full turning budget
+    const vMax = (this.avoiding === 'up' && plan.urgency > 0.3 ? c.carve.maxG : c.verticalMaxG) * g;
+    const vert = clamp(this._aPerp.y, -vMax, vMax);
     this._aPerp.y = 0;
     this._aPerp.clampLength(0, maxG);
     this._aPerp.y = vert;

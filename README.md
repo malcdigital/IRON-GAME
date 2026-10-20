@@ -20,7 +20,8 @@ Each system lives in its own file. Systems talk through a small event bus instea
 | `src/data/range.js` | Test range layout: towers, rings, crates | Move things around, add a course |
 | `src/physics/` | Rigid body and collisions | Rarely |
 | `src/flight/controller.js` | Turns keys into "wanted force and spin" (assist + manual modes) | Add a flight mode |
-| `src/flight/jetFlight.js` | Fast flight mode: banked turns, barrel rolls, flip-and-burn | Tune maneuvers, add new ones |
+| `src/flight/jetFlight.js` | Fast flight mode: banked turns, roll-jukes, hard turns, flip-and-burn | Tune maneuvers, add new ones |
+| `src/flight/avoidance.js` | Obstacle sensor: measures buildings/ground ahead and picks over / left / right | Tune how early and how hard it steers (`avoid` in config) |
 | `src/physics/aero.js` | Air on the body: drag, lift, braking | Change how slippery or floaty flight is |
 | `src/flight/thrustMixer.js` + `allocator.js` | Splits the work between whatever thrusters exist, including swivelling nozzles | Rarely: it handles any thruster layout |
 | `src/suit/` | Suit built from a loadout, heat, damage | Add new part effects |

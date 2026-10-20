@@ -45,7 +45,8 @@ function table() {
     move: ['W A S D', 'L stick'],
     turn: [`${kx('yawLeft')} ${kx('yawRight')}`, 'R stick'],
     roll: [`${kx('yawLeft')} ${kx('yawRight')}`, 'R stick flick'],
-    juke: ['Double-tap', 'D-pad'],
+    juke: [`${kx('yawLeft')} / ${kx('yawRight')}`, 'R stick flick'],
+    snap: [`Double-tap ${kx('yawLeft')}/${kx('yawRight')}`, 'Double-flick R stick'],
     carve: [`${kx('left')}/${kx('right')} + ${kx('back')}`, 'L stick sideways + back'],
     start: ['Click', PAD_NAMES[p.menu.select]],
   };

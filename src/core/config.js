@@ -69,13 +69,34 @@ export const CONFIG = {
     gripLearn: 3,                   // how fast the assist corrects for less grip than expected
     maxAoaDeg: 32,                  // best-grip body angle; beyond this you'd stall
     maxLeadDeg: 35,                 // how far the aim can get ahead of where you're actually going
-    rollTime: 0.6, dodgeAccel: 16, rollMaxRate: 14,  // barrel roll
+    rollTime: 0.6, dodgeAccel: 16, rollMaxRate: 14,  // barrel roll (also the juke)
+    // Hard turn (double-tap Q/E or the right stick): brake, snap round, burst away
+    snap: { angleDeg: 90, time: 0.6, cornerFrac: 0.55, exitFrac: 0.85, response: 0.08, maxG: 20, maxGTurn: 16, minSpeed: 15, burstTime: 0.8, cooldown: 1.2 },
     flipTime: 0.9, flipMaxG: 10, flipMaxRate: 4.5,  // 180° reverse
     attitudeGain: 1.8,
     autoExitSpeed: 4,               // touching down slower than this drops back to hover
+    slowDive: { minDeg: 18, from: 15, full: 40 },  // steepest dive allowed: 18° when slow, full dive by 40 m/s
     autoLevel: 0.7,                 // how fast the path levels out when you let go of up/down (1/s)
     groundAvoid: { height: 10, pitch: 0.25, lookahead: 1.3 },  // near the ground without diving: nose comes up on its own
     verticalMaxG: 2.5,              // height-keeping gets its own budget so turns don't drag you down
+  },
+
+  // Obstacle sensor for flight mode: looks ahead, measures what's in the way, steers round it
+  avoid: {
+    enabled: true,
+    lookTime: 2.2, lookExtra: 8,   // how far ahead to look: seconds of travel + metres
+    margin: 4,                     // clearance kept from walls and rooftops (m)
+    groundMargin: 6,               // never plan a path lower than this above the ground (m)
+    urgentTime: 0.7,               // at this many seconds from impact the sensor takes full control
+    extraDeg: 4,                   // extra angle beyond the bare minimum
+    upBias: 1.15,                  // >1 prefers going round over going over
+    stickiness: 0.15,              // keep the chosen side unless another is clearly better (rad)
+    brakeAbove: 0.8, brakeFrac: 0.6,  // brake if the turn needs more than 80% of max grip
+    pullUpShare: 0.5,              // share of max grip assumed for a pull-up (planning margin)
+    reactTime: 0.3,                // seconds of sink allowed for the suit to react
+    groundEarly: 2.4,              // start easing the nose up when room < this x needed
+    steerBoost: 3,                 // how much harder the assist steers at full urgency
+    minSpeed: 5,
   },
 
   // Launch burst: entering flight mode dumps a stored charge into the thrusters.
@@ -182,8 +203,8 @@ export const CONFIG = {
       help: ['KeyH'],
     },
 
-    // Double-tap a direction key to juke that way (W = drop, S = pop up)
-    doubleTap: { window: 0.25, left: 'jukeLeft', right: 'jukeRight', forward: 'jukeDown', back: 'jukeUp' },
+    // Double-tap Q/E for a hard turn that way
+    doubleTap: { window: 0.28, yawLeft: 'snapLeft', yawRight: 'snapRight' },
 
     // PS5 DualSense (any controller with the standard layout works).
     // Button numbers follow the browser's standard gamepad layout:
@@ -191,7 +212,8 @@ export const CONFIG = {
     // 8 Create, 9 Options, 10 L3, 11 R3, 12-15 D-pad up/down/left/right, 16 PS, 17 touchpad.
     gamepad: {
       deadzone: 0.15,
-      rollFlick: 0.75,        // right stick pushed this far sideways in flight = barrel roll
+      rollFlick: 0.75,        // right stick pushed this far sideways in flight = barrel roll (hold = corkscrew)
+      doubleFlick: 0.3,       // two flicks the same way within this many seconds = hard turn
       invertFlightY: false,   // true: pull the stick back to dive
       sticks: { moveX: 0, moveY: 1, lookX: 2, lookY: 3 },
       analog: { up: 7, down: 6 },       // R2 climb / throttle up, L2 descend / throttle down
@@ -205,7 +227,7 @@ export const CONFIG = {
         help: 8,      // Create
         workshop: 9,  // Options
         reset: 17,    // Touchpad press
-        jukeLeft: 14, jukeRight: 15, jukeUp: 12, jukeDown: 13,  // D-pad
+        jukeLeft: 14, jukeRight: 15,  // D-pad: roll + juke (hover: sidestep)
       },
       menu: { select: 0, back: 1, up: 12, down: 13 },
       rumble: true,

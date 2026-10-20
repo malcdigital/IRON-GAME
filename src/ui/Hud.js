@@ -86,6 +86,9 @@ export class Hud {
 
     const mode = t.mode === 'assist' ? 'Hover · assist'
       : t.mode === 'manual' ? `Hover · manual · ${Math.round(t.throttle * 100)}%`
+      : t.snapping ? 'Flight · hard turn'
+      : t.avoiding === 'up' ? 'Flight · auto pull-up'
+      : t.avoiding ? `Flight · auto-steer ${t.avoiding}`
       : t.carving ? 'Flight · carving' : `Flight · throttle ${Math.round(t.throttle * 100)}%`;
     const twrClass = t.twr < 1 ? 'bad' : t.twr < 1.15 ? 'warn' : '';
     this.readout.innerHTML = `
