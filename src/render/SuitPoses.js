@@ -284,12 +284,13 @@ export class SuitPoser {
     // tilt into where you're going (speed) with an extra lurch when you speed up or brake (push)
     const fwd = clampD(this.lean.y * P.leanPerMs + this.accH.y * H.pushPerMs2, H.tiltMax) * hv;
     const rt = clampD(this.lean.x * P.leanPerMs + this.accH.x * H.pushPerMs2, H.tiltMax) * hv;
-    // sideways: the whole body leans from the hips as one piece; legs only trail a little, together
-    add('Hips', 0, 0, -rt * H.sideHips);
-    add('Spine02', -fwd * 0.5, 0, -rt * 0.15); add('Spine01', -fwd * 0.3, 0, -rt * 0.1);
-    add('Head', fwd * 0.45, 0, rt * 0.35);                                  // eyes stay on where you're going
-    for (const n of ['LeftUpLeg', 'RightUpLeg']) add(n, -fwd * H.legTrail, 0, -rt * H.sideTrail);   // legs trail behind
-    add(rt > 0 ? 'RightLeg' : 'LeftLeg', -Math.abs(rt) * 0.4, 0, 0);                              // the leading knee bends a touch
+    // sideways: like a pendulum. The thrusters carry the upper body, so the hips and legs swing out
+    // behind (inertia and drag) while the chest stays nearly upright
+    add('Hips', 0, 0, -rt * H.sideHips);                                    // the pelvis and legs swing
+    add('Spine02', -fwd * 0.5, 0, rt * H.sideHips * 0.55); add('Spine01', -fwd * 0.3, 0, rt * H.sideHips * 0.3);   // chest stays near upright
+    add('Head', fwd * 0.45, 0, rt * 0.1);                                   // eyes stay on where you're going
+    for (const n of ['LeftUpLeg', 'RightUpLeg']) add(n, -fwd * H.legTrail, 0, -rt * H.sideTrail);   // legs swing further, together
+    add(rt > 0 ? 'LeftLeg' : 'RightLeg', -Math.abs(rt) * 0.35, 0, 0);                             // the trailing knee folds a touch
     for (const n of ['LeftLeg', 'RightLeg']) add(n, -Math.abs(fwd) * 0.5, 0, 0);                 // knees fold as they swing back
     for (const n of ['LeftArm', 'RightArm']) add(n, -fwd * H.armSweep, 0, -rt * H.armSweep * 0.7);   // arms sweep back
     // turning: the chest leads into the turn, the hips and legs lag behind
