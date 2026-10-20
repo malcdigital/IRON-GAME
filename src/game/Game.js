@@ -894,8 +894,8 @@ export class Game {
     jet.yaw = r.heading; jet.pitch = a1;
     // body lined up with the path: upright at the start, head first once level
     const q = this._jumpQ.setFromAxisAngle(Y, r.heading).multiply(this._qTmp2.setFromAxisAngle(this._xAxis.set(1, 0, 0), -(Math.PI / 2 - a1)));
-    // barrel rolls over the top of the curve: spin about the body's length (head axis), eased in and out
-    const dFrom = this.burstD(B.rollFromX), dTo = this.burstD(B.rollToX);
+    // barrel rolls along the curve: spin about the body's length (head axis), eased in and out
+    const dFrom = B.rollFrom, dTo = Math.min(B.rollTo, path.length);
     const ru = THREE.MathUtils.clamp((r.d - dFrom) / Math.max(1, dTo - dFrom), 0, 1);
     const rollAngle = B.rolls * Math.PI * 2 * ru * ru * (3 - 2 * ru);
     if (rollAngle > 0 && ru < 1) {

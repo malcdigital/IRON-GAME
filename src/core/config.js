@@ -151,7 +151,7 @@ export const CONFIG = {
     // where you face, speeding up to speed m/s over rampTime s, body lined up with the path.
     burst: {
       jumpAngleDeg: 88, speed: 108, rampTime: 0.6, velGain: 10, posGain: 25, turnRate: 20,
-      rolls: 2, rollFromX: 10, rollToX: 95,   // barrel rolls over the top of the curve, between these distances forward (m)   // gains: how tightly it holds the path; turnRate: body turn (rad/s)
+      rolls: 3, rollFrom: 8, rollTo: 135,   // barrel rolls, from rollFrom to rollTo metres along the path (it's about 150 m long)   // gains: how tightly it holds the path; turnRate: body turn (rad/s)
       curve: [
         { x: 0, y: 0, in: [0, -13.68564], out: [0, 92.17321] },
         { x: 100, y: 50, in: [-88.11446, -2.798209], out: [36.23938, 1.150837] },
