@@ -1,5 +1,6 @@
 import { GamepadInput } from './GamepadInput.js';
 import { prompts } from './prompts.js';
+import { TapHoldGesture } from './gestures.js';
 
 // All player input. Keyboard and controller both feed the same axes and actions,
 // and bindings for both live in config.js.
@@ -19,12 +20,8 @@ export class Input {
     }
     const gameCodes = new Set([...Object.values(bindings.axes).flat(), ...this.actionByCode.keys()]);
 
-    // Double-tap detection for jukes
-    this.tapAxis = new Map();
-    for (const axis of Object.keys(bindings.doubleTap).filter((k) => k !== 'window')) {
-      for (const code of bindings.axes[axis]) this.tapAxis.set(code, axis);
-    }
-    this.lastTap = {};
+    // Q/E and the right stick: tap = roll + juke, hold = corkscrew, double-tap = hard turn
+    this.rollGesture = new TapHoldGesture(bindings.rollGesture);
 
     target.addEventListener('keydown', (e) => {
       if (isTyping(e.target)) return;
@@ -32,13 +29,6 @@ export class Input {
       prompts.set('keyboard');
       if (gameCodes.has(e.code)) e.preventDefault();
       if (!e.repeat && this.actionByCode.has(e.code)) this.queue.push(this.actionByCode.get(e.code));
-      if (!e.repeat && this.tapAxis.has(e.code)) {
-        const axis = this.tapAxis.get(e.code), now = performance.now() / 1000, dt = bindings.doubleTap;
-        if (now - (this.lastTap[axis] ?? -9) < dt.window) {
-          this.queue.push(dt[axis]);
-          this.lastTap[axis] = -9;
-        } else this.lastTap[axis] = now;
-      }
       this.held.add(e.code);
     });
     target.addEventListener('keyup', (e) => this.held.delete(e.code));
@@ -50,6 +40,12 @@ export class Input {
   poll(dt, state) {
     const before = this.queue.length;
     this.gamepad.poll(dt, state, this.queue);
+    // Work out roll gestures from whichever device is pressing
+    const qe = this.enabled ? (this.down('yawLeft') ? 1 : 0) - (this.down('yawRight') ? 1 : 0) : 0;
+    const raw = qe !== 0 ? qe : this.enabled ? this.gamepad.axes.roll : 0;
+    const gst = this.rollGesture.update(dt, raw);
+    if (gst.tap) this.queue.push(gst.tap > 0 ? 'rollLeft' : 'rollRight');
+    if (gst.double) this.queue.push(gst.double > 0 ? 'snapLeft' : 'snapRight');
     const g = this.gamepad.axes;
     if (this.queue.length > before || g.forward || g.strafe || g.yaw || g.up || g.down || g.boost) {
       this.lastDevice = 'gamepad';
@@ -69,7 +65,7 @@ export class Input {
     a.strafe = pick('strafe', d('right') - d('left'));
     const qe = d('yawLeft') - d('yawRight');
     a.yaw = pick('yaw', qe);
-    a.roll = qe !== 0 ? qe : g.roll;
+    a.roll = this.rollGesture.hold;   // only a confirmed hold rolls continuously (corkscrew)
     a.up = Math.max(d('up'), g.up);
     a.down = Math.max(d('down'), g.down);
     a.boost = this.down('boost') || g.boost;

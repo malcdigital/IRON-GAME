@@ -112,7 +112,9 @@ export const CONFIG = {
   // Assisted flight: the suit holds altitude, levels itself and brakes when you let go.
   assist: {
     maxSpeed: 14, boostSpeed: 26,
-    climbRate: 5, boostClimbRate: 9,
+    climbRate: 5, boostClimbRate: 9, descendRate: 3.5,
+    // Lift reserve: when you need to stop sinking or climb, briefly draw extra thrust from stored charge
+    liftReserve: { thrustMult: 1.5, below: 1.0 },   // kicks in when you're sinking more than 1 m/s slower than wanted
     maxTiltDeg: 28, boostTiltDeg: 45,
     velGain: 1.5, climbGain: 5,
     yawRate: 1.9,
@@ -146,10 +148,11 @@ export const CONFIG = {
   // Evasive moves. Jukes and flares use charges that refill over time.
   evade: {
     charges: 3, rechargeTime: 2,    // juke charges, seconds per charge
-    jukeSpeed: 24,                   // sideways shove (m/s)
-    jinkTime: 0.45,                  // flight assist lets the shove carry you this long
+    jukeSpeed: 30,                   // sideways shove (m/s)
+    hoverJukeScale: 0.8,             // hover sidesteps are a bit gentler
+    jinkTime: 0.6,                  // flight assist lets the shove carry you this long
     jinkBankDeg: 70,                 // the suit snaps into a bank toward the dodge
-    doubleTapWindow: 0.25,           // seconds between taps for a keyboard juke
+    jukeSpread: 0.2,                 // the sidestep is spread over this long, alongside the roll
     corkscrew: true,                 // hold Q/E to keep rolling
     flares: 4, flareRecharge: 6, flaresPerShot: 3, flareBurn: 3,
   },
@@ -203,8 +206,8 @@ export const CONFIG = {
       help: ['KeyH'],
     },
 
-    // Double-tap Q/E for a hard turn that way
-    doubleTap: { window: 0.28, yawLeft: 'snapLeft', yawRight: 'snapRight' },
+    // Q/E (and the right stick): tap = roll + juke, hold = corkscrew, double-tap = hard turn
+    rollGesture: { holdTime: 0.2, doubleWindow: 0.2 },  // seconds: held longer = corkscrew; second tap within = hard turn
 
     // PS5 DualSense (any controller with the standard layout works).
     // Button numbers follow the browser's standard gamepad layout:
@@ -213,7 +216,6 @@ export const CONFIG = {
     gamepad: {
       deadzone: 0.15,
       rollFlick: 0.75,        // right stick pushed this far sideways in flight = barrel roll (hold = corkscrew)
-      doubleFlick: 0.3,       // two flicks the same way within this many seconds = hard turn
       invertFlightY: false,   // true: pull the stick back to dive
       sticks: { moveX: 0, moveY: 1, lookX: 2, lookY: 3 },
       analog: { up: 7, down: 6 },       // R2 climb / throttle up, L2 descend / throttle down

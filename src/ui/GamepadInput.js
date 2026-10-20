@@ -8,8 +8,6 @@ export class GamepadInput {
     this.index = null;
     this.prev = [];
     this.menuRepeat = 0;
-    this.prevRoll = 0;
-    this.lastFlick = null;
     this.supported = typeof navigator.getGamepads === 'function';
     this.axes = { forward: 0, strafe: 0, yaw: 0, roll: 0, up: 0, down: 0, boost: false };
 
@@ -85,15 +83,6 @@ export class GamepadInput {
       if (flying && m.invertFlightY) a.forward = ly;
       a.yaw = -rx;                           // hover: right stick turns
       a.roll = Math.abs(rx) > m.rollFlick ? -Math.sign(rx) : 0;  // flight: flick to barrel roll
-      // Two quick flicks the same way = hard turn
-      if (a.roll !== 0 && this.prevRoll === 0) {
-        const now = performance.now() / 1000;
-        if (this.lastFlick && this.lastFlick.dir === a.roll && now - this.lastFlick.t < m.doubleFlick) {
-          queue.push(a.roll > 0 ? 'snapLeft' : 'snapRight');
-          this.lastFlick = null;
-        } else this.lastFlick = { dir: a.roll, t: now };
-      }
-      this.prevRoll = a.roll;
       a.up = btn(m.analog.up).value;
       a.down = btn(m.analog.down).value;
       a.boost = btn(m.hold.boost).pressed;

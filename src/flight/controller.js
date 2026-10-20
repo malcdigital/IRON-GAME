@@ -106,7 +106,7 @@ export class FlightController {
 
     // Vertical: hold altitude unless climbing or descending
     const climb = input.boost ? c.boostClimbRate : c.climbRate;
-    const vyDes = (input.up - input.down) * climb;
+    const vyDes = input.up * climb - input.down * (input.boost ? c.boostClimbRate : c.descendRate);
     const aY = (vyDes - body.vel.y) * c.climbGain + g;
 
     this._qYaw.setFromAxisAngle(Y, h);

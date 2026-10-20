@@ -84,6 +84,7 @@ export class Game {
     this.mixer?.reset();
     this.caps.aeroAccel.set(0, 0, 0);
     this.snapState = null;
+    this.jukeShove = null;
     this.launchT = 0;
     this.launchCharge = 1;
     this.syncMass();
@@ -117,7 +118,8 @@ export class Game {
     if (right.lengthSq() < 1e-4) right.set(1, 0, 0);
     right.normalize();
     const shove = dir === 'left' ? right.clone().negate() : right;
-    this.body.vel.addScaledVector(shove, e.jukeSpeed);
+    // Spread the sidestep over a short time so it moves with the roll instead of jumping ahead of it
+    this.jukeShove = { vec: shove, t: 0, dur: flying ? e.jukeSpread : 0.12, scale: flying ? 1 : e.hoverJukeScale };
     if (flying) this.controller.jet.jink(fromRoll ? 0 : dir === 'left' ? 1 : -1);
     events.emit('maneuver', { name: 'juke', dir });
   }
@@ -166,6 +168,9 @@ export class Game {
         else this.juke(dir);
         break;
       }
+      case 'rollLeft': case 'rollRight':
+        if (this.controller.flying) this.controller.jet.startRoll(action === 'rollLeft' ? 1 : -1);
+        break;
       case 'snapLeft': case 'snapRight': {
         const side = action === 'snapLeft' ? 1 : -1;
         if (this.controller.flying) {
@@ -218,7 +223,13 @@ export class Game {
     else this.launchCharge = Math.min(1, this.launchCharge + dt / l.recharge);
     this.caps.launching = launching;
     this.caps.altitude = body.pos.y - CONFIG.pilot.feetHeight;
-    updateThrusterAvailability(suit, input.boost, dt, launching ? l.thrustMult : 1);
+    // Hover lift reserve: stop a descent / start a climb quickly (the starter suit is barely stronger than gravity)
+    const a = CONFIG.assist;
+    const vyWant = input.up * a.climbRate - input.down * a.descendRate;
+    this.liftReserve = this.controller.mode === 'assist' && !this.grounded && !launching && !input.boost
+      && vyWant - body.vel.y > a.liftReserve.below;
+    const extra = launching ? l.thrustMult : this.liftReserve ? a.liftReserve.thrustMult : 1;
+    updateThrusterAvailability(suit, input.boost, dt, extra);
     const thr = suit.thrusters;
     let maxLift = 0, fullDraw = 0;
     for (const t of thr) {
@@ -227,7 +238,7 @@ export class Game {
     }
     // The core may not be able to run every thruster flat out
     // The burst runs on stored charge, so the core isn't the limit while it lasts
-    const powerOut = suit.powerOutput() * (launching ? l.thrustMult : 1) * thermalFactor(suit.core.heat);
+    const powerOut = suit.powerOutput() * extra * thermalFactor(suit.core.heat);
     if (fullDraw > powerOut) maxLift *= powerOut / fullDraw;
     this.caps.maxLift = maxLift;
     this.caps.assistGain = suit.assistGain();
@@ -293,6 +304,14 @@ export class Game {
     body.torque.add(this._T.applyQuaternion(body.quat));
 
     body.force.add(this.aero);
+
+    // Juke sidestep in progress
+    if (this.jukeShove) {
+      const j = this.jukeShove, e = CONFIG.evade;
+      body.force.addScaledVector(j.vec, (body.mass * e.jukeSpeed * j.scale) / j.dur);
+      j.t += dt;
+      if (j.t >= j.dur) this.jukeShove = null;
+    }
 
     // Hard turn: a stored-charge dump that sheds speed, swings the motion round and fires you out
     if (this.snapState) {

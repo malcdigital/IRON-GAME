@@ -91,6 +91,7 @@ export class JetFlight {
     this.rollT = this.cfg.flight.rollTime;
     this.rollDir = dir;
     this.pendingJuke = dir;
+    this.rollJuke = true;
     events.emit('maneuver', { name: 'roll' });
   }
 
@@ -126,10 +127,11 @@ export class JetFlight {
 
     // Barrel roll on a fresh Q/E press
     const roll = input.roll || 0;
-    // Fresh press = one roll; holding (corkscrew) keeps rolling
-    if (roll !== 0 && this.rollT <= 0 && this.snapT <= 0) {
-      if (this.prevRoll === 0) this.startRoll(roll);            // fresh press: roll + juke
-      else if (this.cfg.evade.corkscrew) { this.rollT = c.rollTime; this.rollDir = roll; }  // held: keep rolling
+    // A held roll (confirmed by the gesture reader) is a corkscrew: rolls only, no juke
+    if (roll !== 0 && this.rollT <= 0 && this.snapT <= 0 && this.cfg.evade.corkscrew) {
+      this.rollT = c.rollTime;
+      this.rollDir = roll;
+      this.rollJuke = false;
     }
     this.prevRoll = roll;
 
@@ -238,11 +240,6 @@ export class JetFlight {
     this._aPerp.y = 0;
     this._aPerp.clampLength(0, maxG);
     this._aPerp.y = vert;
-    if (this.rollT > 0) {
-      // Sideways dodge during a roll
-      this._x.crossVectors(d, Y).normalize();
-      this._aPerp.addScaledVector(this._x, -this.rollDir * c.dodgeAccel);
-    }
     const accelCap = (caps.launching ? this.cfg.launch.maxAccelG : 2) * g;
     this._A.copy(d).multiplyScalar(clamp((vTarget - along) * c.speedGain, -2 * g, accelCap)).add(this._aPerp);
     this._A.y += g;
