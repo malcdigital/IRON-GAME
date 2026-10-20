@@ -1,5 +1,6 @@
 import * as THREE from '../lib/three.js';
 import { CONFIG } from '../core/config.js';
+import { events } from '../core/events.js';
 import { HERO_BUILDERS, buildHeroPilot, PALETTE } from './HeroSuit.js';
 import { loadSuitModel, placeModel } from './ModelSuit.js';
 
@@ -210,7 +211,10 @@ export class SuitView {
         this.root.add(placed.model);
         for (const b of this.boxes) b.visible = false;
         this.attachFlamesToModel(placed);
-      }).catch((err) => console.warn('Suit model failed to load, using the box suit', err));
+      }).catch((err) => {
+        console.warn('Suit model failed to load, using the box suit', err);
+        events.emit('toast', { text: `3D suit couldn't load (${err?.message ?? err}). Showing the box suit.`, kind: 'hot' });
+      });
     }
   }
 
