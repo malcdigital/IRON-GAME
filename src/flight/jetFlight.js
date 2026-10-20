@@ -264,7 +264,11 @@ export class JetFlight {
       // Only when a small correction can't clear it: one quick move (hop a roof edge, or a
       // barrel roll with a sidestep sized to clear it). Never a hard turn.
       const need = plan.dist * Math.tan(clamp(plan.angle - THREE.MathUtils.degToRad(as.extraDeg), 0, 1.2)) + 1;   // metres to shift to clear it
-      if (!ground && !away && tooBig && plan.ttc < as.moveTime && this.autoCool <= 0 && plan.target !== this.autoHandled) {
+      // A sidestep of `need` metres takes stepTime seconds at the suit's max sideways push;
+      // the roll waits until the last moment that still works
+      const stepTime = Math.sqrt((5.77 * need) / as.stepMaxAccel);
+      const lastMoment = plan.kind === 'up' ? plan.ttc < as.moveTime : plan.ttc <= stepTime + as.stepLead;
+      if (!ground && !away && tooBig && lastMoment && this.autoCool <= 0 && plan.target !== this.autoHandled) {
         let move = null;
         if (plan.kind === 'up' && need <= as.hopMax) {
           move = { type: 'hop', dv: clamp((need / Math.max(plan.ttc, 0.3)) * 1.5 + 3, 4, as.hopMaxSpeed) };
@@ -272,7 +276,7 @@ export class JetFlight {
           const dir = plan.kind === 'left' ? 1 : -1;
           // Only one auto roll every few seconds, never between buildings or along a wall
           // you're skimming. Otherwise the course correction does the work.
-          if (this.autoRollT <= 0 && this.streetT <= 0 && plan.headOn >= as.rollHeadOn) move = { type: 'roll', dir, need, ttc: plan.ttc };
+          if (this.autoRollT <= 0 && this.streetT <= 0 && plan.headOn >= as.rollHeadOn) move = { type: 'roll', dir, need, ttc: plan.ttc, time: Math.max(stepTime, Math.min(as.stepTimeMax, plan.ttc - as.stepLead)) };
         }
         if (move) {
           if (move.type === 'roll') this.autoRollT = as.rollLockout;

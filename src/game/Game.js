@@ -340,7 +340,7 @@ export class Game {
           const right = new THREE.Vector3().crossVectors(jet.direction, Y).normalize();
           const vec = m.dir > 0 ? right.negate() : right;
           const av = CONFIG.avoid;
-          const time = THREE.MathUtils.clamp(m.ttc * av.stepTimeFrac, av.stepTimeMin, av.stepTimeMax);
+          const time = m.time;
           let shift = null;
           for (let d = Math.max(2, m.need); d <= av.rollMax; d += 0.5) {
             if (pathClear(this.predictStep(vec, d, time, m.ttc + 0.5), cols, 2)) { shift = d; break; }

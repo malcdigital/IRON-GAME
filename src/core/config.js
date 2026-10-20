@@ -89,7 +89,10 @@ export const CONFIG = {
     nudgeMaxDeg: 12,               // never bends more than this; bigger = auto hop / roll instead
     nudgeEnough: 0.6,              // the suit takes time to swing, so past 60% of that it rolls/hops instead
     nudgeTime: 1.2, nudgeFull: 0.5, // starts this many seconds from impact, full size by nudgeFull
-    stepTimeFrac: 0.6, stepTimeMin: 0.3, stepTimeMax: 0.6,  // auto sidestep takes this share of the time to impact
+    // Auto roll waits until the last moment: it fires when the sidestep would only just make it
+    stepMaxAccel: 220,             // hardest sideways push of an auto sidestep (m/s², ~22 g)
+    stepLead: 0.12,                // safety margin (s) before the last possible moment
+    stepTimeMax: 0.6,              // longest an auto sidestep takes
     stepSettle: 0.25,              // then holds the new line this long (no drift into the next building)
     rollLockout: 4,                // after an auto roll, no other auto roll for this many seconds
     rollHeadOn: 0.5,               // auto roll only flying within ~60° of straight at the wall
