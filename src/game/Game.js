@@ -340,8 +340,17 @@ export class Game {
     if (this.stunT > 0) {
       this.stunT = Math.max(0, this.stunT - dt);
       input = { ...input, cut: true, up: 0, down: 0, forward: 0, strafe: 0, yaw: 0, pitch: 0, roll: 0, boost: false, takeoffBoost: false };
-      // Coming round in the air: twist to face the ground, burn to stop the fall, then upright
-      if (this.stunT === 0 && !this.grounded && (this.caps.room ?? 0) > CONFIG.crash.rescueMinRoom) this.rescue = { phase: 'orient', t: 0 };
+      if (this.stunT === 0 && !this.grounded) {
+        const c = CONFIG.crash, sideways = Math.hypot(body.vel.x, body.vel.z);
+        if (this.knockFlying && sideways > c.keepFlightSpeed && (this.caps.room ?? 0) > c.rescueAbortRoom) {
+          // a glancing hit that didn't kill your speed: straight back into flight along your path
+          this.controller.enterFlight(body, null);
+          events.emit('toast', { text: 'Back in flight' });
+        } else if ((this.caps.room ?? 0) > c.rescueMinRoom) {
+          // coming round in the air: twist to face the ground, burn to stop the fall, then upright
+          this.rescue = { phase: 'orient', t: 0 };
+        }
+      }
     }
     this.caps.attTarget = null;
     if (this.rescue) input = this.stepRescue(dt, input);
@@ -774,6 +783,7 @@ export class Game {
     }
     const t = Math.min(c.stunMax, c.stunMin + (speed - c.knockSpeed) * c.stunPerMs);
     if (this.stunT <= 0) events.emit('toast', { text: 'Crash! Suit rebooting…', kind: 'hot' });
+    if (this.stunT <= 0) this.knockFlying = this.controller.flying;   // (a new knockout: were we flying?)
     this.stunT = Math.max(this.stunT, t);
     if (this.controller.flying) this.controller.exitFlight(this.body, this.hoverFraction());
   }

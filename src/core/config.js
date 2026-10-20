@@ -331,7 +331,8 @@ export const CONFIG = {
     // rescueTurnGain × normal, until within rescueFacedDeg or rescueOrientMax s), then burn to slow
     // the fall to rescueSinkSpeed (up to rescueBrakeAccel m/s² extra), then upright hover.
     rescueMinRoom: 5, rescueAbortRoom: 2.5, rescueTurnGain: 2.5, rescueFacedDeg: 20, rescueOrientMax: 1.2, rescueSpin: 7,
-    rescueSinkSpeed: 1.5, rescueBrakeAccel: 22 },
+    rescueSinkSpeed: 1.5, rescueBrakeAccel: 22,
+    keepFlightSpeed: 18 },   // knocked out in flight but still moving faster than this (m/s, sideways)? come round straight back into flight
 
   // Key bindings. Values are KeyboardEvent.code names.
   keys: {
