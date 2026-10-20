@@ -313,10 +313,10 @@ export const CONFIG = {
     //   fov: field of view (°)               bank: how much the horizon leans with your bank (0-1)
     //   lag: how tightly it follows (higher = tighter)   shake: handheld shake at speed (m)
     shots: {
-      hover:  { distance: 4.2, orbit: 0, height: 25, shoulder: 0, lookUp: 1,    lookAhead: 0,    fov: 90, bank: 0,    lag: 6, shake: 0 },
-      flight: { distance: 2.2, orbit: 0, height: 18, shoulder: 0, lookUp: -3,   lookAhead: 20.5, fov: 60, bank: 0,    lag: 7, shake: 0 },
-      boost:  { distance: 6.2, orbit: 0, height: 12, shoulder: 0, lookUp: -1.4, lookAhead: 20,   fov: 74, bank: 0.35, lag: 5, shake: 0.03 },
-      charge: { distance: 2.7, orbit: 0, height: 25, shoulder: 0, lookUp: 0.6,  lookAhead: 0,    fov: 68, bank: 0,    lag: 8, shake: 0 },   // L1 + R1 crouch on the ground
+      hover:  { distance: 4.2, orbit: 0, height: 30, shoulder: 0,   lookUp: 1,    lookAhead: 0,    fov: 90, bank: 0,    lag: 6, shake: 0 },
+      flight: { distance: 2.2, orbit: 0, height: 18, shoulder: 0.1, lookUp: -3,   lookAhead: 20.5, fov: 60, bank: 0,    lag: 7, shake: 0 },
+      boost:  { distance: 6.2, orbit: 0, height: 12, shoulder: 0,   lookUp: -1.4, lookAhead: 20,   fov: 74, bank: 0.35, lag: 5, shake: 0.03 },
+      charge: { distance: 2.8, orbit: 0, height: 38, shoulder: 0,   lookUp: 0.6,  lookAhead: 0,    fov: 68, bank: 0,    lag: 8, shake: 0 },   // L1 + R1 crouch on the ground
     },
     // Charging up (L1 + R1 crouch on the ground): its own shot (shots.charge, set it in the Camera
     // Studio), eased in and out over blendTime s, plus a small tense shake (m)
