@@ -1,7 +1,7 @@
 import * as THREE from '../lib/three.js';
 import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
 
-// The 3D suit model (assets/suit.glb, generated from the character sheet).
+// The 3D suit model (assets/suit.gltf.json: glTF with its data embedded, generated from the character sheet).
 // It's one piece with a humanoid skeleton. The game still treats the suit as separate parts
 // (for damage, heat and thrust), so the box parts are kept, hidden, for their flame positions,
 // and damage/heat tint the whole model.
