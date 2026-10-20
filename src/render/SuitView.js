@@ -206,7 +206,7 @@ export class SuitView {
       const token = (this.buildToken = (this.buildToken ?? 0) + 1);
       loadSuitModel(CONFIG.suitModel.url).then((gltf) => {
         if (token !== this.buildToken) return;
-        const placed = placeModel(gltf, CONFIG.suitModel);
+        const placed = placeModel(gltf, { ...CONFIG.suitModel, toon: CONFIG.art.style === 'toon' });
         this.model = placed;
         this.modelBase = placed.mats.map((m) => m.color.clone());
         this.modelEmissive = placed.mats.map((m) => m.emissive.clone());
@@ -292,6 +292,7 @@ export class SuitView {
     holder.position.set(...pos);
     const basePos = new THREE.Vector3(...pos);
     holder.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), comp.thruster.dir);
+    outer.material.userData.outlineParameters = inner.material.userData.outlineParameters = { visible: false };   // flames glow, no ink lines
     holder.add(outer, inner);
     this.root.add(holder);
     const ion = comp.part.visual.glow != null && CONFIG.suitStyle !== 'hero';

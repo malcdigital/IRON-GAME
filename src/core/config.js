@@ -216,10 +216,13 @@ export const CONFIG = {
   cargo: { grabRange: 2.4, holdOffset: [0, -0.35, -0.65], radius: 0.42 },
 
   // Suit look: 'hero' (the character sheet: ivory, navy, orange) or 'scrap' (each part its own junk colours)
+  // Art style: 'toon' (cel shading and ink outlines, like the character sheet) or 'realistic'
+  art: { style: 'toon', outline: { thickness: 0.004, color: 0x15161c } },
   suitStyle: 'model',
   // 'model': the 3D model made from the character sheet (falls back to 'hero' if it can't load)
   suitModel: { url: 'assets/suit.json', height: 1.9, feetY: -1.03, turn: Math.PI,
-    podMaxDeg: 35, podRate: 8 },   // back pods swing toward the thrust direction (up to podMaxDeg; podRate = how quickly)
+    podMaxDeg: 35, podRate: 8,      // back pods swing toward the thrust direction (up to podMaxDeg; podRate = how quickly)
+    toonSteps: [140, 205, 255], toonNormal: 0.6 },   // cel shading (art.style 'toon'): light bands (0-255), panel-line depth
 
   camera: {
     // One shot per state. Tune them live with the Camera Studio (K) and paste the copied settings here.

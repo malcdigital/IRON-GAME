@@ -42,6 +42,27 @@ export function loadSuitModel(url) {
   return cached;
 }
 
+let gradient = null;
+function toonGradient(steps) {
+  if (gradient) return gradient;
+  const data = new Uint8Array(steps.length * 4);
+  steps.forEach((v, i) => data.set([v, v, v, 255], i * 4));
+  gradient = new THREE.DataTexture(data, steps.length, 1);
+  gradient.minFilter = gradient.magFilter = THREE.NearestFilter;
+  gradient.needsUpdate = true;
+  return gradient;
+}
+
+function toonFrom(m, cfg) {
+  return new THREE.MeshToonMaterial({
+    color: m.color, map: m.map,
+    emissive: m.emissive, emissiveMap: m.emissiveMap, emissiveIntensity: m.emissiveIntensity,
+    normalMap: m.normalMap, normalScale: new THREE.Vector2(cfg.toonNormal, cfg.toonNormal),
+    gradientMap: toonGradient(cfg.toonSteps),
+    side: m.side,
+  });
+}
+
 // Fit the model to the suit's body: feet at the soles, facing -Z (the game's forward)
 export function placeModel(gltf, cfg) {
   const model = gltf.scene;
@@ -55,10 +76,16 @@ export function placeModel(gltf, cfg) {
   box.setFromObject(model);
   model.position.y += cfg.feetY - box.min.y;
   const mats = [];
+  const swapped = new Map();
   model.traverse((o) => {
     if (o.isMesh) {
       o.castShadow = true;
       o.frustumCulled = false;   // skinned meshes can be culled wrongly
+      if (cfg.toon && o.material) {
+        // Cel look: lighting snaps into a few flat bands (like the character sheet)
+        if (!swapped.has(o.material)) swapped.set(o.material, toonFrom(o.material, cfg));
+        o.material = swapped.get(o.material);
+      }
       const m = o.material;
       if (m && !mats.includes(m)) mats.push(m);
     }
