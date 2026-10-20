@@ -564,13 +564,17 @@ export class SuitPoser {
       for (const n of ['LeftLeg', 'RightLeg']) add(n, 10 * dive, 0, 0);
       for (const n of ['LeftFoot', 'RightFoot']) add(n, -15 * dive, 0, 0);
       this.handCurl('Left', 30 * dive); this.handCurl('Right', 30 * dive);
-      // climbing: reach for the sky. Right fist punches up ahead, back arches, legs trail soft, look up
-      aimTo('RightArm', [0.05, 0.97, -0.22], climb); aimTo('RightForeArm', [0.03, 0.99, -0.12], climb);
-      aimTo('LeftArm', [-0.3, -0.9, 0.3], climb * 0.6);
-      add('Spine01', 8 * climb, 0, 0); add('Head', 14 * climb, 0, 0);
-      legT.Left.x += 12 * climb; legT.Right.x += 4 * climb;
-      add('LeftLeg', -20 * climb, 0, 0);
-      this.handCurl('Right', 45 * climb);
+      // climbing: push yourself up. Arms drive down along the body with the palms toward the feet
+      // (the hand thrusters firing back down), the more so the more upright you are, like the launch
+      for (const n of ['LeftArm', 'RightArm', 'LeftForeArm', 'RightForeArm', 'LeftHand', 'RightHand']) {
+        const lp = POSES.launch[n];
+        if (lp?.aim) aimTo(n, lp.aim, climb);
+        if (lp?.twist && R[n]) R[n].twist += lp.twist * climb;
+      }
+      add('Spine01', 6 * climb, 0, 0); add('Head', 14 * climb, 0, 0);
+      legT.Left.x += 10 * climb; legT.Right.x += 4 * climb;
+      add('LeftLeg', -16 * climb, 0, 0);
+      this.handCurl('Left', -15 * climb); this.handCurl('Right', -15 * climb);
       // flutter in the airflow: knees and feet shiver a little, more at speed
       const fz = Math.min(1, this.speed / 60) * S.flutterDeg * fl, t = this.t;
       add('LeftLeg', -fz * (0.5 + 0.5 * Math.sin(t * 15.3)), 0, 0); add('RightLeg', -fz * (0.5 + 0.5 * Math.sin(t * 13.1 + 1.7)), 0, 0);
