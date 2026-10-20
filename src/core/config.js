@@ -316,7 +316,7 @@ export const CONFIG = {
     },
     // Boosted takeoff: the camera pulls back this much further (m), widens the view by fovMult (0.5 = +50%),
     // and keeps the horizon level, through the curve and for hold s after. spring: how quickly it eases in and out.
-    burst: { distance: 10, fovMult: 0.5, spring: 6, hold: 1.5 },
+    burst: { distance: 7.8, fovMult: 0.5, spring: 6, hold: 1.5 },   // (7.8 on top of the 2.2 m flight shot = 10 m away)
     // Moments added on top of the shots
     moments: {
       punch: { distance: 0.25, fov: 8, attack: 0.12, release: 0.7 },   // launch burst: push in 25% (and narrow the view 8°), then ease back
