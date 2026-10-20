@@ -238,6 +238,16 @@ export class CameraRig {
       this.camera.position.x += amp * (Math.sin(t * 37.3) + 0.5 * Math.sin(t * 61.7));
       this.camera.position.y += amp * (Math.sin(t * 43.1) + 0.5 * Math.sin(t * 57.9));
     }
+    // superhero landing: a thud
+    if ((game.heroLandCount ?? 0) !== (this.lastHero ?? 0)) { this.lastHero = game.heroLandCount ?? 0; if (!this.snapNext) this.thudT = 0; }
+    if (this.thudT != null) {
+      const LD = CONFIG.pose.landing;
+      this.thudT += dt;
+      const k = Math.max(0, 1 - this.thudT / LD.shakeTime) ** 2, amp = LD.shake * k, t = this.thudT;
+      this.camera.position.y += amp * (Math.sin(t * 71.0) + 0.5 * Math.sin(t * 113.0)) - amp * 0.8;
+      this.camera.position.x += amp * 0.5 * Math.sin(t * 89.0);
+      if (this.thudT > LD.shakeTime) this.thudT = null;
+    }
     if (slam > 0.01) {
       const t = this.slamT, amp = SL.shake * slam;
       this.camera.position.x += amp * (Math.sin(t * 67.3) + 0.6 * Math.sin(t * 109.7));

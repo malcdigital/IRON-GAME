@@ -4,6 +4,7 @@ import { events } from '../core/events.js';
 // Fills the same axes and actions as the keyboard, so the game doesn't care which you use.
 export class GamepadInput {
   constructor(map) {
+    events.on('cutEnd', () => { this.cutHold = false; });
     this.map = map;
     this.index = null;
     this.prev = [];
@@ -99,9 +100,14 @@ export class GamepadInput {
         a.boost = btn(h.boost).value > 0.5;   // R2: boost
         a.takeoffBoost = btn(h.up).pressed && l1;   // L1 + R1 while pressing ✕: boosted takeoff
       }
-      // Double-tap L1 and hold the second press: cut the thrusters (hover)
-      if (l1 && !this.prev[h.down]) this.cutHold = this.clock - this.l1Released < m.doubleTap;
-      if (!l1 && this.prev[h.down]) { this.l1Released = this.clock; this.cutHold = false; }
+      // Double-tap L1: cut the thrusters (hover) and stay cut, no holding. Tap L1 again or press R1 to
+      // fire them back up (they also come back on landing, in flight, or when the safety catch fires)
+      if (l1 && !this.prev[h.down]) {
+        if (this.cutHold) this.cutHold = false;
+        else this.cutHold = this.clock - this.l1Released < m.doubleTap;
+      }
+      if (!l1 && this.prev[h.down]) this.l1Released = this.clock;
+      if (btn(h.up).pressed || flying) this.cutHold = false;
       a.cut = this.cutHold && !flying;
     }
     this.prev = p.buttons.map((b) => b.pressed);

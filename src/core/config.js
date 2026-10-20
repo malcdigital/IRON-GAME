@@ -284,6 +284,9 @@ export const CONFIG = {
     blendRate: 5,                   // how quickly it moves into a new pose
     leanRate: 9, leanPerMs: 1.2, leanMax: 18,     // hover: degrees of lean per m/s of movement (up to leanMax)
     turnRate: 5, turnPerMs2: 0.5, turnMax: 25,    // flight turns: degrees of lean into the turn per m/s² of turning
+    // landing hard (falling faster than heroFrom m/s, or any drop with the thrusters cut): the
+    // superhero landing (pose 'land'), held heroHold s (no walking off), standing up over heroRise s
+    landing: { heroFrom: 7, heroHold: 0.55, heroRise: 0.6, shake: 0.08, shakeTime: 0.45, dropSpeed: 6 },
     landSpeedFull: 10, landTime: 0.45, crouchDeg: 35,   // landing crouch: full at this fall speed, back up in landTime s
     stepsPerMeter: 0.9, walkSwing: 28,            // walking legs
     limits: true,                   // keep every joint within real human ranges (SuitPoses.js LIMITS)
@@ -394,7 +397,7 @@ export const CONFIG = {
       down: ['KeyC'],
       brake: ['ControlLeft', 'ControlRight'],   // flight: hold to brake
       boost: ['ShiftLeft', 'ShiftRight'],
-      cut: ['KeyZ'],             // hover: hold to cut the thrusters and drop (or double-tap C and hold)
+      cut: ['KeyZ'],             // hover: hold to cut the thrusters and drop (or double-tap C: stays cut until C / Space)
     },
     actions: {
       mode: ['KeyM'],
@@ -426,7 +429,7 @@ export const CONFIG = {
       analog: { up: 7, down: 6 },       // flight: R2 throttle up, L2 throttle down
       hold: { boost: 5 },               // flight: R1 boost / afterburner
       flightBrake: 4,                   // flight: hold L1 to brake
-      hover: { up: 5, down: 4, boost: 7 },   // hover: R1 climb, L1 descend (double-tap L1 and hold: cut thrusters), R2 boost
+      hover: { up: 5, down: 4, boost: 7 },   // hover: R1 climb, L1 descend (double-tap L1: cut thrusters, stays cut until L1 / R1), R2 boost
       doubleTap: 0.3,                   // seconds between taps for the L1 double-tap
       actions: {
         flight: 0,    // Cross

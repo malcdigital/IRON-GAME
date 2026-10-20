@@ -135,6 +135,19 @@ export const POSES = {
   },
   // Launch wind-up (and the small hop off the ground): a deep crouch, tipped forward, arms swept
   // back behind the hips, head up looking ahead (from art/takeoff_ref.mp4). Feet stay under the hips.
+  // Superhero landing (a hard landing, or the end of a drop with the thrusters cut): right fist and
+  // right knee on the ground, left foot planted out front, left arm swept back, head down
+  land: {
+    hands: { Left: { curl: 25, thumb: 10 }, Right: { curl: 95, thumb: 60 } },
+    Spine02: { aim: [0, 0.62, -0.78] }, Spine01: { aim: [0, 0.55, -0.83] },
+    Spine: { aim: [0.05, 0.5, -0.86] }, neck: { aim: [0, 0.55, -0.83] },
+    Head: { aim: [0, 0.4, -0.92] },
+    RightArm: { aim: [0.18, -0.85, -0.5] }, RightForeArm: { aim: [0.05, -0.97, -0.25] }, RightHand: { aim: [0.02, -1, -0.05] },
+    LeftArm: { aim: [-0.6, -0.4, 0.69] }, LeftForeArm: { aim: [-0.55, -0.25, 0.8] }, LeftHand: { aim: [-0.5, -0.3, 0.81] },
+    LeftUpLeg: { aim: [-0.22, -0.3, -0.93] }, LeftLeg: { aim: [-0.08, -0.99, 0.08] }, LeftFoot: { aim: [-0.1, -0.25, -0.96] },
+    RightUpLeg: { aim: [0.15, -0.97, 0.18] }, RightLeg: { aim: [0.06, -0.12, 0.99] }, RightFoot: { aim: [0.05, -0.75, 0.66] },
+  },
+
   // Charging up in mid-air (L1 + R1 held while hovering): curled up tight and tensed, knees to
   // the chest, arms cocked down and back with the palms still pushing at the ground
   aircharge: {
@@ -305,7 +318,7 @@ export class SuitPoser {
     this.yawRate = 0;                   // smoothed turning speed, rad/s
     this.vy = 0;                        // smoothed climb speed, m/s
     this.brace = 0;                     // brace-for-impact weight, 0..1
-    this.mom = { flare: 0, launch: 0, crouch: 0, hop: 0, recover: 0, launchCount: null, launchClock: 9, hopClock: 9, recoverClock: 9 };
+    this.mom = { flare: 0, launch: 0, crouch: 0, hop: 0, recover: 0, land: 0, launchCount: null, launchClock: 9, hopClock: 9, recoverClock: 9 };
     this.limp = 0;                      // knocked-out looseness, 0..1
     this.geff = new THREE.Vector3(0, -9.8, 0);   // gravity as the suit feels it (minus its own acceleration), suit frame
     this.limbs = {};                    // knocked-out limb swing: { p: direction, v: velocity }
@@ -417,7 +430,15 @@ export class SuitPoser {
     mo.airCharge = (mo.airCharge ?? 0) + ((chA ? 1 : 0) - (mo.airCharge ?? 0)) * (1 - Math.exp(-(chA ? 10 : 14) * dt));
     if (game.launchSeq && !game.launchSeq.ground && !game.launchSeq.charged) mo.airCharge = 0;
     if (game.launchSeq) mo.charge = 0;   // (launching from the crouch: the launch timeline takes it from here)
-    const special = { brace: this.brace, flare: mo.flare, launch: mo.launch * (1 - mo.crouch), recover: mo.recover, crouch: Math.max(mo.crouch, mo.hop * 0.7, mo.charge), aircharge: mo.airCharge };
+    // superhero landing: slam into it, hold, then stand up
+    const LD = P.landing;
+    if (mo.heroCount == null) mo.heroCount = game.heroLandCount ?? 0;   // (after a reset: nothing to replay)
+    if ((game.heroLandCount ?? 0) !== mo.heroCount) { mo.heroCount = game.heroLandCount ?? 0; mo.heroClock = 0; this.crouch = 0; }
+    mo.heroClock = (mo.heroClock ?? 9) + dt;
+    const hc = mo.heroClock;
+    mo.land = hc < 0.06 ? hc / 0.06 : hc < 0.06 + LD.heroHold ? 1 : Math.max(0, 1 - (hc - 0.06 - LD.heroHold) / LD.heroRise);
+    if (flying || game.launchSeq) mo.land = 0;
+    const special = { brace: this.brace, flare: mo.flare, launch: mo.launch * (1 - mo.crouch), recover: mo.recover, crouch: Math.max(mo.crouch, mo.hop * 0.7, mo.charge), aircharge: mo.airCharge, land: mo.land };
     let sp = 0;
     for (const v of Object.values(special)) sp = Math.max(sp, v);
     for (const s of STATES) if (!(s in special)) want[s] *= 1 - sp;
@@ -775,7 +796,7 @@ export class SuitPoser {
       b.bone.quaternion.copy(_q.copy(pCur).invert().multiply(b.cur));
     }
     // Crouching (launch wind-up / hop) and walking: lower the body so the feet stay on the ground
-    const cw = Math.max(this.w.crouch ?? 0, this.locoOn ? this.w.stand : 0);
+    const cw = Math.max(this.w.crouch ?? 0, this.w.land ?? 0, this.locoOn ? this.w.stand : 0);
     if (cw > 0.01 && this.restFootY != null) {
       const f = this.footY();
       this.model.position.y += (this.restFootY - f) * cw;

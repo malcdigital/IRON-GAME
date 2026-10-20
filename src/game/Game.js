@@ -86,6 +86,7 @@ export class Game {
     b.pos.y = this.surfaceBelow(b.pos) + CONFIG.pilot.feetHeight;   // standing on the pad (not hovering just above it)
     b.vel.set(0, 0, 0);
     b.angVel.set(0, 0, 0);
+    this.heroDrop = false; this.landLockT = 0;
     b.quat.setFromAxisAngle(Y, this.world.spawn.heading);
     this.controller.reset(this.world.spawn.heading);
     this.suit.repair();
@@ -517,12 +518,19 @@ export class Game {
       const stop = (fall * fall) / (2 * co.catchAccel);
       if (room < stop * co.safetyMargin + co.safetyExtra) {
         input.cut = false;
-        if (!this.safetyCatch) events.emit('toast', { text: 'Thrusters back on: too close to land' });
+        if (!this.safetyCatch) { events.emit('toast', { text: 'Thrusters back on: too close to land' }); events.emit('cutEnd'); }
         this.safetyCatch = true;
+        this.heroDrop = fall > 4;   // (a real drop: it ends in the superhero landing)
         this.catchGrace = CONFIG.assist.cutoff.noDamageTime;
       }
     } else if (!input.cut) this.safetyCatch = false;
     this.cutting = !!input.cut && hovering && !this.grounded;
+    if (input.cut && this.grounded) events.emit('cutEnd');
+    // caught after a drop: come down fast enough to land hard (dropSpeed), not a gentle touchdown
+    if (input.up > 0 || this.controller.flying) this.heroDrop = false;   // (climbing away: no landing)
+    this.caps.landSpeed = this.heroDrop && !this.grounded ? CONFIG.pose.landing.dropSpeed : null;
+    // superhero landing: hold it a moment before you can walk off
+    if (this.landLockT > 0) { this.landLockT -= dt; input = { ...input, forward: 0, strafe: 0 }; }
     this.catchGrace = Math.max(0, (this.catchGrace ?? 0) - dt);
     this.caps.room = body.pos.y - CONFIG.pilot.feetHeight - this.surfaceBelow(body.pos);   // height above whatever's below
     this.caps.stunned = this.stunT > 0;
@@ -861,6 +869,15 @@ export class Game {
       if (dmg > 0 && !(this.catchGrace > 0)) applyZoneDamage(this.suit, c.sphere.zone, dmg);   // (never hurt by a safety catch)
       if (speed > hardest) hardest = speed;
       if (speed > 3) events.emit('impact', { point: c.point.clone(), speed });
+    }
+    // touching down: a hard landing (or the end of a drop) is a superhero landing
+    if (this.grounded && !wasGrounded && !this.controller.flying && !(this.stunT > 0)) {
+      const fall = -this._preHitVel.y, L = CONFIG.pose.landing;
+      if (fall > L.heroFrom || (this.heroDrop && fall > 2)) {
+        this.heroLandCount = (this.heroLandCount ?? 0) + 1;
+        this.landLockT = L.heroHold;
+      }
+      this.heroDrop = false;
     }
     if (hardest > CONFIG.damage.safeImpactSpeed) events.emit('crash', { speed: hardest });
     if (hardest > CONFIG.crash.knockSpeed && !(this.catchGrace > 0)) this.knockOut(hardest, this._preHitVel);

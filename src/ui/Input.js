@@ -1,4 +1,5 @@
 import { GamepadInput } from './GamepadInput.js';
+import { events } from '../core/events.js';
 import { prompts } from './prompts.js';
 import { TapHoldGesture } from './gestures.js';
 
@@ -7,6 +8,7 @@ import { TapHoldGesture } from './gestures.js';
 export class Input {
   constructor(target, bindings) {
     this.bindings = bindings;
+    events.on('cutEnd', () => { this.cCut = false; });
     this.held = new Set();
     this.queue = [];
     this.enabled = true;
@@ -51,11 +53,15 @@ export class Input {
     if (gst.press) this.queue.push(gst.press > 0 ? 'rollLeft' : 'rollRight');
     if (gst.tap) this.queue.push(gst.tap > 0 ? 'rollJukeLeft' : 'rollJukeRight');
     if (gst.double) this.queue.push(gst.double > 0 ? 'snapLeft' : 'snapRight');
-    // Double-tap C and hold the second press: cut the thrusters (hover)
+    // Double-tap C: cut the thrusters (hover) and stay cut; tap C again or press Space to fire them back up
     this.clock += dt;
     const c = this.enabled && this.down('down');
-    if (c && !this.cWasDown) this.cCut = this.clock - this.cReleased < this.bindings.gamepad.doubleTap;
-    if (!c && this.cWasDown) { this.cReleased = this.clock; this.cCut = false; }
+    if (c && !this.cWasDown) {
+      if (this.cCut) this.cCut = false;
+      else this.cCut = this.clock - this.cReleased < this.bindings.gamepad.doubleTap;
+    }
+    if (!c && this.cWasDown) this.cReleased = this.clock;
+    if (this.down('up')) this.cCut = false;
     this.cWasDown = c;
     const g = this.gamepad.axes;
     if (this.queue.length > before || g.forward || g.strafe || g.yaw || g.up || g.down || g.boost) {
