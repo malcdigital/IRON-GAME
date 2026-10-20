@@ -2,6 +2,9 @@
 // Body frame: +Y is up (head), -Z is forward, +X is the suit's right.
 
 export const CONFIG = {
+  // Building tools: the Camera Studio (K) and Pose Studio (P). Set false for the finished game.
+  devTools: true,
+
   physics: {
     dt: 1 / 120,            // fixed simulation step (seconds)
     maxStepsPerFrame: 10,
@@ -313,6 +316,7 @@ export const CONFIG = {
       workshop: ['KeyB'],
       camera: ['KeyV'],
       studio: ['KeyK'],
+      poses: ['KeyP'],
       help: ['KeyH'],
     },
 

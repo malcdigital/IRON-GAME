@@ -20,6 +20,7 @@ import { Input } from './ui/Input.js';
 import { ThreatMarkers } from './ui/ThreatMarkers.js';
 import { prompts } from './ui/prompts.js';
 import { CameraStudio, loadSavedShots } from './ui/CameraStudio.js';
+import { PoseStudio, loadSavedPoses } from './ui/PoseStudio.js';
 
 function start(hotData) {
   const loadout = validLoadout(hotData?.loadout ?? storage.get('loadout') ?? STARTER_LOADOUT);
@@ -50,6 +51,12 @@ function start(hotData) {
   let frozen = false;   // Camera Studio: freeze the game while you frame a shot
   const studio = new CameraStudio(document.getElementById('studio'), document.getElementById('viewport'), { onFreeze: (f) => { frozen = f; } });
   document.getElementById('btn-studio').addEventListener('click', () => { document.activeElement?.blur(); handleAction('studio'); });
+  // Pose Studio (dev tool): set the suit's poses
+  loadSavedPoses();
+  const poseStudio = new PoseStudio(document.getElementById('posestudio'), document.getElementById('viewport'), { suitView, onFreeze: (f) => { frozen = f; } });
+  document.getElementById('btn-poses').addEventListener('click', () => { document.activeElement?.blur(); handleAction('poses'); });
+  // Dev tools (the two studios) are for building the game; CONFIG.devTools = false hides them
+  if (!CONFIG.devTools) for (const id of ['btn-studio', 'btn-poses']) document.getElementById(id).hidden = true;
 
   const startEl = document.getElementById('start');
   document.getElementById('btn-start').addEventListener('click', () => {
@@ -123,14 +130,15 @@ function start(hotData) {
     if (a === 'workshop') return toggleWorkshop();
     if (!started || paused) return;
     if (a === 'camera') return hud.toast(`Camera: ${cam.cycle()}`);
-    if (a === 'studio') return studio.toggle(cam);
+    if (a === 'studio') { if (CONFIG.devTools) { if (poseStudio.isOpen) poseStudio.close(); studio.toggle(cam); } return; }
+    if (a === 'poses') { if (CONFIG.devTools) { if (studio.isOpen) studio.close(); poseStudio.toggle(); } return; }
     if (a === 'help') return hud.toggleHelp();
     game.handleAction(a);
     if (a === 'reset') cam.snap();
   }
 
   // Debug hook for automated tests: open the page with ?debug
-  if (location.search.includes('debug')) window.__scrapjack = { game, cam, hud, CONFIG, input, studio, suitView };
+  if (location.search.includes('debug')) window.__scrapjack = { game, cam, hud, CONFIG, input, studio, suitView, poseStudio };
 
   // Keep the build when the page is updated while open
   window.claude?.hot?.snapshot?.(() => ({ loadout: game.suit.loadout }));
@@ -167,7 +175,8 @@ function start(hotData) {
     vapor.update(game, dt);
     missileView.update(dt, clockTime);
     chaseView.update(dt, clockTime);
-    cam.update(game, dt, axes.boost);
+    if (poseStudio.isOpen) poseStudio.update(game, renderer.camera);
+    else cam.update(game, dt, axes.boost);
     studio.update();
     renderer.follow(game.body.pos);
     renderer.render();

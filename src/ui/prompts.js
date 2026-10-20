@@ -36,6 +36,7 @@ function table() {
     grab: [ka('grab'), pa('grab')],
     camera: [ka('camera'), pa('camera')],
     studio: [ka('studio'), ka('studio')],
+    poses: [ka('poses'), ka('poses')],
     autosteer: [ka('autosteer'), pa('autosteer')],
     brake: [kx('brake'), PAD_NAMES[p.flightBrake]],
     flight: [ka('flight'), pa('flight')],

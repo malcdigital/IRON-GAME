@@ -411,3 +411,12 @@ body:not(.device-gamepad) .start-kbd { display: none; }
 .studio-field input { grid-area: range; width: 100%; accent-color: var(--amber); }
 .studio-actions { display: flex; gap: 8px; justify-content: flex-end; }
 .studio-copy { width: 100%; min-height: 110px; font: 12px/1.4 var(--font-data); color: var(--ink); background: rgba(0,0,0,0.3); border: 1px solid var(--edge); border-radius: 3px; padding: 6px; resize: vertical; }
+
+/* ---------- Pose studio (dev tool) ---------- */
+.pose-tabs { grid-template-columns: repeat(4, 1fr); }
+.pose-overlay { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 4; cursor: grab; touch-action: none; }
+.pose-select { grid-template-areas: "label label" "range range"; }
+.pose-select select { grid-area: range; width: 100%; font: inherit; color: var(--ink); background: rgba(0,0,0,0.35); border: 1px solid var(--edge); border-radius: 3px; padding: 4px; }
+.pose-hands summary { cursor: pointer; color: var(--amber); font-weight: 600; font-size: 14px; padding: 2px 0; }
+.pose-hands .studio-fields { margin-top: 6px; }
+body.posing .hud-tl, body.posing .hud-bl, body.posing .hud-tr, body.posing .hud-br > :not(.hud-buttons) { visibility: hidden; }

@@ -316,7 +316,7 @@ export class SuitView {
   update(game, boost, time, camera) {
     const b = game.body;
     this.root.position.copy(b.pos);
-    this.root.quaternion.copy(b.quat);
+    this.root.quaternion.copy(this.viewQuat ?? b.quat);   // (the Pose Studio can turn the suit to show a pose)
     const dt = Math.min(0.1, time - (this.lastTime ?? time));
     this.lastTime = time;
     // pose the skeleton, then move the flames onto their (posed) bones
@@ -349,7 +349,7 @@ export class SuitView {
       // the fist held out front in Superman flight doesn't fire back through the body
       const hideFwd = f.forwardHand && this.poser ? this.poser.w.flight : 0;
       const u = f.comp.throttle * (1 - hideFwd);
-      const on = u > 0.02 && f.comp.available > 0;
+      const on = u > 0.02 && f.comp.available > 0 && !this.hideFlames;
       f.holder.visible = on;
       if (on) {
         // Nozzles swivel: point the flame along the real thrust direction
@@ -366,7 +366,7 @@ export class SuitView {
           f.trail.emit(pos, vel, flying ? T.life : T.hoverLife, (boost ? T.boostWidth : T.width) * (0.7 + 0.5 * u), Math.min(1, 0.35 + u));
         }
       }
-      if (camPos) f.trail.update(dt, camPos);
+      if (camPos) f.trail.update(this.hideFlames ? 10 : dt, camPos);   // (cleared while posing)
     }
 
     // The 3D model is one piece: overall damage darkens it, the hottest part sets the glow
