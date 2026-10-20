@@ -249,6 +249,10 @@ export class SuitPoser {
     this.limp = 0;                      // knocked-out looseness, 0..1
     this.geff = new THREE.Vector3(0, -9.8, 0);   // gravity as the suit feels it (minus its own acceleration), suit frame
     this.limbs = {};                    // knocked-out limb swing: { p: direction, v: velocity }
+    this.t = 0;                         // running clock for breathing, glances and flutter
+    this.legSpring = { Left: { x: 0, vx: 0, z: 0, vz: 0 }, Right: { x: 0, vx: 0, z: 0, vz: 0 } };   // legs swing on springs (settle with a wiggle)
+    this.pitch = 0;                     // flight: how far the nose points up (+) or down (-), radians
+    this.speed = 0;
     this.flt = { pull: 0, lat: 0, roll: 0, rollAcc: 0, lastRoll: 0 };   // flight: g toward the back, sideways g, roll speed and its change
     this.lastVel = new THREE.Vector3();
     this.wasGrounded = true;
@@ -320,6 +324,10 @@ export class SuitPoser {
 
     if (!this.primed) { this.lastVel.copy(game.body.vel); this.primed = true; }
     this.dtLast = dt;
+    this.t += dt;
+    const headY = THREE.MathUtils.clamp(_v3.set(0, 1, 0).applyQuaternion(game.body.quat).y, -1, 1);
+    this.pitch += (Math.asin(headY) - this.pitch) * (1 - Math.exp(-4 * dt));
+    this.speed = game.body.vel.length();
     // velocity and push in the suit's frame
     const qInv = _q.copy(body.quat).invert();
     const vL = _v.copy(body.vel).applyQuaternion(qInv);
@@ -431,7 +439,7 @@ export class SuitPoser {
     add('Hips', 0, 0, -rt * H.sideHips);                                    // pelvis and legs swing
     add('Spine02', -fwd * 0.5, 0, rt * H.sideHips * 0.6); add('Spine01', -fwd * 0.3, 0, rt * H.sideHips * 0.4);   // chest back to level
     add('Head', fwd * 0.45, 0, 0);
-    for (const n of ['LeftUpLeg', 'RightUpLeg']) add(n, -fwd * H.legTrail, 0, -rt * H.sideTrail);   // legs together
+    const legT = { Left: { x: -fwd * H.legTrail, z: -rt * H.sideTrail }, Right: { x: -fwd * H.legTrail, z: -rt * H.sideTrail } };   // legs together (sprung, below)
     for (const n of ['LeftLeg', 'RightLeg']) add(n, side * H.sideStraight, 0, 0);                  // knees straighten (the joint limit stops them at straight)
     for (const n of ['LeftFoot', 'RightFoot']) add(n, -side * 0.4, 0, 0);                         // toes point
     for (const n of ['LeftLeg', 'RightLeg']) add(n, -Math.abs(fwd) * 0.5, 0, 0);                 // knees fold as they swing back
@@ -473,12 +481,12 @@ export class SuitPoser {
       const pull = THREE.MathUtils.clamp(this.flt.pull / F.pullFull, -1, 1) * fl;
       const pu = Math.max(0, pull), pd = Math.max(0, -pull);
       add('Spine02', 6 * pull, 0, 0); add('Spine01', 10 * pull, 0, 0); add('Head', 12 * pu - 6 * pd, 0, 0);
-      add('LeftUpLeg', 30 * pull, 0, 0); add('RightUpLeg', 24 * pull, 0, 0);             // legs lag toward the chest side
+      legT.Left.x += 30 * pull; legT.Right.x += 24 * pull;                                // legs lag toward the chest side
       add('LeftLeg', -28 * pu, 0, 0); add('RightLeg', -18 * pu, 0, 0);                     // knees give under the g
       add('LeftArm', 14 * pull, 0, -22 * pu); add('RightArm', 14 * pull, 0, 22 * pu);     // arms open out like wings
       // Sideways push: legs swing to the outside, the head and chest lean in
       const lat = THREE.MathUtils.clamp(this.flt.lat / F.latFull, -1, 1) * fl;
-      add('LeftUpLeg', 0, 0, -18 * lat); add('RightUpLeg', 0, 0, -18 * lat);
+      legT.Left.z += -18 * lat; legT.Right.z += -18 * lat;
       add('Spine01', 0, 0, -8 * lat); add('Head', 0, 0, -10 * lat);
       // Barrel rolls: an arm flings out to thrust the suit into the spin (and the other arm to stop it);
       // mid-spin everything tucks in tight, like a skater spinning faster
@@ -493,6 +501,57 @@ export class SuitPoser {
       // the thrusting hand opens (palm out), the others close up
       this.handCurl('Right', -40 * kr + 25 * spin * (1 - kr));
       this.handCurl('Left', -40 * kl + 25 * spin * (1 - kl));
+    }
+    // FLIGHT toward the ground / the sky (the way the nose points)
+    if (fl > 0.01) {
+      const S = P.subtle;
+      const dive = Math.min(1, Math.max(0, -this.pitch) / (S.pitchFullDeg * D2R)) * fl;
+      const climb = Math.min(1, Math.max(0, this.pitch) / (S.pitchFullDeg * D2R)) * fl;
+      const aimTo = (name, v, wgt) => {
+        const b = R[name];
+        if (!b?.dir || wgt < 0.01) return;
+        _v.fromArray(v).normalize();
+        if (!b.hasAim) { b.aim.copy(b.dir); b.hasAim = true; }
+        b.aim.normalize().lerp(_v, wgt).normalize();
+      };
+      // diving: streamline. Arms tight back along the body, legs together and straight, toes pointed
+      aimTo('LeftArm', [-0.1, -0.98, 0.15], dive); aimTo('RightArm', [0.1, -0.98, 0.15], dive);
+      aimTo('LeftForeArm', [-0.06, -0.98, 0.18], dive); aimTo('RightForeArm', [0.06, -0.98, 0.18], dive);
+      legT.Left.z += 6 * dive; legT.Right.z -= 6 * dive;
+      for (const n of ['LeftLeg', 'RightLeg']) add(n, 10 * dive, 0, 0);
+      for (const n of ['LeftFoot', 'RightFoot']) add(n, -15 * dive, 0, 0);
+      this.handCurl('Left', 30 * dive); this.handCurl('Right', 30 * dive);
+      // climbing: reach for the sky. Right fist punches up ahead, back arches, legs trail soft, look up
+      aimTo('RightArm', [0.05, 0.97, -0.22], climb); aimTo('RightForeArm', [0.03, 0.99, -0.12], climb);
+      aimTo('LeftArm', [-0.3, -0.9, 0.3], climb * 0.6);
+      add('Spine01', 8 * climb, 0, 0); add('Head', 14 * climb, 0, 0);
+      legT.Left.x += 12 * climb; legT.Right.x += 4 * climb;
+      add('LeftLeg', -20 * climb, 0, 0);
+      this.handCurl('Right', 45 * climb);
+      // flutter in the airflow: knees and feet shiver a little, more at speed
+      const fz = Math.min(1, this.speed / 60) * S.flutterDeg * fl, t = this.t;
+      add('LeftLeg', -fz * (0.5 + 0.5 * Math.sin(t * 15.3)), 0, 0); add('RightLeg', -fz * (0.5 + 0.5 * Math.sin(t * 13.1 + 1.7)), 0, 0);
+      add('LeftFoot', fz * 0.6 * Math.sin(t * 11.7 + 0.4), 0, 0); add('RightFoot', fz * 0.6 * Math.sin(t * 12.9 + 2.2), 0, 0);
+    }
+    // legs swing on springs that slightly overshoot: after a turn or a stop they wiggle as they settle
+    if (!this.preview) {
+      const S = P.subtle, dt = Math.min(0.05, this.dtLast ?? 0.016);
+      for (const [sd, om] of [['Left', S.legSpring], ['Right', S.legSpring * 1.13]]) {
+        const sp = this.legSpring[sd], z2 = 2 * S.legDamping * om;
+        // aim only within what the hip can do (so the overshoot is a small wiggle, not a big swing)
+        const tx = THREE.MathUtils.clamp(legT[sd].x, -32, 45), tz = THREE.MathUtils.clamp(legT[sd].z, -25, 25);
+        sp.vx += (om * om * (tx - sp.x) - z2 * sp.vx) * dt; sp.x += sp.vx * dt;
+        sp.vz += (om * om * (tz - sp.z) - z2 * sp.vz) * dt; sp.z += sp.vz * dt;
+        add(`${sd}UpLeg`, sp.x, 0, sp.z);
+      }
+    }
+    // at rest (standing or hovering): breathing, and the head glances around now and then
+    if (!this.preview) {
+      const S = P.subtle, calm = (w.hover + w.stand) * Math.max(0, 1 - this.speed / 4), t = this.t;
+      const br = Math.sin(t * 2 * Math.PI / S.breathPeriod) * S.breathDeg * (w.hover + w.stand + (w.flight + w.boost) * 0.4);
+      add('Spine01', br, 0, 0); add('Spine', br * 0.6, 0, 0); add('LeftArm', 0, 0, -br * 0.3); add('RightArm', 0, 0, br * 0.3);
+      const look = (Math.sin(t * 0.37) + 0.6 * Math.sin(t * 0.91 + 1.3)) * S.glanceDeg * calm;
+      add('neck', 0, look * 0.4, 0); add('Head', Math.sin(t * 0.53 + 0.7) * S.glanceDeg * 0.25 * calm, look * 0.6, 0);
     }
     // walking
     if (this.walk > 0.01) {
