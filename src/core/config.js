@@ -230,7 +230,8 @@ export const CONFIG = {
     // Moments added on top of the shots
     moments: {
       punch: { distance: 0.25, fov: 8, attack: 0.12, release: 0.7 },   // launch burst: push in 25% (and narrow the view 8°), then ease back
-      moveDistance: 0.25,          // turns, barrel rolls, hard turns: camera backs off 25%...
+      moveDistance: 0.25,          // turns and barrel rolls: camera backs off 25%...
+      hardTurnDistance: 0.5,       // hard turns: backs off 50%
       moveFov: 0.20,               // ...and the view widens 20%
       moveHold: 0.6,               // rolls and hard turns are quick: hold the effect this long after them
       turnShoulder: 0.72,          // slide this far (m) to the side you're turning toward
