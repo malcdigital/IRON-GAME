@@ -25,7 +25,7 @@ const FOOT = SPHERES.filter((s) => s.foot).reduce((a, s, _, all) => a.addScaledV
 // The simulation. No rendering, no DOM: it can run headless and is easy to port.
 export class Game {
   constructor(loadout) {
-    this._qTmp = new THREE.Quaternion(); this._qTmp2 = new THREE.Quaternion(); this._xAxis = new THREE.Vector3();
+    this._qTmp = new THREE.Quaternion(); this._qTmp2 = new THREE.Quaternion(); this._qTmp3 = new THREE.Quaternion(); this._jumpQ = new THREE.Quaternion(); this._jumpQ2 = new THREE.Quaternion(); this._xAxis = new THREE.Vector3();
     this.world = new World(RANGE);
     this.body = new RigidBody();
     this.controller = new FlightController(CONFIG);
@@ -382,8 +382,17 @@ export class Game {
         if (s.ground) this.launchClimb = { t: 0 };   // ease the nose down over the climb (below)
         this.launch(s.boosted);
       } else {
-        // hold still while winding up; once off the ground the jets just help the jump a little
-        input = { ...input, forward: s.jumped && s.ground ? seq.jumpCarry : 0, strafe: 0, yaw: 0, down: 0, cut: false, up: s.jumped && s.ground ? seq.jumpAssist : 0 };
+        // hold still while winding up
+        input = { ...input, forward: 0, strafe: 0, yaw: 0, down: 0, cut: false, up: 0 };
+        if (s.jumped && s.ground) {
+          // in the jump: thrusters off (a real leap), and the body throws itself forward until it
+          // lines up with the jump, head first, ready to fire along it
+          input.cut = true;
+          const a = (90 - seq.jumpAngleDeg) * Math.PI / 180, h = this.controller.heading ?? 0;
+          const full = this._jumpQ.setFromAxisAngle(Y, h).multiply(this._qTmp2.setFromAxisAngle(this._xAxis.set(1, 0, 0), -a));
+          this.caps.attTarget = full; this.caps.attGain = 3;
+          this.spinToward(full, CONFIG.launch.seq.tipRate, 12);
+        }
       }
     }
     // Climb out after a launch from the ground: the nose starts climb.pitchDeg up and eases down to
@@ -396,6 +405,12 @@ export class Game {
       else {
         const u = THREE.MathUtils.smoothstep(lc.t, 0, c.time);
         jet.pitch = (c.pitchDeg + (c.levelDeg - c.pitchDeg) * u) * Math.PI / 180;
+        // keep the body lined up head first along the climb as it speeds up
+        if (lc.t < c.alignTime) {
+          // (along the climb angle being flown, so the thrust carries you up it)
+          const q = this._jumpQ.setFromAxisAngle(Y, jet.yaw).multiply(this._qTmp2.setFromAxisAngle(this._xAxis.set(1, 0, 0), -(Math.PI / 2 - jet.pitch)));
+          this.spinToward(q, 8, 8);
+        }
       }
     }
     // How soon will we hit something? (for the brace-for-impact pose)
@@ -447,7 +462,7 @@ export class Game {
     // Thruster cut-off (hover): free-fall while held. Safety catch: if whatever is below is
     // coming up too fast to stop in time, the thrusters fire anyway.
     const hovering = this.controller.mode === 'assist' && !this.controller.flying;
-    if (input.cut && hovering && !this.grounded) {
+    if (input.cut && hovering && !this.grounded && !this.launchSeq) {
       const co = CONFIG.assist.cutoff, fall = Math.max(0, -body.vel.y);
       const room = body.pos.y - CONFIG.pilot.feetHeight - this.surfaceBelow(body.pos);
       const stop = (fall * fall) / (2 * co.catchAccel);
@@ -804,6 +819,18 @@ export class Game {
       if (b.vel.y > -c.rescueSinkSpeed - 1 && r.t > 0.35) { this.rescue = null; events.emit('toast', { text: 'Systems back online' }); }
     }
     return { ...input, cut: true, up: 0, down: 0, forward: 0, strafe: 0, yaw: 0, pitch: 0, roll: 0, boost: false, takeoffBoost: false };
+  }
+
+  // Turn the body toward an orientation with a strong jet-assisted spin (up to maxRate rad/s)
+  spinToward(target, maxRate, gain = 5) {
+    const b = this.body;
+    const qe = this._qTmp.copy(target).multiply(this._qTmp3.copy(b.quat).invert());
+    if (qe.w < 0) qe.set(-qe.x, -qe.y, -qe.z, -qe.w);
+    const ang = 2 * Math.acos(Math.min(1, qe.w)), sn = Math.sqrt(Math.max(1e-9, 1 - qe.w * qe.w));
+    const wDes = this._c.set(qe.x / sn, qe.y / sn, qe.z / sn).multiplyScalar(Math.min(maxRate, ang * gain));
+    const alpha = wDes.sub(b.angVel).multiplyScalar(gain * 2);
+    b.torque.add(b.inertiaWorld(alpha, alpha));
+    return ang;
   }
 
   // A hard hit knocks the pilot out for a moment (longer for harder hits)

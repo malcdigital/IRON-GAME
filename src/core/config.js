@@ -143,10 +143,9 @@ export const CONFIG = {
     // jumpAt s, jump (jumpSpeed m/s, jumpAngleDeg above level, toward where you face), thrusters fire
     // at fireAt s. In the air: fire at airFireAt s.
     seq: { jumpAt: 0.35, fireAt: 0.55, jumpSpeed: 6, jumpAngleDeg: 15, airFireAt: 0.15,
-      jumpCarry: 0.7,     // and the jets keep carrying you forward during it (0-1 of full hover speed)
-      jumpAssist: 0.25 }, // how hard the jets help the jump (0-1 of a full climb)
+      tipRate: 14 },   // during the jump the thrusters are off and the body tips forward (up to tipRate rad/s) to line up with it
     // Climb-out after launching from the ground: nose starts pitchDeg up, eases to levelDeg over time s
-    climb: { pitchDeg: 22, levelDeg: 4, time: 1.2 } },
+    climb: { pitchDeg: 28, levelDeg: 4, time: 1.4, alignTime: 0.8 } },   // alignTime: s the body is held lined up with the path
 
   // Thermal limiter: instead of cutting out at 100%, thrusters and the core
   // taper their output as they get hot, so you sink gently rather than drop.
