@@ -35,6 +35,9 @@ export class CameraRig {
     this.offset = new THREE.Vector3();
     this._pivot = new THREE.Vector3();
     this.lookOff = new THREE.Vector3();
+    this.sp = { zoom: { x: 1, v: 0 }, side: { x: 0, v: 0 } };
+    this.punchT = null;
+    this.lastLaunch = 0;
     this._ray = new THREE.Vector3();
     this.wallDist = Infinity;
     this.from = { ...this.cur };
@@ -57,6 +60,14 @@ export class CameraRig {
   }
 
   snap() { this.snapNext = true; }
+
+  // Critically damped spring: eases toward a target without overshoot or sudden starts
+  spring(name, target, w, dt) {
+    const s = this.sp[name];
+    if (this.snapNext) { s.x = target; s.v = 0; return; }
+    s.v += (w * w * (target - s.x) - 2 * w * s.v) * dt;
+    s.x += s.v * dt;
+  }
 
   // If a building is between the suit and the camera, bring the camera in front of it
   // straight away; once clear, ease back out to the shot's distance.
@@ -98,12 +109,38 @@ export class CameraRig {
     for (const k of SHOT_KEYS) this.cur[k] = this.from[k] + (shot[k] - this.from[k]) * e;
     const s = this.cur;
 
+    // Moments on top of the shot, all eased so nothing snaps:
+    //   turns and rolls -> pull back a little and slide over the shoulder on the turn's side
+    //   launch burst    -> a quick punch in toward the suit, then back out
+    const m = cc.moments, inp = game.lastInput;
+    const jet = ctrl.jet;
+    const turn = !inp ? 0 : ctrl.flying ? inp.strafe : -inp.yaw;   // + = turning right
+    const rolling = ctrl.flying && (jet.rollT > 0 || jet.jinkT > 0) ? 1 : 0;
+    const zoomWant = 1 + m.turnZoom * Math.max(Math.abs(turn), rolling);
+    const sideWant = m.turnShoulder * THREE.MathUtils.clamp(turn, -1, 1);
+    this.spring('zoom', zoomWant, m.zoomSpring, dt);
+    this.spring('side', sideWant, m.shoulderSpring, dt);
+    if ((game.launchCount ?? 0) !== this.lastLaunch) { this.lastLaunch = game.launchCount ?? 0; if (!this.snapNext) this.punchT = 0; }
+    let punch = 0;
+    if (this.punchT != null) {
+      this.punchT += dt;
+      const p = m.punch;
+      punch = this.punchT < p.attack ? THREE.MathUtils.smootherstep(this.punchT, 0, p.attack)
+        : 1 - THREE.MathUtils.smootherstep(this.punchT, p.attack, p.attack + p.release);
+      if (this.punchT > p.attack + p.release) this.punchT = null;
+    }
+    const zoom = this.sp.zoom.x * (1 - m.punch.distance * punch);
+    const shoulder = s.shoulder + this.sp.side.x;
+
     // Frame: hover follows your heading; flight follows where you're actually going.
     // The frame swings on a spring, so it never jumps (e.g. the steep climb of a launch).
     let yaw = ctrl.heading, pitch = 0;
     if (ctrl.flying) {
       const d = speed > 8 ? this._dir.copy(body.vel).normalize() : this._dir.copy(ctrl.jet.direction);
       yaw = Math.atan2(-d.x, -d.z);
+      // Not steering: face along your intended path, so a juke's sidestep (or its leftover drift)
+      // doesn't swing the view. Steering or in a hard turn: follow your actual motion.
+      if (Math.abs(turn) < 0.1 && jet.snapT <= 0 && jet.flipT <= 0 && speed > 8) yaw = jet.yaw;
       pitch = Math.asin(THREE.MathUtils.clamp(d.y, -1, 1)) * cc.followPitch;
     }
     const w = ctrl.flying ? cc.frameSpring.flight : cc.frameSpring.hover;
@@ -121,13 +158,13 @@ export class CameraRig {
     this.fpitch += this.vpitch * dt;
     yaw = this.fyaw;
     pitch = this.fpitch;
-    const dist = s.distance * (this.mode.distanceMult ?? 1);
+    const dist = s.distance * (this.mode.distanceMult ?? 1) * zoom;
     const elev = THREE.MathUtils.degToRad(s.height);
     this._q.setFromAxisAngle(Y, yaw + THREE.MathUtils.degToRad(s.orbit + (this.mode.orbit ?? 0)));
     this._qp.setFromAxisAngle(X, pitch);
     this._q.multiply(this._qp);
     // (in this frame -Z is forward, +Z behind, +X right)
-    this._off.set(s.shoulder, Math.sin(elev) * dist, Math.cos(elev) * dist).applyQuaternion(this._q);
+    this._off.set(shoulder, Math.sin(elev) * dist, Math.cos(elev) * dist).applyQuaternion(this._q);
     this._want.copy(target).add(this._off);
     this._q.setFromAxisAngle(Y, yaw).multiply(this._qp);
     this._wantLook.set(0, s.lookUp, -s.lookAhead).applyQuaternion(this._q).add(target);
@@ -170,7 +207,7 @@ export class CameraRig {
     this.camera.lookAt(this.look);
 
     // Field of view: the shot's, a little wider at speed
-    const wantFov = s.fov + Math.min(cc.speedFovMax, Math.max(0, speed - cc.speedFovFrom) * cc.speedFovPer);
+    const wantFov = s.fov - cc.moments.punch.fov * punch + Math.min(cc.speedFovMax, Math.max(0, speed - cc.speedFovFrom) * cc.speedFovPer);
     this.camera.fov += (wantFov - this.camera.fov) * (this.snapNext ? 1 : Math.min(1, 3 * dt));
     this.camera.updateProjectionMatrix();
     this.snapNext = false;

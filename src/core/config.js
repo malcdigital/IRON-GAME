@@ -217,8 +217,15 @@ export const CONFIG = {
     //   lag: how tightly it follows (higher = tighter)   shake: handheld shake at speed (m)
     shots: {
       hover:  { distance: 4.2, orbit: 0, height: 25, shoulder: 0, lookUp: 1,    lookAhead: 0,    fov: 90, bank: 0,    lag: 6, shake: 0 },
-      flight: { distance: 3.1, orbit: 0, height: 35, shoulder: 0, lookUp: -3,   lookAhead: 20.5, fov: 60, bank: 0,    lag: 7, shake: 0 },
+      flight: { distance: 2.2, orbit: 0, height: 18, shoulder: 0, lookUp: -3,   lookAhead: 20.5, fov: 60, bank: 0,    lag: 7, shake: 0 },
       boost:  { distance: 6.2, orbit: 0, height: 12, shoulder: 0, lookUp: -1.4, lookAhead: 20,   fov: 74, bank: 0.35, lag: 5, shake: 0.03 },
+    },
+    // Moments added on top of the shots
+    moments: {
+      punch: { distance: 0.25, fov: 8, attack: 0.12, release: 0.7 },   // launch burst: push in 25% (and narrow the view 8°), then ease back
+      turnZoom: 0.10,              // pull back 10% while turning or barrel rolling
+      turnShoulder: 0.6,           // slide this far (m) to the side you're turning toward
+      zoomSpring: 6, shoulderSpring: 5,   // how quickly those ease in and out (higher = quicker)
     },
     modeBlendTime: 1.2,            // seconds to glide between hover and flight shots
     shotBlendTime: 1.0,            // seconds to glide between flight and boost

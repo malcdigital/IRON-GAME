@@ -106,6 +106,7 @@ export class Game {
     }
     this.launchCharge = 0;
     this.launchT = l.time;
+    this.launchCount = (this.launchCount ?? 0) + 1;   // (the camera punches in on each launch)
     this.launchPower = boosted ? l.boosted : 1;
     this.body.vel.addScaledVector(this.controller.jet.direction, l.kick * this.launchPower);
     if (boosted) events.emit('toast', { text: 'Boosted takeoff' });
@@ -328,6 +329,7 @@ export class Game {
     this.liftReserve = this.controller.mode === 'assist' && !this.grounded && !launching && !input.boost
       && vyWant - body.vel.y > a.liftReserve.below;
     this.boostHeld = input.boost;
+    this.lastInput = input;
     const extra = launching ? l.thrustMult * (this.launchPower ?? 1) : this.liftReserve ? a.liftReserve.thrustMult : 1;
     updateThrusterAvailability(suit, input.boost, dt, extra);
     const thr = suit.thrusters;
