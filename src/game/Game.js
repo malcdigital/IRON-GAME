@@ -356,6 +356,14 @@ export class Game {
       const foot = body.pointToWorld(FOOT, this._tmp).sub(body.pos);
       body.torque.add(this._c.crossVectors(foot, a).negate());
     }
+    // Hover agility: steering jets push you straight toward the stick's speed, so you can move
+    // and change direction fast while staying upright (the swivel push alone is too weak)
+    if (cmd.hoverVel && !this.controller.flying && this.hoverBrakeT <= 0) {
+      const ag = CONFIG.assist.agility;
+      const a = this._c.set(cmd.hoverVel.x - body.vel.x, 0, cmd.hoverVel.z - body.vel.z).multiplyScalar(ag.gain)
+        .clampLength(0, input.boost ? ag.boostAccel : ag.accel);
+      body.force.addScaledVector(a, body.mass);
+    }
     // Just switched from flight to hover: brake hard to a hover (thrust + chest into the wind)
     if (this.hoverBrakeT > 0) {
       this.hoverBrakeT -= dt;

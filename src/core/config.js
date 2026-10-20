@@ -142,7 +142,7 @@ export const CONFIG = {
 
   // Assisted flight: the suit holds altitude, levels itself and brakes when you let go.
   assist: {
-    maxSpeed: 14, boostSpeed: 26,
+    maxSpeed: 22, boostSpeed: 30,
     climbRate: 9, boostClimbRate: 14, descendRate: 7,
     // Lift reserve: when you need to stop sinking or climb, briefly draw extra thrust from stored charge
     liftReserve: { thrustMult: 1.5, below: 1.0 },   // kicks in when you're sinking more than 1 m/s slower than wanted
@@ -151,10 +151,12 @@ export const CONFIG = {
     yawRate: 1.9,
     upright: true,    // slide around without tilting (hold boost to lean in for speed)
     uprightLeanDeg: 6, // tiny lean allowed in upright mode for snappier moves
+    boostLeanDeg: 15,  // a little more lean while boosting (looks fast, still upright)
     sideUse: 0.6,     // share of the swivel push the assist may use for sliding (rest keeps you up)
     allowManual: false, // manual hover (tips with the stick, throttle stays put): off; set true to bring back the toggle
     walkSpeed: 3, runSpeed: 6,   // on the ground the stick walks (boost = run)
     exitBrake: { time: 1.2, gain: 3, maxG: 2.5 },          // leaving flight: brake to a hover
+    agility: { gain: 4, accel: 22, boostAccel: 28 },       // hover steering jets: how hard they push you toward the stick's speed (m/s²)
   },
 
   // Manual flight: keys set rotation rates, throttle stays where you leave it.

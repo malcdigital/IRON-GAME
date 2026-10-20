@@ -77,6 +77,7 @@ export class FlightController {
   update(body, input, caps, grounded, dt) {
     this.out.sideways = false;
     this.out.walk = null;
+    this.out.hoverVel = null;
     if (this.mode === 'flight') {
       const out = this.jet.update(body, input, caps, dt, this.out, this._attitude);
       this.heading = this.jet.yaw;
@@ -123,11 +124,13 @@ export class FlightController {
       return out;
     }
 
+    out.hoverVel = this._vDes;   // the game adds a direct push toward this (see Game: hover agility)
+
     // Slide upright: swivelled thrusters push sideways. Lean only for what they can't cover,
     // and (in upright mode) only while boosting.
     this._aSide.copy(this._aH).clampLength(0, (caps.sideMax * c.sideUse) / body.mass);
     this._aLean.subVectors(this._aH, this._aSide);
-    if (c.upright && !input.boost) this._aLean.clampLength(0, g * Math.tan(THREE.MathUtils.degToRad(c.uprightLeanDeg)));
+    if (c.upright) this._aLean.clampLength(0, g * Math.tan(THREE.MathUtils.degToRad(input.boost ? c.boostLeanDeg : c.uprightLeanDeg)));
 
     // Tilt the suit so its main thrust points along the rest of the wanted acceleration
     this._A.set(this._aLean.x, Math.max(aY, 0.3 * g), this._aLean.z);
