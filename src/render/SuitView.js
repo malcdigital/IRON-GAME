@@ -1,4 +1,6 @@
 import * as THREE from '../lib/three.js';
+import { CONFIG } from '../core/config.js';
+import { HERO_BUILDERS, buildHeroPilot, PALETTE } from './HeroSuit.js';
 
 // Builds the suit's 3D model from its parts and shows heat, damage and thrust.
 // Models are simple boxes so they're cheap to draw and easy to replace later.
@@ -174,12 +176,13 @@ export class SuitView {
     this.root.clear();
     this.parts = [];
     this.flames = [];
-    this.root.add(buildPilot());
+    const hero = CONFIG.suitStyle === 'hero';
+    this.root.add(hero ? buildHeroPilot() : buildPilot());
 
     for (const comp of suit.list) {
       const slot = comp.slot;
       const side = comp.id.endsWith('L') ? -1 : comp.id.endsWith('R') ? 1 : 0;
-      const built = BUILDERS[slot](comp.part, side);
+      const built = (hero ? HERO_BUILDERS : BUILDERS)[slot](comp.part, side);
       this.root.add(built.group);
       this.parts.push({ comp, mats: built.mats, base: built.mats.map((m) => m.color.clone()) });
 
@@ -201,7 +204,7 @@ export class SuitView {
     holder.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), comp.thruster.dir);
     holder.add(outer, inner);
     this.root.add(holder);
-    const ion = comp.part.visual.glow != null;
+    const ion = comp.part.visual.glow != null && CONFIG.suitStyle !== 'hero';
     if (ion) { outer.material.color.setHex(0x5fc9ff); inner.material.color.setHex(0xd8f6ff); }
     this.flames.push({ comp, holder, outer, inner });
   }

@@ -215,6 +215,9 @@ export const CONFIG = {
 
   cargo: { grabRange: 2.4, holdOffset: [0, -0.35, -0.65], radius: 0.42 },
 
+  // Suit look: 'hero' (the character sheet: ivory, navy, orange) or 'scrap' (each part its own junk colours)
+  suitStyle: 'hero',
+
   camera: {
     // One shot per state. Tune them live with the Camera Studio (K) and paste the copied settings here.
     //   distance: metres from the suit       orbit: degrees round the suit (0 = behind, + = to your right)
