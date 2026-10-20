@@ -130,6 +130,20 @@ export const POSES = {
     LeftLeg: { aim: [-0.3, -0.8, 0.52] }, RightLeg: { aim: [0.3, -0.8, 0.52] },
     LeftFoot: { rot: [-20, 0, 0] }, RightFoot: { rot: [-20, 0, 0] },
   },
+  // Launch wind-up (and the small hop off the ground): a deep crouch, tipped forward, arms swept
+  // back behind the hips, head up looking ahead (from art/takeoff_ref.mp4). Feet stay under the hips.
+  crouch: {
+    Hips: { rot: [-35, 0, 0] },
+    Spine02: { aim: [-0.01, 0.58, -0.81] }, Spine01: { aim: [-0.01, 0.5, -0.87] },
+    Spine: { aim: [-0.01, 0.5, -0.87] }, neck: { aim: [-0.01, 0.55, -0.83] },
+    Head: { aim: [-0.05, 0.88, -0.47] },
+    LeftArm: { aim: [-0.45, -0.5, 0.74] }, RightArm: { aim: [0.45, -0.5, 0.74] },
+    LeftForeArm: { aim: [-0.25, -0.72, 0.65] }, RightForeArm: { aim: [0.25, -0.72, 0.65] },
+    LeftHand: { aim: [-0.2, -0.6, 0.77] }, RightHand: { aim: [0.2, -0.6, 0.77] },
+    LeftUpLeg: { aim: [-0.17, -0.38, -0.91] }, RightUpLeg: { aim: [0.18, -0.38, -0.91] },
+    LeftLeg: { aim: [-0.1, -0.88, 0.45] }, RightLeg: { aim: [0.1, -0.88, 0.45] },
+    LeftFoot: { aim: [-0.12, -0.25, -0.96] }, RightFoot: { aim: [0.12, -0.25, -0.96] },
+  },
 };
 
 export const STATES = Object.keys(POSES);
@@ -258,6 +272,8 @@ export class SuitPoser {
       if ((out.x - b.dir.x) * mirror < 0 && !/Spine|neck|Head/.test(b.name)) sideAxis.negate();
       b.lim = { ...lim, flexAxis, sideAxis };
     }
+    this.suitRoot = suitRoot;
+    this.restFootY = this.footY();
     this.w = Object.fromEntries(STATES.map((s) => [s, s === 'stand' ? 1 : 0]));
     this.crouch = 0;      // landing crouch, 0..1
     this.walkPhase = 0;
@@ -292,7 +308,8 @@ export class SuitPoser {
       const lc = t < q.fireAt ? launchCurve(t, q.jumpAt, q.fireAt, 9) : launchCurve(null, 0, 0, t - q.fireAt);
       for (const s of STATES) this.w[s] = 0;
       const base = t < q.fireAt ? 'stand' : 'flight';
-      this.w.launch = lc.launch; this.w[base] = 1 - lc.launch;
+      const cw = lc.crouch;
+      this.w.crouch = cw; this.w.launch = lc.launch * (1 - cw); this.w[base] = (1 - lc.launch) * (1 - cw);
       this.mom.crouch = lc.crouch; this.mom.hop = 0; this.mom.recover = 0;
       this.crouch = 0; this.walk = 0; this.lean.set(0, 0); this.side = 0; this.brace = 0; this.limp = 0;
       Object.assign(this.flt, { pull: 0, lat: 0, roll: 0, rollAcc: 0 });
@@ -306,7 +323,7 @@ export class SuitPoser {
       this.accH.set(0, 0); this.yawRate = 0; this.vy = 0; this.upS = 0; this.upV = 0;
       Object.assign(this.flt, { pull: 0, lat: 0, roll: 0, rollAcc: 0 });
       this.brace = 0; this.limp = 0;
-      Object.assign(this.mom, { crouch: 0, hop: 0, recover: 0 });
+      Object.assign(this.mom, { crouch: this.preview === 'crouch' ? 1 : 0, hop: 0, recover: 0 });
       return this.apply();
     }
     const P = CONFIG.pose;
@@ -348,7 +365,7 @@ export class SuitPoser {
     if (game.rescue) mo.recoverHold = 0; else mo.recoverHold = (mo.recoverHold ?? 9) + dt;
     const hold = game.rescue ? 1 : Math.max(0, 1 - mo.recoverHold / 0.6);
     mo.recover = Math.max(hold * Math.min(1, rc / 0.15), rc < M.recoverTime ? Math.min(1, rc / 0.2) * Math.min(1, (M.recoverTime - rc) / 0.5) : 0);
-    const special = { brace: this.brace, flare: mo.flare, launch: mo.launch, recover: mo.recover };
+    const special = { brace: this.brace, flare: mo.flare, launch: mo.launch * (1 - mo.crouch), recover: mo.recover, crouch: Math.max(mo.crouch, mo.hop * 0.7) };
     let sp = 0;
     for (const v of Object.values(special)) sp = Math.max(sp, v);
     for (const s of STATES) if (!(s in special)) want[s] *= 1 - sp;
@@ -492,18 +509,8 @@ export class SuitPoser {
     add('LeftFoot', -climb * 18 + drop * 15, 0, 0); add('RightFoot', -climb * 18 + drop * 15, 0, 0);
     add('LeftUpLeg', drop * 22, 0, 0); add('RightUpLeg', drop * 16, 0, 0);
     add('LeftLeg', -drop * 38, 0, 0); add('RightLeg', -drop * 30, 0, 0);
-    // launch and hop: crouch then spring (knees fold, arms swing back, then everything extends)
-    const mo = this.mom, sq = Math.max(mo.crouch, mo.hop * 0.7);
-    if (sq > 0.01) {
-      // (the wind-up in art/takeoff_ref.mp4: deep crouch, leaning forward, arms swept back and out)
-      // (shins aim in the suit's frame, so they only tip back a little: the knee bend comes from the thighs coming up)
-      for (const sd of ['Left', 'Right']) { add(`${sd}UpLeg`, 65 * sq, 0, 0); add(`${sd}Leg`, -28 * sq, 0, 0); add(`${sd}Foot`, 18 * sq, 0, 0); }
-      add('LeftArm', -55 * sq, 0, -14 * sq); add('RightArm', -55 * sq, 0, 14 * sq);
-      add('Hips', -45 * sq, 0, 0);                                           // whole upper body tips forward
-      for (const sd of ['Left', 'Right']) add(`${sd}UpLeg`, 40 * sq, 0, 0);    // (thighs keep folding up under it)
-      add('Spine02', -12 * sq, 0, 0); add('Spine01', -6 * sq, 0, 0); add('Head', 40 * sq, 0, 0);
-    }
     // coming round: a couple of quick head shakes, dying away
+    const mo = this.mom;
     if (mo.recover > 0.01) {
       const rc = mo.recoverClock, shake = Math.sin(rc * 22) * Math.exp(-rc * 2.2) * P.moments.shakeDeg * mo.recover;
       add('neck', 0, shake * 0.6, shake * 0.15); add('Head', 0, shake, -shake * 0.2);
@@ -621,8 +628,7 @@ export class SuitPoser {
       add('Spine02', -cr * 0.5, 0, 0);
     }
     const th = R.LeftUpLeg?.len ?? 0.45, sh = R.LeftLeg?.len ?? 0.45;
-    const lowered = Math.max(cr, 55 * Math.max(this.mom.crouch, this.mom.hop * 0.7));   // landing / launch crouch
-    this.model.position.y = this.baseY - (th + sh) * (1 - Math.cos(lowered * D2R)) * 0.9 + (this.previewLift ?? 0);
+    this.model.position.y = this.baseY - (th + sh) * (1 - Math.cos(cr * D2R)) * 0.9 + (this.previewLift ?? 0);   // landing crouch
 
     // 3. set each bone: carry the parent's motion, aim, then the extra turn
     for (const b of this.list) {
@@ -646,6 +652,12 @@ export class SuitPoser {
       if (b.lim && CONFIG.pose.limits) this.limit(b, pCur);
       // back into the bone's own (parent-relative) rotation
       b.bone.quaternion.copy(_q.copy(pCur).invert().multiply(b.cur));
+    }
+    // Crouching (launch wind-up / hop): lower the body so the feet stay where they were
+    const cw = this.w.crouch ?? 0;
+    if (cw > 0.01 && this.restFootY != null) {
+      const f = this.footY();
+      this.model.position.y += (this.restFootY - f) * cw;
     }
   }
 
@@ -712,5 +724,15 @@ export class SuitPoser {
       b.rot.multiplyScalar(1 - L);
     }
     this.handCurl('Left', 20 * L); this.handCurl('Right', 20 * L);
+  }
+
+  // Height of the lower ankle, in the suit's frame
+  footY() {
+    const r = this.suitRoot, L = this.byName.LeftFoot?.bone, Rf = this.byName.RightFoot?.bone;
+    if (!r || !L || !Rf) return null;
+    this.model.updateMatrixWorld(true);
+    const inv = new THREE.Matrix4().copy(r.matrixWorld).invert();
+    const a = L.getWorldPosition(_v).applyMatrix4(inv).y, b = Rf.getWorldPosition(_v).applyMatrix4(inv).y;
+    return Math.min(a, b);
   }
 }
