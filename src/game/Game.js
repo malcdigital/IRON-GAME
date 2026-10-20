@@ -46,6 +46,7 @@ export class Game {
     this.twr = 0;
     this.launchT = 0;
     this.rescue = null;      // coming round in the air (see stepRescue)
+    this.launchKick = null;
     this.launchSeq = null;   // launching: { t, jumpAt, fireAt, ... } (see step)
     this.stunT = 0;          // knocked out by a crash: thrusters off, no control (seconds left)
     this.impactIn = Infinity; // seconds until the suit hits something on its current path
@@ -98,6 +99,7 @@ export class Game {
     this.pendingSnap = null;
     this.launchT = 0;
     this.rescue = null;      // coming round in the air (see stepRescue)
+    this.launchKick = null;
     this.launchSeq = null;
     this.stunT = 0;          // knocked out by a crash: thrusters off, no control (seconds left)
     this.impactIn = Infinity; // seconds until the suit hits something on its current path
@@ -117,7 +119,8 @@ export class Game {
     this.launchT = l.time;
     this.launchCount = (this.launchCount ?? 0) + 1;   // (the camera punches in on each launch)
     this.launchPower = boosted ? l.boosted : 1;
-    this.body.vel.addScaledVector(this.controller.jet.direction, l.kick * this.launchPower);
+    // the kick builds smoothly over rampTime (gentle start, strongest mid-way, easing off) instead of all at once
+    this.launchKick = { dv: l.kick * this.launchPower, t: 0 };
     if (boosted) events.emit('toast', { text: 'Boosted takeoff' });
     events.emit('launch');
   }
@@ -388,7 +391,9 @@ export class Game {
     this.boostHeld = input.boost;
     this.takeoffBoostHeld = !!input.takeoffBoost;
     this.lastInput = input;
-    const extra = launching ? l.thrustMult * (this.launchPower ?? 1) : this.liftReserve ? a.liftReserve.thrustMult : 1;
+    // launching: the thrusters spool up to the launch boost over rampTime (no jolt)
+    const spool = launching ? THREE.MathUtils.smoothstep(l.time - this.launchT, 0, l.rampTime) : 0;
+    const extra = launching ? 1 + (l.thrustMult * (this.launchPower ?? 1) - 1) * spool : this.liftReserve ? a.liftReserve.thrustMult : 1;
     updateThrusterAvailability(suit, input.boost, dt, extra);
     const thr = suit.thrusters;
     let maxLift = 0, fullDraw = 0;
@@ -570,6 +575,13 @@ export class Game {
     }
 
     // Auto-steer hop in progress (stored charge, straight up)
+    // Launch kick, spread over rampTime along the way you're launching
+    if (this.launchKick) {
+      const k = this.launchKick, ramp = CONFIG.launch.rampTime, u = k.t / ramp;
+      if (u >= 1) this.launchKick = null;
+      else body.force.addScaledVector(this.controller.jet.direction, (body.mass * k.dv * 6 * u * (1 - u)) / ramp);
+      k.t += dt;
+    }
     if (this.hopShove) {
       const h = this.hopShove;
       body.force.y += (body.mass * h.dv) / h.dur;

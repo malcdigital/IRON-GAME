@@ -138,6 +138,7 @@ export const CONFIG = {
   // Works from the ground too (rocket takeoff). Recharges over a few seconds.
   launch: { time: 1.5, thrustMult: 3, kick: 18, recharge: 5, groundPitch: 0.6, gyroMult: 6, maxAccelG: 2,
     boosted: 1.15,     // hold boost while launching: a launch this much stronger (same 1.5 s)
+    rampTime: 0.7,     // the kick and the thruster boost build up smoothly over this long (s)
     // The launch sequence (set it in the Pose Studio's Launch tab): from the ground, crouch until
     // jumpAt s, jump (jumpSpeed m/s up), thrusters fire at fireAt s. In the air: fire at airFireAt s.
     seq: { jumpAt: 0.3, fireAt: 0.55, jumpSpeed: 6, airFireAt: 0.15 } },
