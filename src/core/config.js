@@ -272,7 +272,7 @@ export const CONFIG = {
     // Subtle touches: dive/climb pose at this nose angle (degrees), leg springs (how fast they swing
     // back and how little they're damped: lower damping = more wiggle), now-and-then leg shifts (every
     // fidgetEvery s, about fidgetDeg degrees), airflow flutter, breathing, glances
-    subtle: { tremble: 0.8,   // charged-up crouch (L1 + R1): size of the tensed tremble (degrees)
+    subtle: { tremble: 1.6,   // charged-up crouch (L1 + R1): size of the tensed tremble (degrees)
       spinFling: 32, spinLag: 14,   // boosted takeoff rolls: how far the spin throws the limbs out / how far they trail (degrees)
       pitchFullDeg: 50, legSpring: 14, legDamping: 0.38, fidgetEvery: [2.5, 6], fidgetDeg: 4, flutterDeg: 4, breathPeriod: 3.4, breathDeg: 1.6, glanceDeg: 7 },
     // Moments: hop-off-the-ground length, post-knockout recovery length (s), head shake
@@ -319,7 +319,7 @@ export const CONFIG = {
     },
     // Charging up (L1 + R1 crouch on the ground): camera punches in by punchIn (0.35 = 35% closer),
     // narrows the view by fovCut (0.25 = 25%), and shakes a little (m)
-    charge: { punchIn: 0.35, fovCut: 0.25, shake: 0.025, spring: 7 },
+    charge: { punchIn: 0.35, fovCut: 0.25, shake: 0.0125, spring: 7 },
     // Boosted takeoff: the camera pulls back this much further (m), widens the view by fovMult (0.5 = +50%),
     // and keeps the horizon level, until returnAt of the way along the curve (0.5 = halfway), then eases back.
     // spring: how quickly it eases in and out.
