@@ -859,6 +859,14 @@ export class Game {
     this.controller.enterFlight(this.body, this.burstPath.angle(d));
   }
 
+  // Distance along the burst curve where it reaches x metres forward
+  burstD(x) {
+    const path = this.burstPath;
+    this._burstDCache ??= {};
+    if (this._burstDCache[x] == null) { const p = path.pts.find((q) => q.x >= x) ?? path.pts[path.pts.length - 1]; this._burstDCache[x] = p.d; }
+    return this._burstDCache[x];
+  }
+
   stepBurst(dt) {
     const B = CONFIG.launch.burst, r = this.burst, path = this.burstPath, b = this.body, g = CONFIG.physics.gravity;
     r.t += dt;
@@ -886,7 +894,17 @@ export class Game {
     jet.yaw = r.heading; jet.pitch = a1;
     // body lined up with the path: upright at the start, head first once level
     const q = this._jumpQ.setFromAxisAngle(Y, r.heading).multiply(this._qTmp2.setFromAxisAngle(this._xAxis.set(1, 0, 0), -(Math.PI / 2 - a1)));
-    this.spinToward(q, B.turnRate, 16);
+    // barrel rolls over the top of the curve: spin about the body's length (head axis), eased in and out
+    const dFrom = this.burstD(B.rollFromX), dTo = this.burstD(B.rollToX);
+    const ru = THREE.MathUtils.clamp((r.d - dFrom) / Math.max(1, dTo - dFrom), 0, 1);
+    const rollAngle = B.rolls * Math.PI * 2 * ru * ru * (3 - 2 * ru);
+    if (rollAngle > 0 && ru < 1) {
+      q.multiply(this._qTmp2.setFromAxisAngle(this._xAxis.set(0, 1, 0), rollAngle));
+      // (rolls are scripted: set the body's turn directly, with its spin so the poses tuck in)
+      const rate = B.rolls * Math.PI * 2 * 6 * ru * (1 - ru) * v / Math.max(1, dTo - dFrom);
+      b.quat.copy(q);
+      b.angVel.copy(this._v4.set(0, 1, 0).applyQuaternion(q)).multiplyScalar(rate);
+    } else this.spinToward(q, B.turnRate, 16);
     if (r.d >= path.length) this.burst = null;   // end of the curve: normal flight from here
   }
 

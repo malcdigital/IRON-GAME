@@ -35,7 +35,7 @@ export class CameraRig {
     this.offset = new THREE.Vector3();
     this._pivot = new THREE.Vector3();
     this.lookOff = new THREE.Vector3();
-    this.sp = { zoom: { x: 1, v: 0 }, side: { x: 0, v: 0 }, move: { x: 0, v: 0 }, hard: { x: 0, v: 0 } };
+    this.sp = { zoom: { x: 1, v: 0 }, side: { x: 0, v: 0 }, move: { x: 0, v: 0 }, hard: { x: 0, v: 0 }, burst: { x: 0, v: 0 } };
     this.punchT = null;
     this.lastLaunch = 0;
     this._ray = new THREE.Vector3();
@@ -137,6 +137,11 @@ export class CameraRig {
         : 1 - THREE.MathUtils.smootherstep(this.punchT, p.attack, p.attack + p.release);
       if (this.punchT > p.attack + p.release) this.punchT = null;
     }
+    // Boosted takeoff: pull way back and widen the view (eased in and out)
+    // (held for burst.hold s after the curve ends, so the big wide shot has time to play)
+    if (game.burst) this.burstHold = cc.burst.hold; else this.burstHold = Math.max(0, (this.burstHold ?? 0) - dt);
+    this.spring('burst', this.burstHold > 0 ? 1 : 0, cc.burst.spring, dt);
+    const bw = Math.max(0, this.sp.burst.x);
     const zoom = this.sp.zoom.x * (1 - m.punch.distance * punch);
     const fovMult = 1 + m.moveFov * this.sp.move.x + m.hardTurnFov * this.sp.hard.x;   // widens with the same easing
     const shoulder = s.shoulder + this.sp.side.x;
@@ -167,7 +172,7 @@ export class CameraRig {
     this.fpitch += this.vpitch * dt;
     yaw = this.fyaw;
     pitch = this.fpitch;
-    const dist = s.distance * (this.mode.distanceMult ?? 1) * zoom;
+    const dist = s.distance * (this.mode.distanceMult ?? 1) * zoom + cc.burst.distance * bw;
     const elev = THREE.MathUtils.degToRad(s.height);
     this._q.setFromAxisAngle(Y, yaw + THREE.MathUtils.degToRad(s.orbit + (this.mode.orbit ?? 0)));
     this._qp.setFromAxisAngle(X, pitch);
@@ -178,9 +183,9 @@ export class CameraRig {
     this._q.setFromAxisAngle(Y, yaw).multiply(this._qp);
     this._wantLook.set(0, s.lookUp, -s.lookAhead).applyQuaternion(this._q).add(target);
 
-    // Lean the horizon with the suit's bank (flight)
+    // Lean the horizon with the suit's bank (flight); never during the boosted takeoff (level horizon)
     this._wantUp.copy(Y);
-    if (ctrl.flying && s.bank > 0) {
+    if (ctrl.flying && s.bank > 0 && !(this.burstHold > 0)) {
       this._back.set(0, 0, 1).applyQuaternion(body.quat);
       this._wantUp.lerp(this._back, s.bank * (1 - ctrl.jet.flare)).normalize();
       if (this._wantUp.y < 0.3) this._wantUp.copy(Y);
@@ -216,8 +221,9 @@ export class CameraRig {
     this.camera.lookAt(this.look);
 
     // Field of view: the shot's, a little wider at speed
-    const wantFov = s.fov * fovMult - cc.moments.punch.fov * punch + Math.min(cc.speedFovMax, Math.max(0, speed - cc.speedFovFrom) * cc.speedFovPer);
+    const wantFov = s.fov * fovMult * (1 + cc.burst.fovMult * bw) - cc.moments.punch.fov * punch + Math.min(cc.speedFovMax, Math.max(0, speed - cc.speedFovFrom) * cc.speedFovPer);
     this.camera.fov += (wantFov - this.camera.fov) * (this.snapNext ? 1 : Math.min(1, 3 * dt));
+    if (bw > 0.01) this.camera.up.copy(Y), this.up.copy(Y);   // (boosted takeoff: horizon held level)
     this.camera.updateProjectionMatrix();
     this.snapNext = false;
   }
