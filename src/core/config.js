@@ -142,7 +142,7 @@ export const CONFIG = {
     // The launch sequence (set it in the Pose Studio's Launch tab): from the ground, crouch until
     // jumpAt s, jump (jumpSpeed m/s, jumpAngleDeg above level, toward where you face), thrusters fire
     // at fireAt s. In the air: fire at airFireAt s.
-    seq: { jumpAt: 0.35, fireAt: 0.55, jumpSpeed: 6, jumpAngleDeg: 15, airFireAt: 0.15,
+    seq: { jumpAt: 0.35, fireAt: 0.55, jumpSpeed: 8, jumpAngleDeg: 17, airFireAt: 0.15,
       tipRate: 14 },   // during the jump the thrusters are off and the body tips forward (up to tipRate rad/s) to line up with it
     // Climb-out after launching from the ground: nose starts pitchDeg up, eases to levelDeg over time s
     climb: { pitchDeg: 28, levelDeg: 4, time: 1.4, alignTime: 0.8 } },   // alignTime: s the body is held lined up with the path
