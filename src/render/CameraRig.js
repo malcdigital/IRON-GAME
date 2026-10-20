@@ -115,11 +115,12 @@ export class CameraRig {
     const m = cc.moments, inp = game.lastInput;
     const jet = ctrl.jet;
     const turn = !inp ? 0 : ctrl.flying ? inp.strafe : -inp.yaw;   // + = turning right
-    const rolling = ctrl.flying && (jet.rollT > 0 || jet.jinkT > 0) ? 1 : 0;
-    // Hard turn: pull well back (held a moment after, through the burst out of it)
-    if (ctrl.flying && jet.snapT > 0) this.hardTurnT = m.hardTurnHold;
-    else this.hardTurnT = Math.max(0, (this.hardTurnT ?? 0) - dt);
-    const zoomWant = Math.max(1 + m.turnZoom * Math.max(Math.abs(turn), rolling), this.hardTurnT > 0 ? 1 + m.hardTurnZoom : 1);
+    // Turns, barrel rolls and hard turns: the camera backs off and the view widens.
+    // Rolls and hard turns are quick, so the effect is held a moment after them.
+    if (ctrl.flying && (jet.rollT > 0 || jet.jinkT > 0 || jet.snapT > 0)) this.moveT = m.moveHold;
+    else this.moveT = Math.max(0, (this.moveT ?? 0) - dt);
+    const moving = Math.max(Math.min(1, Math.abs(turn)), this.moveT > 0 ? 1 : 0);
+    const zoomWant = 1 + m.moveDistance * moving;
     const sideWant = m.turnShoulder * THREE.MathUtils.clamp(turn, -1, 1);
     this.spring('zoom', zoomWant, m.zoomSpring, dt);
     this.spring('side', sideWant, m.shoulderSpring, dt);
@@ -133,6 +134,7 @@ export class CameraRig {
       if (this.punchT > p.attack + p.release) this.punchT = null;
     }
     const zoom = this.sp.zoom.x * (1 - m.punch.distance * punch);
+    const fovMult = 1 + m.moveFov * ((this.sp.zoom.x - 1) / Math.max(1e-6, m.moveDistance));   // widens with the same easing
     const shoulder = s.shoulder + this.sp.side.x;
 
     // Frame: hover follows your heading; flight follows where you're actually going.
@@ -210,7 +212,7 @@ export class CameraRig {
     this.camera.lookAt(this.look);
 
     // Field of view: the shot's, a little wider at speed
-    const wantFov = s.fov - cc.moments.punch.fov * punch + Math.min(cc.speedFovMax, Math.max(0, speed - cc.speedFovFrom) * cc.speedFovPer);
+    const wantFov = s.fov * fovMult - cc.moments.punch.fov * punch + Math.min(cc.speedFovMax, Math.max(0, speed - cc.speedFovFrom) * cc.speedFovPer);
     this.camera.fov += (wantFov - this.camera.fov) * (this.snapNext ? 1 : Math.min(1, 3 * dt));
     this.camera.updateProjectionMatrix();
     this.snapNext = false;
