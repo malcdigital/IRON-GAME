@@ -132,6 +132,22 @@ export const POSES = {
   },
   // Launch wind-up (and the small hop off the ground): a deep crouch, tipped forward, arms swept
   // back behind the hips, head up looking ahead (from art/takeoff_ref.mp4). Feet stay under the hips.
+  // Charging up in mid-air (L1 + R1 held while hovering): curled up tight and tensed, knees to
+  // the chest, arms cocked down and back with the palms still pushing at the ground
+  aircharge: {
+    hands: { Left: { curl: 70, thumb: 30 }, Right: { curl: 70, thumb: 30 } },
+    Hips: { rot: [-15, 0, 0] },
+    Spine02: { aim: [0, 0.72, -0.69] }, Spine01: { aim: [0, 0.8, -0.6] },
+    Spine: { aim: [0, 0.88, -0.48] }, neck: { aim: [0, 0.8, -0.6] },
+    Head: { aim: [0, 0.7, -0.71] },
+    LeftArm: { aim: [-0.4, -0.72, 0.57] }, RightArm: { aim: [0.4, -0.72, 0.57] },
+    LeftForeArm: { aim: [-0.3, -0.9, 0.3], twist: 30 }, RightForeArm: { aim: [0.3, -0.9, 0.3], twist: -30 },
+    LeftHand: { aim: [-0.5, -0.85, 0.15] }, RightHand: { aim: [0.5, -0.85, 0.15] },
+    LeftUpLeg: { aim: [-0.18, -0.15, -0.97] }, RightUpLeg: { aim: [0.18, -0.15, -0.97] },
+    LeftLeg: { aim: [-0.08, -0.92, 0.38] }, RightLeg: { aim: [0.08, -0.92, 0.38] },
+    LeftFoot: { aim: [-0.1, -0.85, -0.5] }, RightFoot: { aim: [0.1, -0.85, -0.5] },
+  },
+
   crouch: {
     Hips: { rot: [-35, 0, 0] },
     Spine02: { aim: [-0.01, 0.58, -0.81] }, Spine01: { aim: [-0.01, 0.5, -0.87] },
@@ -390,9 +406,12 @@ export class SuitPoser {
     const hold = game.rescue ? 1 : Math.max(0, 1 - mo.recoverHold / 0.6);
     mo.recover = Math.max(hold * Math.min(1, rc / 0.15), rc < M.recoverTime ? Math.min(1, rc / 0.2) * Math.min(1, (M.recoverTime - rc) / 0.5) : 0);
     // charging up (L1 + R1 on the ground): sink into the crouch and hold it
-    mo.charge = (mo.charge ?? 0) + ((game.charging ? 1 : 0) - (mo.charge ?? 0)) * (1 - Math.exp(-(game.charging ? 12 : 8) * dt));
+    const chG = game.charging && !game.chargeAir, chA = !!game.chargeAir;
+    mo.charge = (mo.charge ?? 0) + ((chG ? 1 : 0) - (mo.charge ?? 0)) * (1 - Math.exp(-(chG ? 12 : 8) * dt));
+    mo.airCharge = (mo.airCharge ?? 0) + ((chA ? 1 : 0) - (mo.airCharge ?? 0)) * (1 - Math.exp(-(chA ? 10 : 14) * dt));
+    if (game.launchSeq && !game.launchSeq.ground && !game.launchSeq.charged) mo.airCharge = 0;
     if (game.launchSeq) mo.charge = 0;   // (launching from the crouch: the launch timeline takes it from here)
-    const special = { brace: this.brace, flare: mo.flare, launch: mo.launch * (1 - mo.crouch), recover: mo.recover, crouch: Math.max(mo.crouch, mo.hop * 0.7, mo.charge) };
+    const special = { brace: this.brace, flare: mo.flare, launch: mo.launch * (1 - mo.crouch), recover: mo.recover, crouch: Math.max(mo.crouch, mo.hop * 0.7, mo.charge), aircharge: mo.airCharge };
     let sp = 0;
     for (const v of Object.values(special)) sp = Math.max(sp, v);
     for (const s of STATES) if (!(s in special)) want[s] *= 1 - sp;
@@ -564,8 +583,9 @@ export class SuitPoser {
       this.handCurl('Left', -15 * push); this.handCurl('Right', -15 * push);
     }
     // charged up and tensed: a fine tremble through the body, with a slow sway on top
-    if ((mo.charge ?? 0) > 0.01 && !this.preview) {
-      const S = P.subtle, a = S.tremble * mo.charge, t = this.t;
+    const tense = Math.max(mo.charge ?? 0, mo.airCharge ?? 0);
+    if (tense > 0.01 && !this.preview) {
+      const S = P.subtle, a = S.tremble * tense, t = this.t;
       const n = (f, ph) => Math.sin(t * f + ph) * 0.6 + Math.sin(t * f * 1.73 + ph * 2.1) * 0.4;   // jittery, never repeating quite the same
       add('Spine02', a * n(31, 0.3) + a * 0.8 * Math.sin(t * 2.3), 0, a * n(27, 1.1));
       add('Spine01', a * n(37, 2.0), a * 0.6 * n(29, 0.7), 0);

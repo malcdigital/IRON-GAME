@@ -357,8 +357,9 @@ export class SuitView {
     if (this.blastT != null) {
       const BL = CONFIG.launch.air.blast;
       this.blastT += dt;
-      flare = 1 + (BL.flame - 1) * Math.max(0, 1 - this.blastT / BL.time) ** 2;
-      if (this.blastT > BL.time) this.blastT = null;
+      const sc = game.blastScale ?? 1;
+      flare = 1 + (BL.flame - 1) * sc * Math.max(0, 1 - this.blastT / (BL.time * sc)) ** 2;
+      if (this.blastT > BL.time * sc) this.blastT = null;
     }
     for (const f of this.flames) {
       const u = f.comp.throttle;

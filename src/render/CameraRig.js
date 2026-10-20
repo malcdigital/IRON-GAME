@@ -153,8 +153,8 @@ export class CameraRig {
     const BL = CONFIG.launch.air.blast;
     if (this.blastT != null) {
       this.blastT += dt;
-      blast = this.blastT < 0.06 ? this.blastT / 0.06 : Math.max(0, 1 - (this.blastT - 0.06) / BL.time) ** 2;
-      if (this.blastT > BL.time + 0.06) this.blastT = null;
+      blast = (this.blastT < 0.06 ? this.blastT / 0.06 : Math.max(0, 1 - (this.blastT - 0.06) / (BL.time * (game.blastScale ?? 1))) ** 2) * (game.blastScale ?? 1);
+      if (this.blastT > BL.time * (game.blastScale ?? 1) + 0.06) this.blastT = null;
     }
     const zoom = this.sp.zoom.x * (1 - m.punch.distance * punch) * (1 + BL.camBack * blast);
     const fovMult = 1 + m.moveFov * this.sp.move.x + m.hardTurnFov * this.sp.hard.x;   // widens with the same easing

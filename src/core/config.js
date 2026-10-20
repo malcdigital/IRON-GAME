@@ -148,7 +148,9 @@ export const CONFIG = {
       rampTime: 0.25, kickMult: 3.6,   // explosive: the thrust and kick hit almost at once (kick x3.6)
       // the blast as it fires: flames flare to flame x their length, the camera is knocked back
       // (camBack of its distance) and widens fov degrees, with a sharp shake; all fading over time s
-      blast: { time: 0.6, flame: 2.6, camBack: 0.3, fov: 12, shake: 0.09 } },   // (rampTime: the thrust spools up more gently than a ground launch)
+      blast: { time: 0.6, flame: 2.6, camBack: 0.3, fov: 12, shake: 0.09 },
+      // charged up first (hold L1 + R1 in the air, then launch): kick x kick, blast effects x blast
+      charged: { kick: 1.5, blast: 1.6 } },   // (rampTime: the thrust spools up more gently than a ground launch)
     seq: { jumpAt: 0.35, fireAt: 0.55, jumpSpeed: 8, jumpAngleDeg: 17, airFireAt: 0.3,
       tipRate: 14 },   // during the jump the thrusters are off and the body tips forward (up to tipRate rad/s) to line up with it
     chargeReady: 0.2,   // crouched this long (s) holding L1 + R1? launch skips the wind-up

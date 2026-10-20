@@ -273,6 +273,8 @@ export class Game {
             jumpAt: onGround ? seq.jumpAt : 0, fireAt: onGround ? seq.fireAt : seq.airFireAt };
           // already crouched and charged up (L1 + R1 held): skip the wind-up and jump straight away
           if (onGround && this.charging && this.chargeT > CONFIG.launch.chargeReady) this.launchSeq.t = this.launchSeq.jumpAt;
+          // charged up in mid-air: no tuck, fire straight away with the charged blast
+          if (!onGround && this.chargeAir && this.chargeT > CONFIG.launch.chargeReady) { this.launchSeq.t = this.launchSeq.fireAt; this.launchSeq.charged = true; }
         }
         break;
       case 'flip':
@@ -352,7 +354,9 @@ export class Game {
     // crouch and charge up (the boosted takeoff's wind-up): press launch to go straight away.
     const both = input.up > 0 && input.down > 0 && !this.controller.flying;
     const onGround = this.grounded || (this.caps.room ?? 9) < 0.3;
-    this.charging = both && onGround && !this.launchSeq;
+    // (in the air it's a mid-air charge-up: a tensed tuck, holding height, for a bigger burst)
+    this.chargeAir = both && !onGround && !this.launchSeq && !(this.stunT > 0) && !this.rescue;
+    this.charging = (both && onGround && !this.launchSeq) || this.chargeAir;
     this.chargeT = this.charging ? (this.chargeT ?? 0) + dt : 0;
     if (both) input = { ...input, up: 0, down: 0 };
     if (this.charging) input = { ...input, forward: 0, strafe: 0 };   // (tensed up: no walking)
@@ -411,7 +415,9 @@ export class Game {
             this.launchClimb = { t: 0, air: true, to: this.controller.jet.pitch * 180 / Math.PI, time: A.diveTime + A.pullTime };
             this.airLaunchCount = (this.airLaunchCount ?? 0) + 1;   // (the suit plays its lean into flight)
           }
-          this.launch(s.boosted, s.ground ? null : CONFIG.launch.air.rampTime, s.ground ? 1 : CONFIG.launch.air.kickMult, !s.ground);
+          // (a charged mid-air burst hits harder, and its flames and camera jolt are bigger: blastScale)
+          this.blastScale = s.charged ? CONFIG.launch.air.charged.blast : 1;
+          this.launch(s.boosted, s.ground ? null : CONFIG.launch.air.rampTime, s.ground ? 1 : CONFIG.launch.air.kickMult * (s.charged ? CONFIG.launch.air.charged.kick : 1), !s.ground);
         }
       } else {
         // hold still while winding up
