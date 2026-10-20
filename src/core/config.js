@@ -151,7 +151,7 @@ export const CONFIG = {
     // where you face, speeding up to speed m/s over rampTime s, body lined up with the path.
     burst: {
       jumpAngleDeg: 88, speed: 108, rampTime: 0.6, velGain: 10, posGain: 25, turnRate: 20,
-      rolls: 2, rollFromX: 12, rollToX: 75,   // barrel rolls over the top of the curve, between these distances forward (m)   // gains: how tightly it holds the path; turnRate: body turn (rad/s)
+      rolls: 2, rollFromX: 10, rollToX: 95,   // barrel rolls over the top of the curve, between these distances forward (m)   // gains: how tightly it holds the path; turnRate: body turn (rad/s)
       curve: [
         { x: 0, y: 0, in: [0, -13.68564], out: [0, 92.17321] },
         { x: 100, y: 50, in: [-88.11446, -2.798209], out: [36.23938, 1.150837] },
@@ -315,8 +315,9 @@ export const CONFIG = {
       boost:  { distance: 6.2, orbit: 0, height: 12, shoulder: 0, lookUp: -1.4, lookAhead: 20,   fov: 74, bank: 0.35, lag: 5, shake: 0.03 },
     },
     // Boosted takeoff: the camera pulls back this much further (m), widens the view by fovMult (0.5 = +50%),
-    // and keeps the horizon level, through the curve and for hold s after. spring: how quickly it eases in and out.
-    burst: { distance: 7.8, fovMult: 0.5, spring: 6, hold: 1.5 },   // (7.8 on top of the 2.2 m flight shot = 10 m away)
+    // and keeps the horizon level, until returnAt of the way along the curve (0.5 = halfway), then eases back.
+    // spring: how quickly it eases in and out.
+    burst: { distance: 7.8, fovMult: 0.5, spring: 6, returnAt: 0.5 },   // (7.8 on top of the 2.2 m flight shot = 10 m away)
     // Moments added on top of the shots
     moments: {
       punch: { distance: 0.25, fov: 8, attack: 0.12, release: 0.7 },   // launch burst: push in 25% (and narrow the view 8°), then ease back

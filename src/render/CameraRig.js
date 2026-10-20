@@ -138,8 +138,8 @@ export class CameraRig {
       if (this.punchT > p.attack + p.release) this.punchT = null;
     }
     // Boosted takeoff: pull way back and widen the view (eased in and out)
-    // (held for burst.hold s after the curve ends, so the big wide shot has time to play)
-    if (game.burst) this.burstHold = cc.burst.hold; else this.burstHold = Math.max(0, (this.burstHold ?? 0) - dt);
+    // (held until returnAt of the way along the curve, then it eases back)
+    this.burstHold = game.burst && game.burst.d < (game.burstPath?.length ?? 0) * cc.burst.returnAt ? 1 : 0;
     this.spring('burst', this.burstHold > 0 ? 1 : 0, cc.burst.spring, dt);
     const bw = Math.max(0, this.sp.burst.x);
     const zoom = this.sp.zoom.x * (1 - m.punch.distance * punch);
