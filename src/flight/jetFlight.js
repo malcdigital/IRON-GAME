@@ -48,6 +48,9 @@ export class JetFlight {
     this.autoMove = null;
     this.autoHandled = null;
     this.autoCool = 0;
+    this.steerDir = new THREE.Vector3(0, 0, -1);
+    this.steerGain = 1;
+    this.steerMaxA = 50;
     this.autoLabel = '';
     this.autoLabelT = 0;
     this.rollAngle = 0;
@@ -214,7 +217,7 @@ export class JetFlight {
     const canPull = clamp(gripNow, 1.5, c.carve.maxG * g);
     // Auto-steer: smallest move first. Close to a building: a small course correction. If that
     // can't clear it: one quick move that keeps your speed (hop a roof edge, roll-juke past it).
-    // Full also brakes as a last resort. Off / Light / Full via caps.autoSteer.
+    // Light: correction only. Full: adds the hop / roll. Off / Light / Full via caps.autoSteer.
     const as = this.cfg.avoid;
     const level = caps.autoSteer || 'full';
     this.autoCool = Math.max(0, this.autoCool - dt);
@@ -227,7 +230,6 @@ export class JetFlight {
     this.avoiding = plan.active && plan.urgency > 0.02 ? plan.kind : null;
     this.avoidPlan = plan;
     if (plan.inStreet) this.streetT = this.cfg.avoid.streetHold;   // stays 'between buildings' through crossings
-    let avoidBrake = false;
     if (this.avoiding && this.flipT <= 0 && this.snapT <= 0) {
       const ground = plan.target === 'ground';
       const w = plan.urgency;
@@ -268,7 +270,7 @@ export class JetFlight {
       // the roll waits until the last moment that still works
       const stepTime = Math.sqrt((5.77 * need) / as.stepMaxAccel);
       const lastMoment = plan.kind === 'up' ? plan.ttc < as.moveTime : plan.ttc <= stepTime + as.stepLead;
-      if (!ground && !away && tooBig && lastMoment && this.autoCool <= 0 && plan.target !== this.autoHandled) {
+      if (level === 'full' && !ground && !away && tooBig && lastMoment && this.autoCool <= 0 && plan.target !== this.autoHandled) {
         let move = null;
         if (plan.kind === 'up' && need <= as.hopMax) {
           move = { type: 'hop', dv: clamp((need / Math.max(plan.ttc, 0.3)) * 1.5 + 3, 4, as.hopMaxSpeed) };
@@ -287,33 +289,35 @@ export class JetFlight {
           this.autoLabelT = 1;
         }
       }
-      avoidBrake = level === 'full' && plan.brake && plan.ttc < as.brakeTime;
     }
     if (!this.avoiding) this.autoHandled = null;
 
     const vTargetBase = fast ? c.boostSpeed : c.minSpeed + (c.cruiseSpeed - c.minSpeed) * this.throttle;
     // Carving brakes to cornering speed: slower = tighter. A hard turn brakes harder.
     let vTarget = this.carving ? Math.min(vTargetBase, c.carve.cornerSpeed) : vTargetBase;
-    if (avoidBrake) vTarget = Math.min(vTarget, speed * this.cfg.avoid.brakeFrac);
 
     // Wanted acceleration: speed along the path, plus pulling the velocity onto the path
     const d = this.direction;
     this.pitch = this.groundHold != null ? Math.max(savedPitch, this.groundHold) : savedPitch;
     this.groundHold = null;
     this.yaw = savedYaw;
+    this.steerDir.copy(d);   // the path actually being flown this frame (with any correction)
     const along = v.dot(d);
     // Steer back onto the path; much harder when dodging an obstacle
     const avoidW = this.avoiding && plan.target === 'ground' ? plan.urgency : 0;
     this._aPerp.copy(v).addScaledVector(d, -along).multiplyScalar(-(this.carving ? c.carve.turnGain : c.turnGain) * (1 + this.cfg.avoid.steerBoost * avoidW));
     // Keep height-keeping (vertical) and turning (sideways) on separate budgets
     // During a juke, let the shove carry instead of pulling straight back onto the path
-    if (this.jinkT > 0) this._aPerp.multiplyScalar(0.15);
+    // (sideways only: height-keeping stays on, so a roll near the ground doesn't sink you into it)
+    if (this.jinkT > 0) { this._aPerp.x *= 0.15; this._aPerp.z *= 0.15; }
     // Pulling up away from something gets the full turning budget
     const vMax = (this.avoiding === 'up' && plan.urgency > 0.3 ? c.carve.maxG : c.verticalMaxG) * g;
     const vert = clamp(this._aPerp.y, -vMax, vMax);
     this._aPerp.y = 0;
     this._aPerp.clampLength(0, maxG);
     this._aPerp.y = vert;
+    this.steerGain = this.carving ? c.carve.turnGain : c.turnGain;
+    this.steerMaxA = maxG;
     const accelCap = (caps.launching ? this.cfg.launch.maxAccelG : 2) * g;
     this._A.copy(d).multiplyScalar(clamp((vTarget - along) * c.speedGain, -2 * g, accelCap)).add(this._aPerp);
     this._A.y += g;

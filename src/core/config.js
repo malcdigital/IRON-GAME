@@ -105,7 +105,6 @@ export const CONFIG = {
     extraDeg: 4,                   // extra angle beyond the bare minimum
     upBias: 1.15,                  // >1 prefers going round over going over
     stickiness: 0.15,              // keep the chosen side unless another is clearly better (rad)
-    brakeAbove: 0.8, brakeFrac: 0.6,  // brake if the turn needs more than 80% of max grip
     pullUpShare: 0.5,              // share of max grip assumed for a pull-up (planning margin)
     reactTime: 0.3,                // seconds of sink allowed for the suit to react
     groundEarly: 2.4,              // start easing the nose up when room < this x needed
@@ -113,7 +112,6 @@ export const CONFIG = {
     moveTime: 1.0,                 // seconds from impact when it makes one quick move
     hopMax: 14, hopMaxSpeed: 18,    // hop over a roof edge if it needs at most this many metres (and m/s)
     rollMax: 12,                    // roll-juke past a corner if it needs at most this many metres sideways
-    brakeTime: 0.5,                // last resort brake (Full only)
     cooldown: 1.0,
     hopTime: 0.25,                 // the hop's push lasts this long
     minSpeed: 5,
@@ -170,6 +168,7 @@ export const CONFIG = {
     charges: 3, rechargeTime: 2,    // juke charges, seconds per charge
     jukeSpeed: 30,                   // sideways shove (m/s)
     hoverJukeScale: 0.8,             // hover sidesteps are a bit gentler
+    rollHold: { time: 1.0, kp: 30, kd: 10, maxG: 3 },  // keeps your height through a roll-juke
     jinkTime: 0.6,                  // flight assist lets the shove carry you this long
     jinkBankDeg: 70,                 // the suit snaps into a bank toward the dodge
     jukeSpread: 0.2,                 // the sidestep is spread over this long, alongside the roll

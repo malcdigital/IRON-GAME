@@ -111,6 +111,8 @@ export class Game {
   // Sidestep left or right. In flight it rides along with a barrel roll.
   juke(dir, fromRoll = false) {
     const e = CONFIG.evade;
+    // Hold height through the roll (the body's lift spins round with it)
+    if (this.controller.flying) this.rollHold = { y0: this.body.pos.y, vy0: this.body.vel.y, t: 0 };
     if (this.autoStep) {
       // Auto-steer sidestep: moves exactly the planned distance, then stops (free, no charge)
       const st = this.autoStep; this.autoStep = null;
@@ -182,6 +184,18 @@ export class Game {
   }
 
   // Where would a sidestep (juke) or hop take us over the next moment?
+  // Predicted path if the suit keeps following the path it's flying now (with any correction)
+  predictCourse(jet, horizon) {
+    const pts = [], p = this.body.pos.clone(), v = this.body.vel.clone(), d = jet.steerDir, a = new THREE.Vector3(), dt = 0.05;
+    for (let t = dt; t <= horizon; t += dt) {
+      a.copy(v).addScaledVector(d, -v.dot(d)).multiplyScalar(-jet.steerGain).clampLength(0, jet.steerMaxA);
+      v.addScaledVector(a, dt);
+      p.addScaledVector(v, dt);
+      pts.push(p.clone());
+    }
+    return pts;
+  }
+
   // Predicted path for an exact sidestep of `dist` metres over `time` seconds
   predictStep(vec, dist, time, horizon) {
     const pts = [], b = this.body;
@@ -234,7 +248,7 @@ export class Game {
         const levels = ['off', 'light', 'full'];
         this.caps.autoSteer = levels[(levels.indexOf(this.caps.autoSteer) + 1) % levels.length];
         storage.set('autoSteer', this.caps.autoSteer);
-        const what = { off: 'Off', light: 'Light (corrects, hops, rolls)', full: 'Full (adds braking)' }[this.caps.autoSteer];
+        const what = { off: 'Off', light: 'Light (small course corrections)', full: 'Full (adds last-moment hops and rolls)' }[this.caps.autoSteer];
         events.emit('toast', { text: `Auto-steer: ${what}` });
         break;
       }
@@ -342,6 +356,9 @@ export class Game {
           const av = CONFIG.avoid;
           const time = m.time;
           let shift = null;
+          // Is the course correction already enough? Then no roll.
+          const fine = pathClear(this.predictCourse(jet, m.ttc + 0.4), cols, 1.5);
+          if (fine) { m.need = Infinity; jet.autoHandled = null; jet.autoCool = 0; jet.autoLabelT = 0; jet.autoRollT = 0; }
           for (let d = Math.max(2, m.need); d <= av.rollMax; d += 0.5) {
             if (pathClear(this.predictStep(vec, d, time, m.ttc + 0.5), cols, 2)) { shift = d; break; }
           }
@@ -349,7 +366,7 @@ export class Game {
             this.autoStep = { shift, time };
             if (!jet.startRoll(m.dir, true)) this.autoStep = null;
             else jet.autoDodgeT = time + av.stepSettle;
-          } else { jet.autoLabelT = 0; jet.autoRollT = 0; }
+          } else if (!fine) { jet.autoLabelT = 0; jet.autoRollT = 0; }
         }
         if (m.type === 'hop' && !pathClear(this.predictShove(Y, m.dv), cols, 2)) { m.type = 'none'; jet.autoLabelT = 0; }
         if (m.type === 'snap' && !this.startSnap(m.side)) jet.autoLabelT = 0;
@@ -434,6 +451,15 @@ export class Game {
       body.force.addScaledVector(j.vec, (body.mass * e.jukeSpeed * j.scale) / j.dur);
       j.t += dt;
       if (j.t >= j.dur) this.jukeShove = null;
+    }
+
+    // Keep height steady while rolling past something
+    if (this.rollHold) {
+      const h = this.rollHold, r = CONFIG.evade.rollHold;
+      const err = r.kp * (h.y0 + h.vy0 * h.t - body.pos.y) + r.kd * (h.vy0 - body.vel.y);
+      body.force.y += body.mass * THREE.MathUtils.clamp(err, -r.maxG * CONFIG.physics.gravity, r.maxG * CONFIG.physics.gravity);
+      h.t += dt;
+      if (h.t >= r.time || !this.controller.flying) this.rollHold = null;
     }
 
     // A hard turn waiting for room: take it at the first opening

@@ -36,7 +36,7 @@ function rayBox(o, d, min, max, margin, maxDist) {
 export class ObstacleSensor {
   constructor(cfg) {
     this.cfg = cfg;
-    this.plan = { active: false, kind: null, angle: 0, ttc: Infinity, dist: Infinity, urgency: 0, brake: false, name: '' };
+    this.plan = { active: false, kind: null, angle: 0, ttc: Infinity, dist: Infinity, urgency: 0, name: '' };
     this.lastTarget = null;
     this.lastKind = null;
   }
@@ -115,7 +115,6 @@ export class ObstacleSensor {
       }
       if (kind === 'up') angle /= c.upBias;
       const ttc = best / speed;
-      const needAccel = (2 * best * Math.sin(Math.min(Math.max(0, angle), 1.4))) / Math.max(0.05, ttc * ttc);
       const sideKind = options.left <= options.right ? 'left' : 'right';
       // How square-on you're flying at the wall: 1 = straight at it, 0 = skimming along it
       const headOn = faceAxis ? Math.abs(dir[faceAxis]) : 1;
@@ -123,7 +122,6 @@ export class ObstacleSensor {
         target, kind, headOn, angle: Math.max(0, angle), ttc, dist: best, baseYaw, basePitch, sideKind,
         name: target.name || 'building',
         urgency: 1 - THREE.MathUtils.smoothstep(ttc, c.urgentTime, c.lookTime),
-        brake: needAccel > maxAccel * c.brakeAbove,
       };
     }
 
@@ -138,7 +136,7 @@ export class ObstacleSensor {
         result = {
           target: 'ground', kind: 'up', name: 'ground',
           angle: theta + THREE.MathUtils.degToRad(c.extraDeg), ttc: room / Math.max(1, speed * Math.sin(theta)),
-          dist: room, baseYaw, basePitch, urgency, brake: false,
+          dist: room, baseYaw, basePitch, urgency,
         };
       }
     }
