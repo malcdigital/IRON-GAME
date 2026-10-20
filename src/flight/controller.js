@@ -160,7 +160,9 @@ export class FlightController {
     this._side.copy(this._aSide).multiplyScalar(body.mass).applyQuaternion(this._qInv);
     out.force.set(this._side.x, Math.max(0, body.mass * this._A.dot(this._up)) + this._side.y, this._side.z);
     out.sideways = true;
-    this.attitudeTorque(body, this._qDes, caps.assistGain, out.torque, turnMax, ff);
+    // (braking out of flight: the game whips the body back into the wind instead)
+    if (caps.brakeQ) this.attitudeTorque(body, caps.brakeQ, caps.assistGain * caps.brakeGain, out.torque, turnMax * caps.brakeGain);
+    else this.attitudeTorque(body, this._qDes, caps.assistGain, out.torque, turnMax, ff);
     out.thrust = true;
     return out;
   }

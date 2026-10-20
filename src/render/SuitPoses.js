@@ -97,14 +97,16 @@ export const POSES = {
   // Braking out of flight into a hover: hands thrust out in front (palms forward), knees up,
   // leaning back against the stop
   flare: {
-    hands: { Left: { curl: -25, thumb: -10 }, Right: { curl: -25, thumb: -10 } },
-    Spine02: { rot: [8, 0, 0] }, Spine01: { rot: [6, 0, 0] }, Head: { rot: [-10, 0, 0] },
-    LeftArm: { aim: [-0.35, -0.15, -0.92] }, RightArm: { aim: [0.35, -0.15, -0.92] },
-    LeftForeArm: { aim: [-0.25, 0.05, -0.97] }, RightForeArm: { aim: [0.25, 0.05, -0.97] },
-    LeftHand: { aim: [-0.1, 0.65, -0.75] }, RightHand: { aim: [0.1, 0.65, -0.75] },
-    LeftUpLeg: { aim: [-0.12, -0.4, -0.91] }, RightUpLeg: { aim: [0.12, -0.55, -0.83] },
-    LeftLeg: { aim: [-0.06, -0.97, 0.22] }, RightLeg: { aim: [0.06, -0.95, 0.3] },
-    LeftFoot: { rot: [-25, 0, 0] }, RightFoot: { rot: [-25, 0, 0] },
+    // aggressive brake: knees whipped up and forward into the wind, arms punched out in front with
+    // the palms facing forward (the hand jets fire ahead), hunched over the knees, head up
+    hands: { Left: { curl: -35, thumb: -15 }, Right: { curl: -35, thumb: -15 } },
+    Spine02: { rot: [16, 0, 0] }, Spine01: { rot: [12, 0, 0] }, neck: { rot: [-10, 0, 0] }, Head: { rot: [-22, 0, 0] },
+    LeftArm: { aim: [-0.38, 0.02, -0.93] }, RightArm: { aim: [0.38, 0.02, -0.93] },
+    LeftForeArm: { aim: [-0.2, 0.12, -0.97] }, RightForeArm: { aim: [0.2, 0.12, -0.97] },
+    LeftHand: { aim: [-0.05, 0.88, -0.47] }, RightHand: { aim: [0.05, 0.88, -0.47] },
+    LeftUpLeg: { aim: [-0.16, -0.12, -0.98] }, RightUpLeg: { aim: [0.16, -0.3, -0.94] },
+    LeftLeg: { aim: [-0.06, -0.85, -0.52] }, RightLeg: { aim: [0.06, -0.9, -0.42] },
+    LeftFoot: { rot: [-30, 0, 0] }, RightFoot: { rot: [-30, 0, 0] },
   },
   // Launch (matches art/takeoff_ref.mp4): straight and upright as the jets lift you, arms down at
   // the sides a little out, palms to the ground firing straight down, legs together with a soft
@@ -358,10 +360,10 @@ export class SuitPoser {
     const M = P.moments, mo = this.mom;
     // braking out of flight (the game's air brake runs for exitBrake.time)
     const brakeT = game.hoverBrakeT ?? 0, brakeAll = CONFIG.assist.exitBrake.time;
-    const flareWant = brakeT > 0 && !flying ? Math.min(1, brakeT / (brakeAll * 0.35)) : 0;
+    const flareWant = brakeT > 0 && !flying ? THREE.MathUtils.smoothstep(Math.hypot(game.body.vel.x, game.body.vel.z), 1.5, 8) : 0;   // (held while you're still moving)
     // (relaunching into flight from the brake: the braking pose clears quickly for the tuck)
     const relaunch = game.launchSeq && !game.launchSeq.ground;
-    mo.flare += (flareWant - mo.flare) * (1 - Math.exp(-(flareWant > mo.flare && !relaunch ? 14 : relaunch ? 25 : 5) * dt));
+    mo.flare += (flareWant - mo.flare) * (1 - Math.exp(-(flareWant > mo.flare && !relaunch ? 22 : relaunch ? 25 : 5) * dt));
     // launch: a quick crouch, then the rocket pose for the burst, easing into flight
     if (mo.launchCount === null) mo.launchCount = game.launchCount ?? 0;
     if ((game.launchCount ?? 0) !== mo.launchCount) { mo.launchCount = game.launchCount ?? 0; mo.launchClock = 0; }
@@ -424,6 +426,13 @@ export class SuitPoser {
     if (mo.leaning) {
       const rest = 1 - sp;
       this.w.hover = (1 - mo.lean) * rest; this.w.flight = mo.lean * rest; this.w.boost = 0; this.w.stand = 0;
+    }
+    // never more than a whole pose: the states easing out are scaled down to make room for the
+    // special ones (otherwise the blend overshoots and exaggerates)
+    {
+      let spSum = 0, rest = 0;
+      for (const s of STATES) if (s in special) spSum += this.w[s]; else rest += this.w[s];
+      if (spSum + rest > 1.001 && rest > 0) { const k2 = Math.max(0, 1 - spSum) / rest; for (const s of STATES) if (!(s in special)) this.w[s] *= k2; }
     }
     // never less than a whole pose (a blend that comes up short would sag toward the bare model)
     let total = 0;

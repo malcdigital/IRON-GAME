@@ -361,6 +361,14 @@ export class SuitView {
       flare = 1 + (BL.flame - 1) * sc * Math.max(0, 1 - this.blastT / (BL.time * sc)) ** 2;
       if (this.blastT > BL.time * sc) this.blastT = null;
     }
+    // braking hard into a hover: a shorter flare as the forward jets slam on
+    if ((game.brakeCount ?? 0) !== this.lastBrake) { this.lastBrake = game.brakeCount ?? 0; this.brakeFxT = this.lastBrake ? 0 : null; }
+    if (this.brakeFxT != null) {
+      const F = CONFIG.assist.exitBrake.fx;
+      this.brakeFxT += dt;
+      flare = Math.max(flare, 1 + (F.flame - 1) * Math.max(0, 1 - this.brakeFxT / F.time) ** 2);
+      if (this.brakeFxT > F.time) this.brakeFxT = null;
+    }
     for (const f of this.flames) {
       const u = f.comp.throttle;
       const on = u > 0.02 && f.comp.available > 0 && !this.hideFlames;

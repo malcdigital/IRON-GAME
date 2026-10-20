@@ -263,6 +263,11 @@ export class Game {
         if (this.controller.flying) {
           this.controller.exitFlight(this.body, this.hoverFraction());
           this.hoverBrakeT = CONFIG.assist.exitBrake.time;   // air-brake down to a hover
+          const v = this.body.vel;
+          this.brakeDir = new THREE.Vector3(v.x, 0, v.z);
+          if (this.brakeDir.lengthSq() < 1) this.brakeDir.set(-Math.sin(this.controller.heading), 0, -Math.cos(this.controller.heading));
+          this.brakeDir.normalize();
+          this.brakeCount = (this.brakeCount ?? 0) + 1;   // (the camera and flames slam as it hits)
           events.emit('toast', { text: 'Hover mode' });
         } else if (!this.launchSeq) {
           // Launch sequence (CONFIG.launch.seq): wind up, jump, then the thrusters fire.
@@ -523,6 +528,18 @@ export class Game {
     this.caps.stunned = this.stunT > 0;
     if (this.rescue && !input.cut) this.rescue = null;   // the safety catch took over
     if (this.burst) this.stepBurst(dt, input);
+    // Braking into a hover: whip the body back past upright, chest and feet into the wind
+    this.caps.brakeQ = null;
+    if (this.hoverBrakeT > 0 && !this.controller.flying && this.brakeDir && !this.grounded) {
+      const eb = CONFIG.assist.exitBrake, sp = Math.hypot(body.vel.x, body.vel.z);
+      const lean = eb.leanDeg * Math.PI / 180 * THREE.MathUtils.smoothstep(sp, 2, 12);   // (eases back upright as you stop)
+      const axis = this._brakeAxis ?? (this._brakeAxis = new THREE.Vector3());
+      axis.crossVectors(Y, this.brakeDir).normalize().negate();   // (tips the head back, away from travel)
+      const q = this._brakeQ ?? (this._brakeQ = new THREE.Quaternion());
+      q.setFromAxisAngle(axis, lean).multiply(this._qTmp2.setFromAxisAngle(Y, this.controller.heading));
+      this.caps.brakeQ = q; this.caps.brakeGain = eb.turnGain;
+      this.spinToward(q, eb.whipRate, eb.whipGain);   // (a hard whip round, not a gentle tilt)
+    }
     const cmd = this.controller.update(body, input, this.caps, this.grounded, dt);
     if (this.burst) {
       // the thrusters push whatever the path needs (body frame); turning is done in stepBurst
@@ -569,6 +586,7 @@ export class Game {
         const eb = CONFIG.assist.exitBrake, g = CONFIG.physics.gravity;
         const a = this._c.set(-body.vel.x, 0, -body.vel.z).multiplyScalar(eb.gain).clampLength(0, eb.maxG * g);
         body.force.addScaledVector(a, body.mass);
+        body.force.y -= body.mass * body.vel.y * eb.holdGain;   // (stops where you are: no ballooning up)
       }
     }
     const jet = this.controller.jet;
@@ -658,6 +676,20 @@ export class Game {
     body.torque.add(this._T.applyQuaternion(body.quat));
 
     body.force.add(this.aero);
+    // Braking into a hover: the hand and boot thrusters fire forward, against the travel (shown on the flames)
+    if (this.hoverBrakeT > 0 && !this.controller.flying && this.brakeDir) {
+      const sp = Math.hypot(body.vel.x, body.vel.z), lvl = THREE.MathUtils.smoothstep(sp, 1.5, 10);
+      if (lvl > 0.02) {
+        const back = this._c.copy(this.brakeDir).negate().applyQuaternion(this._qTmp.copy(body.quat).invert());
+        for (const t of thr) {
+          const slot = t.comp?.slot ?? t.slot;
+          if (slot !== 'gauntlets' && slot !== 'boots') continue;
+          t.throttle = Math.max(t.throttle, lvl);
+          if (!t.thrustDir) t.thrustDir = new THREE.Vector3();
+          t.thrustDir.lerp(back, lvl).normalize();
+        }
+      }
+    }
     // Rescue burn: the hand and boot thrusters fire at the ground (shown on the flames)
     if (this.rescue?.phase === 'brake' && this.rescue.level > 0.02) {
       const upBody = this._c.set(0, 1, 0).applyQuaternion(this._qTmp.copy(body.quat).invert());

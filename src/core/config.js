@@ -195,7 +195,11 @@ export const CONFIG = {
     sideUse: 0.6,     // share of the swivel push the assist may use for sliding (rest keeps you up)
     allowManual: false, // manual hover (tips with the stick, throttle stays put): off; set true to bring back the toggle
     walkSpeed: 3, runSpeed: 6,   // on the ground the stick walks (boost = run)
-    exitBrake: { time: 1.2, gain: 3, maxG: 2.5 },          // leaving flight: brake to a hover
+    // leaving flight: an aggressive brake to a hover. The body swings back leanDeg past upright into
+    // the wind (turnGain: how hard it whips round), hands and boots fire forward, height is held
+    // (holdGain); slows at up to maxG g. fx: flame flare, camera shake and fov squeeze as it hits.
+    exitBrake: { time: 1.1, gain: 6, maxG: 5, leanDeg: 40, turnGain: 4, holdGain: 5, whipRate: 10, whipGain: 14,   // whipRate: top swing speed (rad/s)
+      fx: { time: 0.5, flame: 1.9, shake: 0.07, fov: 7 } },
     agility: { gain: 4, accel: 22, boostAccel: 28 },       // hover steering jets: how hard they push you toward the stick's speed (m/s²)
   },
 
