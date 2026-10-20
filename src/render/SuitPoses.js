@@ -120,7 +120,7 @@ const FINGERS = ['Index', 'Middle', 'Ring', 'Pinky'];
 const JOINT_SHARE = [1, 1.1, 0.8];   // how a hand's curl spreads over the knuckle, middle and end joints
 const D2R = Math.PI / 180;
 const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _e = new THREE.Euler();
-const _v = new THREE.Vector3(), _v2 = new THREE.Vector3();
+const _v = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3();
 const _lq1 = new THREE.Quaternion(), _lq2 = new THREE.Quaternion(), _lq3 = new THREE.Quaternion(), _lq4 = new THREE.Quaternion(), _lq5 = new THREE.Quaternion(), _lv1 = new THREE.Vector3();
 
 export class SuitPoser {
@@ -193,6 +193,7 @@ export class SuitPoser {
     this.accH = new THREE.Vector2();    // smoothed push in hover (right, forward), m/s²
     this.yawRate = 0;                   // smoothed turning speed, rad/s
     this.vy = 0;                        // smoothed climb speed, m/s
+    this.flt = { pull: 0, lat: 0, roll: 0, rollAcc: 0, lastRoll: 0 };   // flight: g toward the back, sideways g, roll speed and its change
     this.lastVel = new THREE.Vector3();
     this.wasGrounded = true;
     this.lastVy = 0;
@@ -207,6 +208,7 @@ export class SuitPoser {
       for (const s of STATES) this.w[s] = s === this.preview ? 1 : 0;
       this.crouch = 0; this.walk = 0; this.lean.set(0, 0); this.side = 0;
       this.accH.set(0, 0); this.yawRate = 0; this.vy = 0;
+      Object.assign(this.flt, { pull: 0, lat: 0, roll: 0, rollAcc: 0 });
       return this.apply();
     }
     const P = CONFIG.pose;
@@ -232,6 +234,15 @@ export class SuitPoser {
     this.accH.y += (THREE.MathUtils.clamp(-acc.z, -40, 40) - this.accH.y) * kh;
     this.yawRate += ((body.angVel?.y ?? 0) - this.yawRate) * kh;
     this.vy += (body.vel.y - this.vy) * kh;
+    // flight: push in the suit's frame (+Z is its back) and how fast it's rolling about its length
+    const FL = P.flight, kf = 1 - Math.exp(-FL.react * dt), ft = this.flt;
+    const wL = _v3.set(0, 0, 0);
+    if (body.angVel) wL.copy(body.angVel).applyQuaternion(qInv);
+    ft.pull += (THREE.MathUtils.clamp(acc.z, -80, 80) - ft.pull) * kf;
+    ft.lat += (THREE.MathUtils.clamp(acc.x, -80, 80) - ft.lat) * kf;
+    const rollAccNow = (wL.y - ft.lastRoll) / dt; ft.lastRoll = wL.y;
+    ft.roll += (wL.y - ft.roll) * kf;
+    ft.rollAcc += (THREE.MathUtils.clamp(rollAccNow, -200, 200) - ft.rollAcc) * kf;
 
     // landing: crouch by how hard you came down, then stand back up
     if (grounded && !this.wasGrounded) this.crouch = Math.min(1, Math.max(this.crouch, -this.lastVy / P.landSpeedFull));
@@ -306,13 +317,36 @@ export class SuitPoser {
     add('LeftFoot', -climb * 18 + drop * 15, 0, 0); add('RightFoot', -climb * 18 + drop * 15, 0, 0);
     add('LeftUpLeg', drop * 22, 0, 0); add('RightUpLeg', drop * 16, 0, 0);
     add('LeftLeg', -drop * 38, 0, 0); add('RightLeg', -drop * 30, 0, 0);
-    // flight turns: legs swing out, the lead arm and head lean into the turn
-    const fl = w.flight + w.boost;
-    const turn = THREE.MathUtils.clamp(-this.side * P.turnPerMs2, -P.turnMax, P.turnMax) * fl;
-    add('Spine02', 0, 0, turn * 0.35);
-    add('RightArm', 0, 0, turn * 0.8);
-    add('Head', 0, 0, turn * 0.5);
-    add('LeftUpLeg', 0, 0, turn * 0.9); add('RightUpLeg', 0, 0, turn * 0.9);
+    // FLIGHT body language, from the physics (CONFIG.pose.flight). The suit flies head first, back up.
+    const F = P.flight, fl = (w.flight + w.boost) * F.amount;
+    if (fl > 0.01) {
+      // Turning: the suit banks, then pulls round with its back toward the inside of the turn.
+      // That pull (g toward the back) leaves the legs and arms lagging toward the chest side;
+      // the back arches and the head lifts to look round the turn.
+      const pull = THREE.MathUtils.clamp(this.flt.pull / F.pullFull, -1, 1) * fl;
+      const pu = Math.max(0, pull), pd = Math.max(0, -pull);
+      add('Spine02', 6 * pull, 0, 0); add('Spine01', 10 * pull, 0, 0); add('Head', 12 * pu - 6 * pd, 0, 0);
+      add('LeftUpLeg', 30 * pull, 0, 0); add('RightUpLeg', 24 * pull, 0, 0);             // legs lag toward the chest side
+      add('LeftLeg', -28 * pu, 0, 0); add('RightLeg', -18 * pu, 0, 0);                     // knees give under the g
+      add('LeftArm', 14 * pull, 0, -22 * pu); add('RightArm', 14 * pull, 0, 22 * pu);     // arms open out like wings
+      // Sideways push: legs swing to the outside, the head and chest lean in
+      const lat = THREE.MathUtils.clamp(this.flt.lat / F.latFull, -1, 1) * fl;
+      add('LeftUpLeg', 0, 0, -18 * lat); add('RightUpLeg', 0, 0, -18 * lat);
+      add('Spine01', 0, 0, -8 * lat); add('Head', 0, 0, -10 * lat);
+      // Barrel rolls: an arm flings out to thrust the suit into the spin (and the other arm to stop it);
+      // mid-spin everything tucks in tight, like a skater spinning faster
+      const spin = Math.min(1, Math.abs(this.flt.roll) / F.rollFull) * fl;
+      const kick = THREE.MathUtils.clamp(this.flt.rollAcc / F.rollAccFull, -1, 1) * fl;
+      const kr = Math.max(0, kick), kl = Math.max(0, -kick);
+      add('LeftArm', 0, 0, 26 * spin * (1 - kl) - 70 * kl); add('RightArm', 0, 0, -26 * spin * (1 - kr) + 70 * kr);
+      add('LeftForeArm', 0, 0, -20 * kl); add('RightForeArm', 0, 0, 20 * kr);
+      add('LeftUpLeg', 0, 0, 6 * spin); add('RightUpLeg', 0, 0, -6 * spin);               // legs squeeze together
+      for (const n of ['LeftLeg', 'RightLeg']) add(n, 8 * spin, 0, 0);                     // and straighten
+      add('Head', -8 * spin, 0, 0);                                                          // chin tucks
+      // the thrusting hand opens (palm out), the others close up
+      this.handCurl('Right', -40 * kr + 25 * spin * (1 - kr));
+      this.handCurl('Left', -40 * kl + 25 * spin * (1 - kl));
+    }
     // walking
     if (this.walk > 0.01) {
       const s = Math.sin(this.walkPhase), a = P.walkSwing * this.walk;
@@ -387,5 +421,12 @@ export class SuitPoser {
     const b = this.byName[`${side}Hand`];
     if (!b?.palm) return null;
     return out.copy(b.palm).applyQuaternion(_q.copy(b.rest).invert()).applyQuaternion(b.cur);
+  }
+
+  // Extra finger curl on one hand (+ fist, - open), on top of the pose
+  handCurl(side, deg) {
+    if (Math.abs(deg) < 0.1) return;
+    for (const f of ['Index', 'Middle', 'Ring', 'Pinky']) JOINT_SHARE.forEach((k, j) => { const b = this.byName[`${side}Hand${f}${j + 1}`]; if (b) b.bend += deg * k; });
+    JOINT_SHARE.forEach((k, j) => { const b = this.byName[`${side}HandThumb${j + 1}`]; if (b) b.bend += deg * 0.5 * k; });
   }
 }

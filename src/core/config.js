@@ -249,6 +249,15 @@ export const CONFIG = {
     stepsPerMeter: 0.9, walkSwing: 28,            // walking legs
     limits: true,                   // keep every joint within real human ranges (SuitPoses.js LIMITS)
     groundRoom: 0.25,
+    // Flight body language, from the physics. amount scales it all (0 = off).
+    flight: {
+      amount: 1,
+      react: 6,                     // how quickly it reacts
+      pullFull: 35,                 // g toward the back in a turn (m/s²) for the full arch-and-lag
+      latFull: 20,                  // sideways push (m/s²) for the full leg swing
+      rollFull: 10,                 // roll speed (rad/s) for the full tuck
+      rollAccFull: 40,              // roll speed-up (rad/s²) for the full arm fling
+    },
     // Hover body language, from the physics. amount scales it all (1 = as tuned, 0 = off).
     hover: {
       amount: 1.3,
