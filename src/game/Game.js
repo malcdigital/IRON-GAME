@@ -6,7 +6,7 @@ import { RigidBody } from '../physics/RigidBody.js';
 import { sphereContacts, resolveContact } from '../physics/collision.js';
 import { Suit } from '../suit/Suit.js';
 import { updateHeat } from '../suit/heat.js';
-import { applyZoneDamage, impactDamage, updateThrusterAvailability } from '../suit/damage.js';
+import { applyZoneDamage, impactDamage, updateThrusterAvailability, thermalFactor } from '../suit/damage.js';
 import { FlightController, yawOf } from '../flight/controller.js';
 import { allocate } from '../flight/allocator.js';
 import { World } from '../world/World.js';
@@ -34,6 +34,8 @@ export class Game {
     this.recoverTimer = 0;
     this.powerLimited = false;
     this.twr = 0;
+    this.launchT = 0;
+    this.launchCharge = 1;
     this.caps = { maxLift: 0, assistGain: 1, aeroAccel: new THREE.Vector3() };
     this.aero = new THREE.Vector3();
     this._Fsave = new THREE.Vector3();
@@ -72,7 +74,22 @@ export class Game {
     this.chase?.reset();
     this.u.fill(0);
     this.caps.aeroAccel.set(0, 0, 0);
+    this.launchT = 0;
+    this.launchCharge = 1;
     this.syncMass();
+  }
+
+  // Dump the stored charge into the thrusters for a burst of speed
+  launch() {
+    const l = CONFIG.launch;
+    if (this.launchCharge < 1) {
+      events.emit('toast', { text: `Flight mode. Burst recharging (${Math.round(this.launchCharge * 100)}%)` });
+      return;
+    }
+    this.launchCharge = 0;
+    this.launchT = l.time;
+    this.body.vel.addScaledVector(this.controller.jet.direction, l.kick);
+    events.emit('launch');
   }
 
   hoverFraction() {
@@ -89,11 +106,10 @@ export class Game {
         if (this.controller.flying) {
           this.controller.exitFlight(this.body, this.hoverFraction());
           events.emit('toast', { text: 'Hover mode' });
-        } else if (this.grounded) {
-          events.emit('toast', { text: 'Lift off first (hold Space), then press F' });
         } else {
-          this.controller.enterFlight(this.body);
-          events.emit('toast', { text: 'Flight mode: Space to speed up, Shift for afterburner' });
+          // From the ground, launch upward like a rocket
+          this.controller.enterFlight(this.body, this.grounded ? CONFIG.launch.groundPitch : null);
+          this.launch();
         }
         break;
       case 'flip':
@@ -125,7 +141,13 @@ export class Game {
     suit.time = this.time;
 
     // 1. What can each thruster give right now?
-    updateThrusterAvailability(suit, input.boost, dt);
+    const l = CONFIG.launch;
+    const launching = this.launchT > 0;
+    if (launching) this.launchT -= dt;
+    else this.launchCharge = Math.min(1, this.launchCharge + dt / l.recharge);
+    this.caps.launching = launching;
+    this.caps.altitude = body.pos.y - CONFIG.pilot.feetHeight;
+    updateThrusterAvailability(suit, input.boost, dt, launching ? l.thrustMult : 1);
     const thr = suit.thrusters;
     let maxLift = 0, fullDraw = 0;
     for (const t of thr) {
@@ -133,7 +155,8 @@ export class Game {
       fullDraw += t.available * t.thruster.powerPerN;
     }
     // The core may not be able to run every thruster flat out
-    const powerOut = suit.powerOutput();
+    // The burst runs on stored charge, so the core isn't the limit while it lasts
+    const powerOut = suit.powerOutput() * (launching ? l.thrustMult : 1) * thermalFactor(suit.core.heat);
     if (fullDraw > powerOut) maxLift *= powerOut / fullDraw;
     this.caps.maxLift = maxLift;
     this.caps.assistGain = suit.assistGain();
@@ -148,7 +171,7 @@ export class Game {
     const cmd = this.controller.update(body, input, this.caps, this.grounded, dt);
 
     // 3. Gyro handles what torque it can; thrusters do the rest
-    const g = suit.gyroTorque() + aeroSteering(body.vel.length(), CONFIG.aero);
+    const g = suit.gyroTorque() * (launching ? l.gyroMult : 1) + aeroSteering(body.vel.length(), CONFIG.aero);
     this._gyro.set(
       THREE.MathUtils.clamp(cmd.torque.x, -g, g),
       THREE.MathUtils.clamp(cmd.torque.y, -g, g),
@@ -213,7 +236,7 @@ export class Game {
     this.checkRecover(dt);
 
     // Touching down slowly in flight mode drops back to hover
-    if (this.controller.flying && this.grounded && body.vel.length() < CONFIG.flight.autoExitSpeed) {
+    if (this.controller.flying && (this.grounded || this.anyContact) && body.vel.length() < CONFIG.flight.autoExitSpeed + (this.grounded ? 0 : 2)) {
       this.controller.exitFlight(body, this.hoverFraction());
       events.emit('toast', { text: 'Landed. Hover mode.' });
     }
@@ -313,6 +336,8 @@ export class Game {
       mode: this.controller.mode,
       throttle: this.controller.flying ? this.controller.jet.throttle : this.controller.throttle,
       gLoad: this.controller.flying ? this.controller.jet.gLoad : 1,
+      launchCharge: this.launchCharge,
+      launching: this.launchT > 0,
       powerDraw: s.powerDraw,
       powerOut: s.powerOutput(),
       powerLimited: this.powerLimited,

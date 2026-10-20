@@ -46,10 +46,10 @@ export class FlightController {
 
   get flying() { return this.mode === 'flight'; }
 
-  enterFlight(body) {
+  enterFlight(body, pitch = null) {
     if (this.mode !== 'flight') this.hoverMode = this.mode;
     this.mode = 'flight';
-    this.jet.enter(body, this.heading);
+    this.jet.enter(body, this.heading, pitch);
   }
 
   exitFlight(body, hoverFraction) {
@@ -150,7 +150,7 @@ export class FlightController {
   }
 
   // PD controller that rotates the body toward qDes
-  attitudeTorque(body, qDes, gain, out) {
+  attitudeTorque(body, qDes, gain, out, maxRate = this.cfg.attitude.maxRate) {
     const a = this.cfg.attitude;
     this._qInv.copy(body.quat).invert();
     this._qErr.multiplyQuaternions(qDes, this._qInv);
@@ -164,10 +164,13 @@ export class FlightController {
     this._e.applyQuaternion(this._qInv);
     this._w.copy(body.angVel).applyQuaternion(this._qInv);
     const kp = a.kp * gain, kd = a.kd * Math.sqrt(gain);
+    // Turn the angle error into a wanted spin rate (capped), then torque toward that rate.
+    // Capping the rate stops big moves from asking for more torque than the suit has.
+    this._e.multiplyScalar(kp / kd).clampLength(0, maxRate);
     out.set(
-      (this._e.x * kp - this._w.x * kd) * body.inertia.x,
-      (this._e.y * kp - this._w.y * kd) * body.inertia.y,
-      (this._e.z * kp - this._w.z * kd) * body.inertia.z,
+      (this._e.x - this._w.x) * kd * body.inertia.x,
+      (this._e.y - this._w.y) * kd * body.inertia.y,
+      (this._e.z - this._w.z) * kd * body.inertia.z,
     );
     return out;
   }

@@ -41,11 +41,12 @@ export class JetFlight {
   }
 
   // Start flying in the direction you're already moving (or facing)
-  enter(body, heading) {
+  enter(body, heading, pitchOverride = null) {
     const v = body.vel, h = Math.hypot(v.x, v.z);
     // Start nearly level: along your horizontal motion, or the way you're facing
     this.yaw = h > 3 ? Math.atan2(-v.x, -v.z) : heading;
     this.pitch = h > 3 ? clamp(Math.atan2(v.y, h), -0.3, 0.3) : 0.12;
+    if (pitchOverride != null) this.pitch = pitchOverride;
     this.throttle = 0.5;
     this.rollT = this.flipT = 0;
   }
@@ -75,7 +76,8 @@ export class JetFlight {
     this.prevRoll = roll;
 
     // Steer the flight path. Turn rate drops at speed so turns stay within the G limit.
-    const maxG = (this.flipT > 0 ? c.flipMaxG : input.boost ? c.boostMaxG : c.maxG) * g;
+    const fast = input.boost || caps.launching;
+    const maxG = (this.flipT > 0 ? c.flipMaxG : fast ? c.boostMaxG : c.maxG) * g;
     const turnRate = Math.min(c.turnRate, maxG / Math.max(speed, 1));
     const oldYaw = this.yaw, oldPitch = this.pitch;
     const vDir = speed > 1 ? this._v.copy(v).divideScalar(speed) : null;
@@ -97,18 +99,34 @@ export class JetFlight {
 
     // Speed
     this.throttle = clamp(this.throttle + (input.up - input.down) * c.throttleRamp * dt, 0, 1);
-    const vTarget = input.boost ? c.boostSpeed : c.minSpeed + (c.cruiseSpeed - c.minSpeed) * this.throttle;
+    // Close to the ground and not diving on purpose: lift the nose
+    // Hands off the pitch: the path eases back to level
+    if (input.forward === 0 && this.flipT <= 0) this.pitch *= Math.exp(-c.autoLevel * dt);
+    const ga = c.groundAvoid;
+    // Look ahead: where will we be in a moment at this sink rate?
+    const predicted = caps.altitude + Math.min(0, v.y) * ga.lookahead;
+    const pitchFloor = predicted < ga.height && input.forward <= 0 ? ga.pitch : -Infinity;
+    const savedPitch = this.pitch;
+    this.pitch = Math.max(this.pitch, pitchFloor);
+    const vTarget = fast ? c.boostSpeed : c.minSpeed + (c.cruiseSpeed - c.minSpeed) * this.throttle;
 
     // Wanted acceleration: speed along the path, plus pulling the velocity onto the path
     const d = this.direction;
+    this.pitch = savedPitch;
     const along = v.dot(d);
-    this._aPerp.copy(v).addScaledVector(d, -along).multiplyScalar(-c.turnGain).clampLength(0, maxG);
+    this._aPerp.copy(v).addScaledVector(d, -along).multiplyScalar(-c.turnGain);
+    // Keep height-keeping (vertical) and turning (sideways) on separate budgets
+    const vert = clamp(this._aPerp.y, -c.verticalMaxG * g, c.verticalMaxG * g);
+    this._aPerp.y = 0;
+    this._aPerp.clampLength(0, maxG);
+    this._aPerp.y = vert;
     if (this.rollT > 0) {
       // Sideways dodge during a roll
       this._x.crossVectors(d, Y).normalize();
       this._aPerp.addScaledVector(this._x, -this.rollDir * c.dodgeAccel);
     }
-    this._A.copy(d).multiplyScalar(clamp((vTarget - along) * c.speedGain, -2 * g, 2 * g)).add(this._aPerp);
+    const accelCap = (caps.launching ? this.cfg.launch.maxAccelG : 2) * g;
+    this._A.copy(d).multiplyScalar(clamp((vTarget - along) * c.speedGain, -2 * g, accelCap)).add(this._aPerp);
     this._A.y += g;
     this.gLoad = this._A.length() / g;
 
@@ -162,7 +180,8 @@ export class JetFlight {
     this._up.copy(Y).applyQuaternion(body.quat);
     this._A.sub(caps.aeroAccel);
     out.force.set(0, Math.max(0, body.mass * this._A.dot(this._up)), 0);
-    attitude(body, qDes, caps.assistGain * c.attitudeGain, out.torque);
+    const rate = this.rollT > 0 ? c.rollMaxRate : this.flipT > 0 ? c.flipMaxRate : this.cfg.attitude.maxRate;
+    attitude(body, qDes, caps.assistGain * c.attitudeGain, out.torque, rate);
     out.thrust = true;
     return out;
   }

@@ -120,6 +120,7 @@ kbd + kbd { margin-left: 3px; }
 .readout dd small { font-size: 11px; color: var(--ink-dim); margin-left: 3px; }
 .readout dd.warn { color: var(--warm); }
 .readout dd.bad { color: var(--hot); }
+.readout dd.good { color: var(--good); }
 
 .chip {
   align-self: flex-start;

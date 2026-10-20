@@ -33,7 +33,7 @@ export const RANGE = {
     // Landing towers
     { id: 'towerA', name: 'Tower A', kind: 'tower', pos: [-18, 6, -40],  size: [8, 12, 8], pad: true, delivery: true },
     { id: 'towerB', name: 'Tower B', kind: 'tower', pos: [24, 11, -78],  size: [6, 22, 6], pad: true },
-    { id: 'towerC', name: 'Tower C', kind: 'tower', pos: [-8, 18, -128], size: [4.5, 36, 4.5], pad: true },
+    { id: 'towerC', name: 'Tower C', kind: 'tower', pos: [-26, 18, -128], size: [4.5, 36, 4.5], pad: true },
 
     // Obstacles to fly around (or crash into)
     { id: 'wall1',  kind: 'wall',  pos: [12, 2.5, -28],  size: [14, 5, 1] },
@@ -71,7 +71,7 @@ export const RANGE = {
     [0, 5, -20],
     [-10, 9, -55],
     [6, 16, -95],
-    [-8, 40, -128],   // over Tower C
+    [-26, 40, -128],  // over Tower C
     [28, 12, -118],
     [39, 7, -22],     // through the arch
     [18, 5, 6],

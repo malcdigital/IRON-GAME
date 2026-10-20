@@ -1,6 +1,6 @@
 import { CONFIG } from '../core/config.js';
 import { events } from '../core/events.js';
-import { damageComponent } from './damage.js';
+import { damageComponent, thermalFactor } from './damage.js';
 
 // Heat builds with use and bleeds off faster the hotter a part is.
 // At 100% a part shuts down until it cools. Running very hot wears parts out.
@@ -23,7 +23,8 @@ export function updateHeat(suit, dt, boost) {
   const coolMult = suit.coolMult();
   const boostMult = boost ? CONFIG.boost.heatMult : 1;
   for (const t of suit.thrusters) {
-    stepHeat(suit, t, t.throttle * t.heatRate * boostMult, coolMult, dt);
+    // A thruster held back by the limiter makes less heat, so it settles instead of cutting out
+    stepHeat(suit, t, t.throttle * t.heatRate * boostMult * thermalFactor(t.heat), coolMult, dt);
   }
   const core = suit.core;
   const load = suit.powerDraw / core.part.power;

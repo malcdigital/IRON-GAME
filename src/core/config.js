@@ -46,7 +46,7 @@ export const CONFIG = {
   // Air: the body is treated as three flat plates. Flying head-first is slick,
   // belly-first catches lots of air (that's what gives lift and braking).
   aero: {
-    plates: [0.8, 0.15, 4],  // N per (m/s)^2 against air hitting the side, head, belly/back
+    plates: [0.8, 0.11, 4],  // N per (m/s)^2 against air hitting the side, head, belly/back
     steerPerV2: 0.2,           // at speed the pilot steers with arms and legs (N·m per (m/s)^2)
     steerMax: 1500,
     smoothing: 0.1,            // seconds, for the flight assist's lift estimate
@@ -54,18 +54,29 @@ export const CONFIG = {
 
   // Flight mode: fast, nose-first, banked turns. Hover modes are separate.
   flight: {
-    minSpeed: 15, cruiseSpeed: 55, boostSpeed: 95,  // m/s targets (thrust and drag decide what you really get)
+    minSpeed: 24, cruiseSpeed: 58, boostSpeed: 95,  // m/s targets (thrust and drag decide what you really get)
     throttleRamp: 0.6,
     speedGain: 0.8,
     turnRate: 1.6, pitchRate: 1.4,  // rad/s
     turnGain: 3,
     maxG: 4, boostMaxG: 6,
     maxLeadDeg: 35,                 // how far the aim can get ahead of where you're actually going
-    rollTime: 0.6, dodgeAccel: 16,  // barrel roll
-    flipTime: 0.9, flipMaxG: 10,    // 180° reverse
+    rollTime: 0.6, dodgeAccel: 16, rollMaxRate: 14,  // barrel roll
+    flipTime: 0.9, flipMaxG: 10, flipMaxRate: 4.5,  // 180° reverse
     attitudeGain: 1.8,
     autoExitSpeed: 4,               // touching down slower than this drops back to hover
+    autoLevel: 0.7,                 // how fast the path levels out when you let go of up/down (1/s)
+    groundAvoid: { height: 10, pitch: 0.25, lookahead: 1.3 },  // near the ground without diving: nose comes up on its own
+    verticalMaxG: 2.5,              // height-keeping gets its own budget so turns don't drag you down
   },
+
+  // Launch burst: entering flight mode dumps a stored charge into the thrusters.
+  // Works from the ground too (rocket takeoff). Recharges over a few seconds.
+  launch: { time: 1.5, thrustMult: 3, kick: 18, recharge: 5, groundPitch: 0.6, gyroMult: 6, maxAccelG: 2 },
+
+  // Thermal limiter: instead of cutting out at 100%, thrusters and the core
+  // taper their output as they get hot, so you sink gently rather than drop.
+  thermalLimiter: { enabled: true, start: 74, end: 92, floor: 0.2 },
 
   boost: { thrustMult: 1.45, heatMult: 1.7 },
 
@@ -81,14 +92,14 @@ export const CONFIG = {
   // Manual flight: keys set rotation rates, throttle stays where you leave it.
   manual: { pitchRate: 2.4, rollRate: 2.8, yawRate: 2.0, rateGain: 9, throttleRamp: 0.7 },
 
-  attitude: { kp: 26, kd: 8.5 },  // scaled by the helmet's assist quality
+  attitude: { kp: 26, kd: 8.5, maxRate: 2.5 },  // scaled by the helmet's assist quality; maxRate caps spin speed (rad/s)
 
   // Thrust mixing weights: [Fx, Fy, Fz, Tx, Ty, Tz]. Higher = matters more.
   allocation: { weights: [0.002, 1, 0.002, 25, 25, 25], sweeps: 12 },
 
   stance: { uprightGain: 40, damping: 10, minUp: 0.55 },  // legs keep you upright when standing
 
-  heat: { overheatAt: 100, restartBelow: 55, wearAbove: 88, wearRate: 4, passiveCool: 2 },
+  heat: { overheatAt: 100, restartBelow: 55, wearAbove: 92, wearRate: 3, passiveCool: 2 },
 
   damage: {
     safeImpactSpeed: 5.5,   // m/s; slower hits do nothing

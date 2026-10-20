@@ -40,8 +40,15 @@ export function efficiency(suit, comp) {
   return min + (1 - min) * suit.ratio(comp);
 }
 
+// Hot parts give less (if the thermal limiter is on), so they rarely hit a full shutdown
+export function thermalFactor(heat) {
+  const l = CONFIG.thermalLimiter;
+  if (!l.enabled || heat <= l.start) return 1;
+  return Math.max(l.floor, 1 - (heat - l.start) / (l.end - l.start));
+}
+
 // Work out how much thrust each thruster can give right now.
-export function updateThrusterAvailability(suit, boost, dt) {
+export function updateThrusterAvailability(suit, boost, dt, extraMult = 1) {
   const d = CONFIG.damage;
   for (const t of suit.thrusters) {
     // Badly damaged thrusters cut out at random
@@ -55,6 +62,6 @@ export function updateThrusterAvailability(suit, boost, dt) {
       t.available = 0;
       continue;
     }
-    t.available = t.thruster.maxThrust * efficiency(suit, t) * (boost ? CONFIG.boost.thrustMult : 1);
+    t.available = t.thruster.maxThrust * efficiency(suit, t) * (boost ? CONFIG.boost.thrustMult : 1) * extraMult * thermalFactor(t.heat);
   }
 }

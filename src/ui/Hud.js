@@ -93,7 +93,7 @@ export class Hud {
           : `<div><dt>Climb</dt><dd>${t.vs >= 0 ? '+' : ''}${fmt(t.vs)}<small>m/s</small></dd></div>`}
         <div><dt>Thrust / wt</dt><dd class="${twrClass}">${fmt(t.twr, 2)}</dd></div>
         <div><dt>Power</dt><dd class="${t.powerLimited ? 'warn' : ''}">${Math.round(t.powerDraw)}<small>/${Math.round(t.powerOut)} kW</small></dd></div>
-        <div><dt>Mass</dt><dd>${Math.round(t.mass)}<small>kg</small></dd></div>
+        <div><dt>Burst</dt><dd class="${t.launching ? 'warn' : t.launchCharge >= 1 ? 'good' : ''}">${t.launching ? 'Go!' : t.launchCharge >= 1 ? 'Ready' : `${Math.round(t.launchCharge * 100)}%`}</dd></div>
       </dl>`;
 
     for (const c of t.components) {
