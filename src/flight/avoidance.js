@@ -6,10 +6,14 @@ const _right = new THREE.Vector3();
 const _up = new THREE.Vector3();
 const _rel = new THREE.Vector3();
 const _aim = new THREE.Vector3();
+const _side = new THREE.Vector3();
+const _side2 = new THREE.Vector3();
 
 // Distance along a ray to an axis-aligned box grown by `margin` (Infinity if missed).
+// hit.axis is the axis of the face it enters through (x, y or z).
+const hit = { axis: null };
 function rayBox(o, d, min, max, margin, maxDist) {
-  let t0 = 0, t1 = maxDist;
+  let t0 = 0, t1 = maxDist, axis = null;
   for (const ax of ['x', 'y', 'z']) {
     const lo = min[ax] - margin, hi = max[ax] + margin;
     if (Math.abs(d[ax]) < 1e-9) {
@@ -18,10 +22,11 @@ function rayBox(o, d, min, max, margin, maxDist) {
     }
     let a = (lo - o[ax]) / d[ax], b = (hi - o[ax]) / d[ax];
     if (a > b) [a, b] = [b, a];
-    t0 = Math.max(t0, a);
+    if (a > t0) { t0 = a; axis = ax; }
     t1 = Math.min(t1, b);
     if (t0 > t1) return Infinity;
   }
+  hit.axis = axis;
   return t0;
 }
 
@@ -54,10 +59,27 @@ export class ObstacleSensor {
     }
     if (!best) { this.lastTarget = null; return plan; }
     Object.assign(plan, best);
+    plan.inStreet = this.betweenBuildings(pos, colliders);
     this.lastTarget = best.target;
     this.lastKind = best.kind;
     plan.active = plan.angle > 0 && plan.urgency > 0;
     return plan;
+  }
+
+  // Buildings close on both your left and right (flying down a street)?
+  betweenBuildings(pos, colliders) {
+    const w = this.cfg.streetWidth;
+    _side.set(-_dir.z, 0, _dir.x);
+    if (_side.lengthSq() < 1e-6) return false;
+    _side.normalize();
+    _side2.copy(_side).negate();
+    let left = false, right = false;
+    for (const col of colliders) {
+      if (!right && rayBox(pos, _side, col.min, col.max, 0, w) < w) right = true;
+      if (!left && rayBox(pos, _side2, col.min, col.max, 0, w) < w) left = true;
+      if (left && right) return true;
+    }
+    return false;
   }
 
   probe(pos, dir, speed, colliders, altitude, maxAccel) {
@@ -65,10 +87,10 @@ export class ObstacleSensor {
     const look = speed * c.lookTime + c.lookExtra;
 
     // Nearest building in the way
-    let best = Infinity, target = null;
+    let best = Infinity, target = null, faceAxis = null;
     for (const col of colliders) {
       const t = rayBox(pos, dir, col.min, col.max, c.margin, look);
-      if (t < best) { best = t; target = col; }
+      if (t < best) { best = t; target = col; faceAxis = hit.axis; }
     }
 
     // Frame looking down this ray
@@ -105,8 +127,10 @@ export class ObstacleSensor {
       const ttc = best / speed;
       const needAccel = (2 * best * Math.sin(Math.min(Math.max(0, angle), 1.4))) / Math.max(0.05, ttc * ttc);
       const sideKind = options.left <= options.right ? 'left' : 'right';
+      // How square-on you're flying at the wall: 1 = straight at it, 0 = skimming along it
+      const headOn = faceAxis ? Math.abs(dir[faceAxis]) : 1;
       result = {
-        target, kind, angle: Math.max(0, angle), ttc, dist: best, baseYaw, basePitch, sideKind,
+        target, kind, headOn, angle: Math.max(0, angle), ttc, dist: best, baseYaw, basePitch, sideKind,
         name: target.name || 'building',
         urgency: 1 - THREE.MathUtils.smoothstep(ttc, c.urgentTime, c.lookTime),
         brake: needAccel > maxAccel * c.brakeAbove,

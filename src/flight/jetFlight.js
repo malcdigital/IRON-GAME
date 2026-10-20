@@ -218,6 +218,7 @@ export class JetFlight {
     const as = this.cfg.avoid;
     const level = caps.autoSteer || 'full';
     this.autoCool = Math.max(0, this.autoCool - dt);
+    this.autoRollT = Math.max(0, (this.autoRollT || 0) - dt);
     this.autoLabelT = Math.max(0, this.autoLabelT - dt);
     const plan = level === 'off' ? this.sensor.plan : this.sensor.scan(body.pos, v, this.direction, caps.colliders, caps.altitude, canPull);
     if (level === 'off') plan.active = false;
@@ -227,10 +228,11 @@ export class JetFlight {
     if (this.avoiding && this.flipT <= 0 && this.snapT <= 0) {
       const ground = plan.target === 'ground';
       const w = plan.urgency;
-      // Gentle nudge; full strength only in an emergency (very close and still on course to hit),
-      // and always for the ground
-      const emergency = plan.ttc < as.emergencyTime;
-      const nudge = ground || emergency ? w : Math.min(w, as.nudgeMax);
+      // Ground: full strength. Buildings: only a slight nudge, only when you're close and
+      // flying nearly straight at the wall (skimming along a wall gets nothing).
+      const headOn = !ground && plan.headOn >= as.nudgeHeadOn;
+      const close = plan.dist < as.nudgeDist || plan.ttc < as.nudgeTime;
+      const nudge = ground ? w : headOn && close ? Math.min(w, as.nudgeMax) : 0;
       if (plan.kind === 'up') {
         const want = Math.min(1.3, plan.basePitch + plan.angle);
         if (want > this.pitch) this.pitch += (want - this.pitch) * nudge;
@@ -241,7 +243,7 @@ export class JetFlight {
         dy = Math.atan2(Math.sin(dy), Math.cos(dy));
         if (dy * sign > 0) this.yaw += dy * nudge;
       }
-      if ((ground || emergency) && w > 0.4) {
+      if (ground && w > 0.4) {
         maxG = Math.max(maxG, c.carve.maxG * g);
         this.spread += (c.spread.carve - this.spread) * Math.min(1, c.spread.rate * dt);   // spread out for more lift
       }
@@ -254,12 +256,16 @@ export class JetFlight {
         if (plan.kind === 'up' && need <= as.hopMax) {
           move = { type: 'hop', dv: clamp((need / Math.max(plan.ttc, 0.3)) * 1.5 + 3, 4, as.hopMaxSpeed) };
         } else if (plan.kind !== 'up' && need <= as.rollMax) {
-          move = { type: 'roll', dir: plan.kind === 'left' ? 1 : -1, need };
-        } else if (level === 'full' && plan.ttc < as.turnTime) {
+          // Rolls only for walls you're flying straight at, never in a street, never ping-pong
+          const dir = plan.kind === 'left' ? 1 : -1;
+          const reverse = this.lastAutoRoll && this.lastAutoRoll !== dir && this.autoRollT > 0;
+          if (headOn && !plan.inStreet && !reverse) move = { type: 'roll', dir, need };
+        } else if (level === 'full' && plan.ttc < as.turnTime && headOn) {
           const side = plan.kind === 'up' ? plan.sideKind : plan.kind;
           move = { type: 'snap', side: side === 'left' ? 1 : -1 };
         }
         if (move) {
+          if (move.type === 'roll') { this.lastAutoRoll = move.dir; this.autoRollT = as.rollNoReverse; }
           this.autoMove = move;
           this.autoHandled = plan.target;
           this.autoCool = as.cooldown;
@@ -283,7 +289,7 @@ export class JetFlight {
     this.yaw = savedYaw;
     const along = v.dot(d);
     // Steer back onto the path; much harder when dodging an obstacle
-    const avoidW = this.avoiding && (plan.target === 'ground' || plan.ttc < this.cfg.avoid.emergencyTime) ? plan.urgency : 0;
+    const avoidW = this.avoiding && plan.target === 'ground' ? plan.urgency : 0;
     this._aPerp.copy(v).addScaledVector(d, -along).multiplyScalar(-(this.carving ? c.carve.turnGain : c.turnGain) * (1 + this.cfg.avoid.steerBoost * avoidW));
     // Keep height-keeping (vertical) and turning (sideways) on separate budgets
     // During a juke, let the shove carry instead of pulling straight back onto the path
