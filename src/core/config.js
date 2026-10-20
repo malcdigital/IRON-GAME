@@ -141,7 +141,12 @@ export const CONFIG = {
     rampTime: 0.7,     // the kick and the thruster boost build up smoothly over this long (s)
     // The launch sequence (set it in the Pose Studio's Launch tab): from the ground, crouch until
     // jumpAt s, jump (jumpSpeed m/s up), thrusters fire at fireAt s. In the air: fire at airFireAt s.
-    seq: { jumpAt: 0.3, fireAt: 0.55, jumpSpeed: 6, airFireAt: 0.15 } },
+    seq: { jumpAt: 0.3, fireAt: 0.55, jumpSpeed: 4.5, airFireAt: 0.15,
+      jumpForward: 4,     // the jump also pushes you forward this much (m/s)
+      jumpCarry: 0.7,     // and the jets keep carrying you forward during it (0-1 of full hover speed)
+      jumpAssist: 0.25 }, // how hard the jets help the jump (0-1 of a full climb)
+    // Climb-out after launching from the ground: nose starts pitchDeg up, eases to levelDeg over time s
+    climb: { pitchDeg: 22, levelDeg: 4, time: 1.2 } },
 
   // Thermal limiter: instead of cutting out at 100%, thrusters and the core
   // taper their output as they get hot, so you sink gently rather than drop.

@@ -47,6 +47,7 @@ export class Game {
     this.launchT = 0;
     this.rescue = null;      // coming round in the air (see stepRescue)
     this.launchKick = null;
+    this.launchClimb = null;
     this.launchSeq = null;   // launching: { t, jumpAt, fireAt, ... } (see step)
     this.stunT = 0;          // knocked out by a crash: thrusters off, no control (seconds left)
     this.impactIn = Infinity; // seconds until the suit hits something on its current path
@@ -99,6 +100,7 @@ export class Game {
     this.pendingSnap = null;
     this.launchT = 0;
     this.rescue = null;      // coming round in the air (see stepRescue)
+    this.launchClimb = null;
     this.launchKick = null;
     this.launchSeq = null;
     this.stunT = 0;          // knocked out by a crash: thrusters off, no control (seconds left)
@@ -362,14 +364,34 @@ export class Game {
       const s = this.launchSeq, seq = CONFIG.launch.seq;
       s.t += dt;
       s.boosted ||= !!(input.boost || input.takeoffBoost);
-      if (!s.jumped && s.t >= s.jumpAt) { s.jumped = true; body.vel.y += seq.jumpSpeed; }
+      if (!s.jumped && s.t >= s.jumpAt) {
+        // jump up and forward (the way you're facing), so you leave the pad already moving
+        s.jumped = true;
+        const h = this.controller.heading ?? 0;
+        body.vel.y += seq.jumpSpeed;
+        body.vel.x += -Math.sin(h) * seq.jumpForward; body.vel.z += -Math.cos(h) * seq.jumpForward;
+      }
       if (s.t >= s.fireAt) {
         this.launchSeq = null;
-        this.controller.enterFlight(body, s.ground ? CONFIG.launch.groundPitch : null);
+        const c = CONFIG.launch.climb;
+        this.controller.enterFlight(body, s.ground ? c.pitchDeg * Math.PI / 180 : null);
+        if (s.ground) this.launchClimb = { t: 0 };   // ease the nose down over the climb (below)
         this.launch(s.boosted);
       } else {
-        // hold still while winding up; once off the ground the jets help the jump along
-        input = { ...input, forward: 0, strafe: 0, yaw: 0, down: 0, cut: false, up: s.jumped && s.ground ? 1 : 0 };
+        // hold still while winding up; once off the ground the jets just help the jump a little
+        input = { ...input, forward: s.jumped && s.ground ? seq.jumpCarry : 0, strafe: 0, yaw: 0, down: 0, cut: false, up: s.jumped && s.ground ? seq.jumpAssist : 0 };
+      }
+    }
+    // Climb out after a launch from the ground: the nose starts climb.pitchDeg up and eases down to
+    // climb.levelDeg over climb.time s (a smooth gain in height that rounds off into flight).
+    // Pitching yourself (stick forward / back) takes over.
+    if (this.launchClimb) {
+      const c = CONFIG.launch.climb, lc = this.launchClimb, jet = this.controller.jet;
+      lc.t += dt;
+      if (!this.controller.flying || Math.abs(input.forward ?? 0) > 0.1 || lc.t > c.time) this.launchClimb = null;
+      else {
+        const u = THREE.MathUtils.smoothstep(lc.t, 0, c.time);
+        jet.pitch = (c.pitchDeg + (c.levelDeg - c.pitchDeg) * u) * Math.PI / 180;
       }
     }
     // How soon will we hit something? (for the brace-for-impact pose)
