@@ -12,7 +12,7 @@ const _side2 = new THREE.Vector3();
 // Distance along a ray to an axis-aligned box grown by `margin` (Infinity if missed).
 // hit.axis is the axis of the face it enters through (x, y or z).
 const hit = { axis: null };
-function rayBox(o, d, min, max, margin, maxDist) {
+export function rayBox(o, d, min, max, margin, maxDist) {
   let t0 = 0, t1 = maxDist, axis = null;
   for (const ax of ['x', 'y', 'z']) {
     const lo = min[ax] - margin, hi = max[ax] + margin;

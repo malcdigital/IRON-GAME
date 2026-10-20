@@ -219,7 +219,10 @@ export const CONFIG = {
       flight: { distance: 2,   orbit: 0, height: 25, shoulder: 0, lookUp: -0.9, lookAhead: 16.5, fov: 60, bank: 0,    lag: 7, shake: 0 },
       boost:  { distance: 5.7, orbit: 0, height: 12, shoulder: 0, lookUp: -1.4, lookAhead: 20,   fov: 74, bank: 0.35, lag: 5, shake: 0.03 },
     },
-    blendRate: 2.5,                // how quickly one shot blends into the next
+    modeBlendTime: 1.2,            // seconds to glide between hover and flight shots
+    shotBlendTime: 1.0,            // seconds to glide between flight and boost
+    frameSpring: { hover: 10, flight: 5 },   // how quickly the camera swings round to a new heading (higher = snappier)
+    wallPad: 0.35, wallMin: 0.6, wallPivotUp: 0.8, wallEaseOut: 3,   // keep the camera out of buildings
     followPitch: 1,                // flight: the camera tilts with dives and climbs (0-1)
     speedFovFrom: 15, speedFovPer: 0.25, speedFovMax: 15,   // wider view at speed (on top of the shot's fov)
     modes: [                       // V cycles these

@@ -1,5 +1,6 @@
 import * as THREE from '../lib/three.js';
 import { CONFIG } from '../core/config.js';
+import { rayBox } from '../flight/avoidance.js';
 
 const Y = new THREE.Vector3(0, 1, 0);
 const X = new THREE.Vector3(1, 0, 0);
@@ -10,7 +11,7 @@ export const SHOT_KEYS = ['distance', 'orbit', 'height', 'shoulder', 'lookUp', '
 // Which shot fits what the suit is doing right now
 export function shotFor(game, boost) {
   if (!game.controller.flying) return 'hover';
-  return boost || game.launchT > 0 ? 'boost' : 'flight';
+  return boost ? 'boost' : 'flight';
 }
 
 // Third-person cinematic camera. Each state (hover, flight, boost) has its own shot:
@@ -32,6 +33,15 @@ export class CameraRig {
     this._dir = new THREE.Vector3();
     this._off = new THREE.Vector3();
     this.offset = new THREE.Vector3();
+    this._pivot = new THREE.Vector3();
+    this.lookOff = new THREE.Vector3();
+    this._ray = new THREE.Vector3();
+    this.wallDist = Infinity;
+    this.from = { ...this.cur };
+    this.blendT = 1;
+    this.blendDur = 1;
+    this.fyaw = 0; this.fpitch = 0; this.vyaw = 0; this.vpitch = 0;
+    this.flyingBefore = false;
     this._back = new THREE.Vector3();
     this._q = new THREE.Quaternion();
     this._qp = new THREE.Quaternion();
@@ -48,25 +58,69 @@ export class CameraRig {
 
   snap() { this.snapNext = true; }
 
+  // If a building is between the suit and the camera, bring the camera in front of it
+  // straight away; once clear, ease back out to the shot's distance.
+  keepOutOfWalls(game, target, dt) {
+    const cc = CONFIG.camera, pivot = this._pivot.copy(target);
+    pivot.y += cc.wallPivotUp;
+    const ray = this._ray.subVectors(this.camera.position, pivot);
+    const full = ray.length();
+    if (full < 1e-3) return;
+    ray.divideScalar(full);
+    let free = full;
+    for (const col of game.world.colliders) {
+      const t = rayBox(pivot, ray, col.min, col.max, cc.wallPad, full);
+      if (t > 0 && t < free) free = t;
+    }
+    free = Math.max(cc.wallMin, free - cc.wallPad);
+    if (this.snapNext || free < this.wallDist) this.wallDist = free;
+    else this.wallDist += (free - this.wallDist) * (1 - Math.exp(-cc.wallEaseOut * dt));
+    if (this.wallDist < full) this.camera.position.copy(pivot).addScaledVector(ray, this.wallDist);
+  }
+
   update(game, dt, boost = false) {
     const body = game.body, ctrl = game.controller, cc = CONFIG.camera;
     const target = body.pos;
     const speed = body.vel.length();
 
-    // Blend toward the shot for what you're doing
-    this.shotName = this.lockShot ?? shotFor(game, boost);
+    // Blend toward the shot for what you're doing: an eased move from the old shot to the new
+    // one (slow-fast-slow), so switching mode glides instead of lurching
+    const name = this.lockShot ?? shotFor(game, boost);
+    if (name !== this.shotName || this.snapNext) {
+      this.shotName = name;
+      this.from = { ...this.cur };
+      this.blendT = this.snapNext ? 1 : 0;
+      this.blendDur = (this.flyingBefore !== ctrl.flying) ? cc.modeBlendTime : cc.shotBlendTime;
+    }
     const shot = cc.shots[this.shotName];
-    const kb = this.snapNext ? 1 : 1 - Math.exp(-cc.blendRate * dt);
-    for (const k of SHOT_KEYS) this.cur[k] += (shot[k] - this.cur[k]) * kb;
+    this.blendT = Math.min(1, this.blendT + dt / this.blendDur);
+    const e = this.blendT * this.blendT * this.blendT * (this.blendT * (this.blendT * 6 - 15) + 10);
+    for (const k of SHOT_KEYS) this.cur[k] = this.from[k] + (shot[k] - this.from[k]) * e;
     const s = this.cur;
 
-    // Frame: hover follows your heading; flight follows where you're actually going
+    // Frame: hover follows your heading; flight follows where you're actually going.
+    // The frame swings on a spring, so it never jumps (e.g. the steep climb of a launch).
     let yaw = ctrl.heading, pitch = 0;
     if (ctrl.flying) {
       const d = speed > 8 ? this._dir.copy(body.vel).normalize() : this._dir.copy(ctrl.jet.direction);
       yaw = Math.atan2(-d.x, -d.z);
       pitch = Math.asin(THREE.MathUtils.clamp(d.y, -1, 1)) * cc.followPitch;
     }
+    const w = ctrl.flying ? cc.frameSpring.flight : cc.frameSpring.hover;
+    const settling = this.flyingBefore !== ctrl.flying ? 0 : 1;
+    if (!settling) this.modeT = cc.modeBlendTime;
+    this.modeT = Math.max(0, (this.modeT ?? 0) - dt);
+    const wNow = w * (1 - 0.6 * (this.modeT / cc.modeBlendTime));   // softer just after a mode switch
+    this.flyingBefore = ctrl.flying;
+    if (this.snapNext) { this.fyaw = yaw; this.fpitch = pitch; this.vyaw = this.vpitch = 0; }
+    let dy = yaw - this.fyaw;
+    dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+    this.vyaw += (wNow * wNow * dy - 2 * wNow * this.vyaw) * dt;
+    this.vpitch += (wNow * wNow * (pitch - this.fpitch) - 2 * wNow * this.vpitch) * dt;
+    this.fyaw += this.vyaw * dt;
+    this.fpitch += this.vpitch * dt;
+    yaw = this.fyaw;
+    pitch = this.fpitch;
     const dist = s.distance * (this.mode.distanceMult ?? 1);
     const elev = THREE.MathUtils.degToRad(s.height);
     this._q.setFromAxisAngle(Y, yaw + THREE.MathUtils.degToRad(s.orbit + (this.mode.orbit ?? 0)));
@@ -94,8 +148,13 @@ export class CameraRig {
     if (this.snapNext) this.offset.copy(this._off);
     else this.offset.lerp(this._off, k);
     this.camera.position.copy(target).add(this.offset);
+    this.keepOutOfWalls(game, target, dt);
     this.camera.position.y = Math.max(0.6, this.camera.position.y);
-    this.look.lerp(this._wantLook, this.snapNext ? 1 : Math.min(1, k * 2));
+    // Aim point, also kept relative to the suit (a sudden burst doesn't jerk the view)
+    this._wantLook.sub(target);
+    if (this.snapNext) this.lookOff.copy(this._wantLook);
+    else this.lookOff.lerp(this._wantLook, Math.min(1, k * 2));
+    this.look.copy(target).add(this.lookOff);
     this.up.lerp(this._wantUp, this.snapNext ? 1 : Math.min(1, k)).normalize();
 
     // Handheld shake that grows with speed
