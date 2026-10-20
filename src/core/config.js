@@ -151,7 +151,7 @@ export const CONFIG = {
     // where you face, speeding up to speed m/s over rampTime s, body lined up with the path.
     burst: {
       jumpAngleDeg: 88, speed: 108, rampTime: 0.6, velGain: 10, posGain: 25, turnRate: 20,
-      rolls: 3, rollFrom: 8, rollTo: 135,   // barrel rolls, from rollFrom to rollTo metres along the path (it's about 150 m long)   // gains: how tightly it holds the path; turnRate: body turn (rad/s)
+      rolls: 3, rollFrom: 8, rollTo: 148, rollEase: 0.2,   // barrel rolls, from rollFrom to rollTo metres along the path (it's about 150 m long); rollEase: share spent spinning up / down   // gains: how tightly it holds the path; turnRate: body turn (rad/s)
       curve: [
         { x: 0, y: 0, in: [0, -13.68564], out: [0, 92.17321] },
         { x: 100, y: 50, in: [-88.11446, -2.798209], out: [36.23938, 1.150837] },
@@ -271,7 +271,8 @@ export const CONFIG = {
     // Subtle touches: dive/climb pose at this nose angle (degrees), leg springs (how fast they swing
     // back and how little they're damped: lower damping = more wiggle), now-and-then leg shifts (every
     // fidgetEvery s, about fidgetDeg degrees), airflow flutter, breathing, glances
-    subtle: { pitchFullDeg: 50, legSpring: 14, legDamping: 0.38, fidgetEvery: [2.5, 6], fidgetDeg: 4, flutterDeg: 4, breathPeriod: 3.4, breathDeg: 1.6, glanceDeg: 7 },
+    subtle: { spinFling: 32, spinLag: 14,   // boosted takeoff rolls: how far the spin throws the limbs out / how far they trail (degrees)
+      pitchFullDeg: 50, legSpring: 14, legDamping: 0.38, fidgetEvery: [2.5, 6], fidgetDeg: 4, flutterDeg: 4, breathPeriod: 3.4, breathDeg: 1.6, glanceDeg: 7 },
     // Moments: hop-off-the-ground length, post-knockout recovery length (s), head shake
     moments: { hopTime: 0.35, recoverTime: 1.6, shakeDeg: 28 },
     // Flight body language, from the physics. amount scales it all (0 = off).

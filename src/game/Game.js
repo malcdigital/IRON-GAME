@@ -897,11 +897,15 @@ export class Game {
     // barrel rolls along the curve: spin about the body's length (head axis), eased in and out
     const dFrom = B.rollFrom, dTo = Math.min(B.rollTo, path.length);
     const ru = THREE.MathUtils.clamp((r.d - dFrom) / Math.max(1, dTo - dFrom), 0, 1);
-    const rollAngle = B.rolls * Math.PI * 2 * ru * ru * (3 - 2 * ru);
+    // spin up quickly, hold a steady spin, spin down (so the fastest part isn't much above the average)
+    const e = B.rollEase, vmax = 1 / (1 - e);
+    const prog = ru < e ? vmax * ru * ru / (2 * e) : ru < 1 - e ? vmax * (e / 2 + ru - e) : 1 - vmax * (1 - ru) ** 2 / (2 * e);
+    const progRate = ru < e ? vmax * ru / e : ru < 1 - e ? vmax : vmax * (1 - ru) / e;
+    const rollAngle = B.rolls * Math.PI * 2 * prog;
     if (rollAngle > 0 && ru < 1) {
       q.multiply(this._qTmp2.setFromAxisAngle(this._xAxis.set(0, 1, 0), rollAngle));
       // (rolls are scripted: set the body's turn directly, with its spin so the poses tuck in)
-      const rate = B.rolls * Math.PI * 2 * 6 * ru * (1 - ru) * v / Math.max(1, dTo - dFrom);
+      const rate = B.rolls * Math.PI * 2 * progRate * v / Math.max(1, dTo - dFrom);
       b.quat.copy(q);
       b.angVel.copy(this._v4.set(0, 1, 0).applyQuaternion(q)).multiplyScalar(rate);
     } else this.spinToward(q, B.turnRate, 16);

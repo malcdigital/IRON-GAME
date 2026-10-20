@@ -351,6 +351,7 @@ export class SuitPoser {
     const seqNow = game.launchSeq;
     const lc = launchCurve(seqNow ? seqNow.t : null, seqNow ? seqNow.jumpAt : 0, seqNow ? seqNow.fireAt : 0, mo.launchClock);
     mo.launch = lc.launch; mo.crouch = lc.crouch;
+    this.inBurst = !!game.burst;
     // boosted takeoff: the upright launch pose while the path climbs steeply, easing into flight as it levels
     if (game.burst) mo.launch = THREE.MathUtils.clamp((game.burst.pitch * 180 / Math.PI - 15) / 45, 0, 1);
     // hopping off the ground into a hover: a small crouch and spring
@@ -539,9 +540,21 @@ export class SuitPoser {
       const spin = Math.min(1, Math.abs(this.flt.roll) / F.rollFull) * fl;
       const kick = THREE.MathUtils.clamp(this.flt.rollAcc / F.rollAccFull, -1, 1) * fl;
       const kr = Math.max(0, kick), kl = Math.max(0, -kick);
-      add('LeftArm', 0, 0, 26 * spin * (1 - kl) - 70 * kl); add('RightArm', 0, 0, -26 * spin * (1 - kr) + 70 * kr);
+      // (in the boosted takeoff's rolls the pilot tucks only a little: the spin throws the limbs out, below)
+      const tuck = this.inBurst ? 0.25 : 1;
+      add('LeftArm', 0, 0, 26 * spin * tuck * (1 - kl) - 70 * kl); add('RightArm', 0, 0, -26 * spin * tuck * (1 - kr) + 70 * kr);
       add('LeftForeArm', 0, 0, -20 * kl); add('RightForeArm', 0, 0, 20 * kr);
-      add('LeftUpLeg', 0, 0, 6 * spin); add('RightUpLeg', 0, 0, -6 * spin);               // legs squeeze together
+      add('LeftUpLeg', 0, 0, 6 * spin * tuck); add('RightUpLeg', 0, 0, -6 * spin * tuck);               // legs squeeze together
+      // Spin physics (boosted takeoff rolls): the spin throws the arms and legs outward and they lag
+      // behind the turn; the elbows give a little; the legs splay on their springs (so they wobble)
+      if (this.inBurst && spin > 0.01) {
+        const S = P.subtle, fling = spin * S.spinFling, lag = -Math.sign(this.flt.roll) * spin * S.spinLag;
+        add('LeftArm', 0, lag, -fling); add('RightArm', 0, lag, fling);
+        add('LeftForeArm', fling * 0.4, 0, -fling * 0.3); add('RightForeArm', fling * 0.4, 0, fling * 0.3);
+        legT.Left.z -= fling * 0.45; legT.Right.z += fling * 0.45;
+        add('LeftUpLeg', 0, lag * 0.6, 0); add('RightUpLeg', 0, lag * 0.6, 0);
+        this.handCurl('Left', -20 * spin); this.handCurl('Right', -20 * spin);
+      }
       for (const n of ['LeftLeg', 'RightLeg']) add(n, 8 * spin, 0, 0);                     // and straighten
       add('Head', -8 * spin, 0, 0);                                                          // chin tucks
       // the thrusting hand opens (palm out), the others close up
