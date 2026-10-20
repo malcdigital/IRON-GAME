@@ -311,6 +311,12 @@ export const CONFIG = {
     ],
   },
 
+  // Crashes: a hit harder than knockSpeed (m/s) knocks the pilot out. Thrusters cut, no control, the
+  // suit tumbles and falls on its own physics, then reboots into hover. Above braceSpeed the suit
+  // braces when it will hit something within braceTime seconds.
+  crash: { knockSpeed: 14, stunMin: 1.0, stunPerMs: 0.04, stunMax: 3, braceSpeed: 12, braceTime: 0.45,
+    tumble: 0.09 },   // spin from an off-centre hit: rad/s per m/s of impact speed
+
   // Key bindings. Values are KeyboardEvent.code names.
   keys: {
     axes: {

@@ -123,7 +123,8 @@ export class FlightController {
     // Thrusters cut (hold to drop): no thrust, the gyro keeps you upright, you free-fall
     if (input.cut && !grounded) {
       out.force.set(0, 0, 0);
-      this.attitudeTorque(body, this._qYaw, caps.assistGain, out.torque, turnMax, ff);
+      if (caps.stunned) out.torque.set(0, 0, 0);   // knocked out: nothing holds you upright
+      else this.attitudeTorque(body, this._qYaw, caps.assistGain, out.torque, turnMax, ff);
       out.thrust = false;
       return out;
     }

@@ -16,7 +16,7 @@ import { ChaseDrone } from '../world/chase.js';
 import { MissileSystem } from '../world/missiles.js';
 import { storage } from '../core/storage.js';
 import { aeroForce, aeroSteering } from '../physics/aero.js';
-import { pathClear } from '../flight/avoidance.js';
+import { pathClear, rayBox } from '../flight/avoidance.js';
 
 const Y = new THREE.Vector3(0, 1, 0);
 const SPHERES = CONFIG.collision.spheres.map((s) => ({ ...s, local: new THREE.Vector3(...s.pos) }));
@@ -44,6 +44,8 @@ export class Game {
     this.powerLimited = false;
     this.twr = 0;
     this.launchT = 0;
+    this.stunT = 0;          // knocked out by a crash: thrusters off, no control (seconds left)
+    this.impactIn = Infinity; // seconds until the suit hits something on its current path
     this.launchCharge = 1;
     this.caps = { maxLift: 0, assistGain: 1, aeroAccel: new THREE.Vector3(), colliders: this.world.colliders, autoSteer: storage.get('autoSteer', 'full') };
     this.aero = new THREE.Vector3();
@@ -92,6 +94,8 @@ export class Game {
     this.hopShove = null;
     this.pendingSnap = null;
     this.launchT = 0;
+    this.stunT = 0;          // knocked out by a crash: thrusters off, no control (seconds left)
+    this.impactIn = Infinity; // seconds until the suit hits something on its current path
     this.launchCharge = 1;
     this.syncMass();
   }
@@ -324,6 +328,15 @@ export class Game {
     this.time += dt;
     suit.time = this.time;
 
+    // Knocked out by a crash: thrusters off and no control; the suit tumbles and falls on its
+    // own physics (the safety catch still fires the thrusters before the ground)
+    if (this.stunT > 0) {
+      this.stunT = Math.max(0, this.stunT - dt);
+      input = { ...input, cut: true, up: 0, down: 0, forward: 0, strafe: 0, yaw: 0, pitch: 0, roll: 0, boost: false, takeoffBoost: false };
+    }
+    // How soon will we hit something? (for the brace-for-impact pose)
+    if ((this._impactTick = ((this._impactTick ?? 0) + 1) % 4) === 0) this.impactIn = this.timeToImpact();
+
     // 1. What can each thruster give right now?
     const l = CONFIG.launch;
     const launching = this.launchT > 0;
@@ -382,6 +395,7 @@ export class Game {
     this.cutting = !!input.cut && hovering && !this.grounded;
     this.catchGrace = Math.max(0, (this.catchGrace ?? 0) - dt);
     this.caps.room = body.pos.y - CONFIG.pilot.feetHeight - this.surfaceBelow(body.pos);   // height above whatever's below
+    this.caps.stunned = this.stunT > 0;
     const cmd = this.controller.update(body, input, this.caps, this.grounded, dt);
     // Vertical steering jets: reach the climb / descent speed quickly, and catch you after a drop
     if (this.controller.mode === 'assist' && !this.controller.flying && !this.grounded && !input.cut && this.hoverBrakeT <= 0) {
@@ -627,6 +641,7 @@ export class Game {
 
   collide() {
     const b = this.body, phys = CONFIG.physics;
+    this._preHitVel = (this._preHitVel ?? new THREE.Vector3()).copy(b.vel);
     const wasGrounded = this.grounded, lastCollider = this.groundCollider;
     this.grounded = false;
     this.anyContact = false;
@@ -656,6 +671,7 @@ export class Game {
       if (speed > 3) events.emit('impact', { point: c.point.clone(), speed });
     }
     if (hardest > CONFIG.damage.safeImpactSpeed) events.emit('crash', { speed: hardest });
+    if (hardest > CONFIG.crash.knockSpeed && !(this.catchGrace > 0)) this.knockOut(hardest, this._preHitVel);
 
     // Push out of whatever we sank into
     const start = b.pos.clone();
@@ -671,6 +687,39 @@ export class Game {
   }
 
   // Lying on the ground? Get back up after a moment.
+  // A hard hit knocks the pilot out for a moment (longer for harder hits)
+  knockOut(speed, before) {
+    const c = CONFIG.crash;
+    // No hit is perfectly centred: the body is sent tumbling (more for harder hits), feet carrying on
+    // the way you were going while the head stops
+    if (this.stunT <= 0) {
+      const b = this.body, dir = (before ?? b.vel).clone().normalize();
+      const head = this._c.set(0, 1, 0).applyQuaternion(b.quat);
+      const axis = new THREE.Vector3().crossVectors(head, dir);
+      if (axis.lengthSq() < 0.05) axis.set(Math.random() - 0.5, 0, Math.random() - 0.5);
+      axis.normalize().applyAxisAngle(dir, (Math.random() - 0.5) * 0.8);
+      b.angVel.addScaledVector(axis, -speed * c.tumble);
+    }
+    const t = Math.min(c.stunMax, c.stunMin + (speed - c.knockSpeed) * c.stunPerMs);
+    if (this.stunT <= 0) events.emit('toast', { text: 'Crash! Suit rebooting…', kind: 'hot' });
+    this.stunT = Math.max(this.stunT, t);
+    if (this.controller.flying) this.controller.exitFlight(this.body, this.hoverFraction());
+  }
+
+  // Seconds until the suit's path meets a building or the ground (Infinity if clear / slow)
+  timeToImpact() {
+    const b = this.body, v = b.vel.length(), c = CONFIG.crash;
+    if (v < c.braceSpeed) return Infinity;
+    const d = this._c.copy(b.vel).divideScalar(v), reach = v * c.braceTime * 1.5;
+    let best = Infinity;
+    for (const col of this.world.colliders) {
+      const t = rayBox(b.pos, d, col.min, col.max, 0.6, reach);
+      if (t < best) best = t;
+    }
+    if (b.vel.y < -1) best = Math.min(best, Math.max(0, this.caps.room ?? Infinity) / Math.max(0.01, -d.y) / 1);
+    return best / v;
+  }
+
   checkRecover(dt) {
     const b = this.body;
     this._up.copy(Y).applyQuaternion(b.quat);

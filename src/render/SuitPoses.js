@@ -82,6 +82,18 @@ export const POSES = {
     LeftFoot: { rot: [-45, 0, 0] },
     RightFoot: { rot: [-45, 0, 0] },
   },
+  // Brace for impact (just before a crash): forearms crossed in front of the helmet, fists shut,
+  // chin and back curled, knees pulled up
+  brace: {
+    hands: { Left: { curl: 70, thumb: 40 }, Right: { curl: 70, thumb: 40 } },
+    Spine02: { rot: [-14, 0, 0] }, Spine01: { rot: [-12, 0, 0] },
+    neck: { rot: [-15, 0, 0] }, Head: { rot: [-18, 0, 0] },
+    LeftArm: { aim: [-0.3, 0.55, -0.78] }, RightArm: { aim: [0.3, 0.55, -0.78] },
+    LeftForeArm: { aim: [0.75, 0.5, -0.43] }, RightForeArm: { aim: [-0.75, 0.42, -0.5] },
+    LeftUpLeg: { aim: [-0.12, -0.55, -0.83] }, RightUpLeg: { aim: [0.12, -0.6, -0.79] },
+    LeftLeg: { aim: [-0.08, -0.9, 0.42] }, RightLeg: { aim: [0.08, -0.85, 0.5] },
+    LeftFoot: { rot: [-20, 0, 0] }, RightFoot: { rot: [-20, 0, 0] },
+  },
 };
 
 export const STATES = Object.keys(POSES);
@@ -117,6 +129,9 @@ function limitsFor(name) {
   return LIMITS[m[4]] ?? LIMITS[name];
 }
 const FINGERS = ['Index', 'Middle', 'Ring', 'Pinky'];
+// Knocked out: each of these hangs like a weighted pendulum (how loose it is, 0..1)
+const LIMP = { LeftArm: 0.85, RightArm: 0.85, LeftForeArm: 0.9, RightForeArm: 0.9, LeftHand: 0.7, RightHand: 0.7,
+  LeftUpLeg: 0.6, RightUpLeg: 0.6, LeftLeg: 0.75, RightLeg: 0.75, Head: 0.45, neck: 0.3, LeftFoot: 0.5, RightFoot: 0.5 };
 const JOINT_SHARE = [1, 1.1, 0.8];   // how a hand's curl spreads over the knuckle, middle and end joints
 const D2R = Math.PI / 180;
 const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _e = new THREE.Euler();
@@ -193,6 +208,10 @@ export class SuitPoser {
     this.accH = new THREE.Vector2();    // smoothed push in hover (right, forward), m/s²
     this.yawRate = 0;                   // smoothed turning speed, rad/s
     this.vy = 0;                        // smoothed climb speed, m/s
+    this.brace = 0;                     // brace-for-impact weight, 0..1
+    this.limp = 0;                      // knocked-out looseness, 0..1
+    this.geff = new THREE.Vector3(0, -9.8, 0);   // gravity as the suit feels it (minus its own acceleration), suit frame
+    this.limbs = {};                    // knocked-out limb swing: { p: direction, v: velocity }
     this.flt = { pull: 0, lat: 0, roll: 0, rollAcc: 0, lastRoll: 0 };   // flight: g toward the back, sideways g, roll speed and its change
     this.lastVel = new THREE.Vector3();
     this.wasGrounded = true;
@@ -209,6 +228,7 @@ export class SuitPoser {
       this.crouch = 0; this.walk = 0; this.lean.set(0, 0); this.side = 0;
       this.accH.set(0, 0); this.yawRate = 0; this.vy = 0;
       Object.assign(this.flt, { pull: 0, lat: 0, roll: 0, rollAcc: 0 });
+      this.brace = 0; this.limp = 0;
       return this.apply();
     }
     const P = CONFIG.pose;
@@ -216,10 +236,20 @@ export class SuitPoser {
     // on the ground: touching it, or floating just above it (the hover assist holds you a little off it)
     const flying = c.flying, grounded = !flying && (game.grounded || (game.caps?.room ?? Infinity) < P.groundRoom);
     const want = { stand: grounded && !flying ? 1 : 0, hover: !grounded && !flying ? 1 : 0, flight: flying && !boost ? 1 : 0, boost: flying && boost ? 1 : 0 };
+    // crashes: brace just before a hit; go limp while knocked out
+    const C = CONFIG.crash;
+    const braceWant = !game.stunT && game.impactIn < C.braceTime ? 1 : 0;
+    this.brace += (braceWant - this.brace) * (1 - Math.exp(-(braceWant ? 18 : 4) * dt));
+    const limpWant = game.stunT > 0 ? 1 : 0;
+    this.limp += (limpWant - this.limp) * (1 - Math.exp(-(limpWant ? 20 : 2.5) * dt));
+    want.brace = 0;
+    for (const s of STATES) if (s !== 'brace') want[s] *= 1 - this.brace;
+    want.brace = this.brace;
     const k = 1 - Math.exp(-P.blendRate * dt);
-    for (const s of STATES) this.w[s] += (want[s] - this.w[s]) * k;
+    for (const s of STATES) this.w[s] += (want[s] - this.w[s]) * (s === 'brace' ? 1 : k);
 
     if (!this.primed) { this.lastVel.copy(game.body.vel); this.primed = true; }
+    this.dtLast = dt;
     // velocity and push in the suit's frame
     const qInv = _q.copy(body.quat).invert();
     const vL = _v.copy(body.vel).applyQuaternion(qInv);
@@ -234,6 +264,10 @@ export class SuitPoser {
     this.accH.y += (THREE.MathUtils.clamp(-acc.z, -40, 40) - this.accH.y) * kh;
     this.yawRate += ((body.angVel?.y ?? 0) - this.yawRate) * kh;
     this.vy += (body.vel.y - this.vy) * kh;
+    // gravity as the body feels it: real gravity minus its own acceleration (in free fall: nothing)
+    const gw = _v3.set(0, -CONFIG.physics.gravity, 0).sub(_v.copy(body.vel).sub(this._prevVel ?? body.vel).multiplyScalar(1 / dt));
+    this._prevVel = (this._prevVel ?? new THREE.Vector3()).copy(body.vel);
+    this.geff.lerp(gw.applyQuaternion(qInv).clampLength(0, 120), 1 - Math.exp(-25 * dt));
     // flight: push in the suit's frame (+Z is its back) and how fast it's rolling about its length
     const FL = P.flight, kf = 1 - Math.exp(-FL.react * dt), ft = this.flt;
     const wL = _v3.set(0, 0, 0);
@@ -276,6 +310,7 @@ export class SuitPoser {
       if (b.hasAim && restW > 0) b.aim.addScaledVector(b.dir, restW);   // poses that leave it at rest
     }
     const R = this.byName;
+    if (this.limp > 0.01) this.applyLimp();
     // hands: curl each finger joint
     for (const s of STATES) {
       if (w[s] < 1e-3 || !POSES[s].hands) continue;
@@ -428,5 +463,28 @@ export class SuitPoser {
     if (Math.abs(deg) < 0.1) return;
     for (const f of ['Index', 'Middle', 'Ring', 'Pinky']) JOINT_SHARE.forEach((k, j) => { const b = this.byName[`${side}Hand${f}${j + 1}`]; if (b) b.bend += deg * k; });
     JOINT_SHARE.forEach((k, j) => { const b = this.byName[`${side}HandThumb${j + 1}`]; if (b) b.bend += deg * 0.5 * k; });
+  }
+
+  // Knocked out: limbs hang and swing like weighted pendulums. Each one is pulled toward the
+  // way gravity feels to the body (so in free fall they float, and a bounce flings them), with
+  // springy, under-damped motion so they flop and overshoot. The joint limits keep it human.
+  applyLimp() {
+    const dt = Math.min(0.05, this.dtLast ?? 0.016), L = this.limp;
+    const g = this.geff, gl = g.length();
+    for (const [name, loose] of Object.entries(LIMP)) {
+      const b = this.byName[name];
+      if (!b?.dir) continue;
+      const st = (this.limbs[name] ??= { p: (b.hasAim ? b.aim.clone() : b.dir.clone()).normalize(), v: new THREE.Vector3() });
+      const posed = _v.copy(b.hasAim ? b.aim : b.dir).normalize();
+      // target: hang along felt gravity (if there's any to speak of), else drift where it is
+      const target = gl > 2 ? _v2.copy(g).multiplyScalar(1 / gl).lerp(posed, 1 - loose).normalize() : _v2.copy(st.p);
+      if (L < 0.05) { st.p.copy(posed); st.v.set(0, 0, 0); continue; }
+      st.v.addScaledVector(_v3.subVectors(target, st.p), 70 * dt).multiplyScalar(Math.exp(-5 * dt));
+      st.p.addScaledVector(st.v, dt).normalize();
+      b.aim.copy(posed).lerp(st.p, L).normalize();
+      b.hasAim = true;
+      b.rot.multiplyScalar(1 - L);
+    }
+    this.handCurl('Left', 20 * L); this.handCurl('Right', 20 * L);
   }
 }

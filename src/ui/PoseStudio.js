@@ -7,7 +7,7 @@ import { POSES, STATES } from '../render/SuitPoses.js';
 // sliders. Drag empty space to orbit, scroll to zoom, right-drag to slide the view.
 // Changes save in this browser; "Copy poses" gives text to paste into src/render/SuitPoses.js.
 
-const LABELS = { stand: 'Stand', hover: 'Hover', flight: 'Flight', boost: 'Boost' };
+const LABELS = { stand: 'Stand', hover: 'Hover', flight: 'Flight', boost: 'Boost', brace: 'Brace' };
 const PARTS = [
   ['Body', [['Spine02', 'Lower back'], ['Spine01', 'Mid back'], ['Spine', 'Chest'], ['neck', 'Neck'], ['Head', 'Head']]],
   ['Left arm', [['LeftArm', 'Left upper arm'], ['LeftForeArm', 'Left forearm'], ['LeftHand', 'Left hand']]],
