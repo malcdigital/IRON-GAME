@@ -44,7 +44,8 @@ export class Input {
     const qe = this.enabled ? (this.down('yawLeft') ? 1 : 0) - (this.down('yawRight') ? 1 : 0) : 0;
     const raw = qe !== 0 ? qe : this.enabled ? this.gamepad.axes.roll : 0;
     const gst = this.rollGesture.update(dt, raw);
-    if (gst.tap) this.queue.push(gst.tap > 0 ? 'rollLeft' : 'rollRight');
+    if (gst.press) this.queue.push(gst.press > 0 ? 'rollLeft' : 'rollRight');
+    if (gst.tap) this.queue.push(gst.tap > 0 ? 'rollJukeLeft' : 'rollJukeRight');
     if (gst.double) this.queue.push(gst.double > 0 ? 'snapLeft' : 'snapRight');
     const g = this.gamepad.axes;
     if (this.queue.length > before || g.forward || g.strafe || g.yaw || g.up || g.down || g.boost) {

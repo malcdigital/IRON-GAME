@@ -86,6 +86,8 @@ export class Hud {
 
     const mode = t.mode === 'assist' ? 'Hover · assist'
       : t.mode === 'manual' ? `Hover · manual · ${Math.round(t.throttle * 100)}%`
+      : t.snapWaiting ? 'Flight · hard turn ready…'
+      : t.autoLabel ? `Flight · ${t.autoLabel}`
       : t.snapping ? 'Flight · hard turn'
       : t.avoiding === 'up' ? 'Flight · auto pull-up'
       : t.avoiding ? `Flight · auto-steer ${t.avoiding}`
@@ -102,6 +104,7 @@ export class Hud {
         <div><dt>Thrust / wt</dt><dd class="${twrClass}">${fmt(t.twr, 2)}</dd></div>
         <div><dt>Power</dt><dd class="${t.powerLimited ? 'warn' : ''}">${Math.round(t.powerDraw)}<small>/${Math.round(t.powerOut)} kW</small></dd></div>
         <div><dt>Juke</dt><dd class="pips">${'●'.repeat(Math.floor(t.evadeCharge))}<span>${'○'.repeat(3 - Math.floor(t.evadeCharge))}</span></dd></div>
+        <div><dt>Auto-steer</dt><dd>${{ off: 'Off', light: 'Light', full: 'Full' }[t.autoSteer]} <small>${prompts.label('autosteer')}</small></dd></div>
         <div><dt>Flares</dt><dd class="${t.flares === 0 ? 'bad' : ''}">${t.flares}</dd></div>
         <div><dt>Burst</dt><dd class="${t.launching ? 'warn' : t.launchCharge >= 1 ? 'good' : ''}">${t.launching ? 'Go!' : t.launchCharge >= 1 ? 'Ready' : `${Math.round(t.launchCharge * 100)}%`}</dd></div>
       </dl>`;

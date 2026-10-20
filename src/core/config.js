@@ -69,9 +69,10 @@ export const CONFIG = {
     gripLearn: 3,                   // how fast the assist corrects for less grip than expected
     maxAoaDeg: 32,                  // best-grip body angle; beyond this you'd stall
     maxLeadDeg: 35,                 // how far the aim can get ahead of where you're actually going
-    rollTime: 0.6, dodgeAccel: 16, rollMaxRate: 14,  // barrel roll (also the juke)
+    rollTime: 0.4, rollRate: 18, rollLeadDeg: 60, dodgeAccel: 16, rollMaxRate: 26,  // barrel roll: spin rate (rad/s), ~0.4 s per turn
     // Hard turn (double-tap Q/E or the right stick): brake, snap round, burst away
-    snap: { angleDeg: 90, time: 0.6, cornerFrac: 0.55, exitFrac: 0.85, response: 0.08, maxG: 20, maxGTurn: 16, minSpeed: 15, burstTime: 0.8, cooldown: 1.2 },
+    // waitWindow: if there's no room to turn, hold the turn this long and take it at the first opening
+    snap: { waitWindow: 1.5, clearance: 3, checkAfter: 0.4, angleDeg: 90, time: 0.6, cornerFrac: 0.55, exitFrac: 0.85, response: 0.08, maxG: 20, maxGTurn: 16, minSpeed: 15, burstTime: 0.8, cooldown: 1.2 },
     flipTime: 0.9, flipMaxG: 10, flipMaxRate: 4.5,  // 180° reverse
     attitudeGain: 1.8,
     autoExitSpeed: 4,               // touching down slower than this drops back to hover
@@ -95,7 +96,17 @@ export const CONFIG = {
     pullUpShare: 0.5,              // share of max grip assumed for a pull-up (planning margin)
     reactTime: 0.3,                // seconds of sink allowed for the suit to react
     groundEarly: 2.4,              // start easing the nose up when room < this x needed
-    steerBoost: 3,                 // how much harder the assist steers at full urgency
+    steerBoost: 3,                 // (ground only) how much harder it steers at full urgency
+    nudgeMax: 0.35,                // buildings: the gentle path bend never goes past this share...
+    emergencyTime: 0.55,           // ...unless still on course to hit within this many seconds
+    moveTime: 1.0,                 // seconds from impact when it makes one quick move
+    hopMax: 8, hopMaxSpeed: 14,    // hop over a roof edge if it needs at most this many metres (and m/s)
+    rollMax: 9,                    // roll-juke past a corner if it needs at most this many metres sideways
+    rollShift: 11,                 // how far a full juke moves you (auto rolls scale down to what's needed)
+    turnTime: 0.8,                 // head-on and too big to hop/roll: hard turn (Full only)
+    brakeTime: 0.5,                // last resort brake (Full only)
+    cooldown: 1.0,
+    hopTime: 0.25,                 // the hop's push lasts this long
     minSpeed: 5,
   },
 
@@ -196,6 +207,7 @@ export const CONFIG = {
     },
     actions: {
       mode: ['KeyM'],
+      autosteer: ['KeyT'],
       flare: ['KeyZ'],
       flight: ['KeyF'],
       flip: ['KeyX'],
@@ -207,7 +219,7 @@ export const CONFIG = {
     },
 
     // Q/E (and the right stick): tap = roll + juke, hold = corkscrew, double-tap = hard turn
-    rollGesture: { holdTime: 0.2, doubleWindow: 0.2 },  // seconds: held longer = corkscrew; second tap within = hard turn
+    rollGesture: { tapMax: 0.18, holdTime: 0.2, doubleWindow: 0.22 },  // released within tapMax = juke; held past holdTime = corkscrew; second tap within doubleWindow = hard turn
 
     // PS5 DualSense (any controller with the standard layout works).
     // Button numbers follow the browser's standard gamepad layout:
@@ -230,6 +242,7 @@ export const CONFIG = {
         workshop: 9,  // Options
         reset: 17,    // Touchpad press
         jukeLeft: 14, jukeRight: 15,  // D-pad: roll + juke (hover: sidestep)
+        autosteer: 12,                // D-pad up: auto-steer Off / Light / Full
       },
       menu: { select: 0, back: 1, up: 12, down: 13 },
       rumble: true,

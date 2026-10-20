@@ -104,8 +104,9 @@ export class ObstacleSensor {
       if (kind === 'up') angle /= c.upBias;
       const ttc = best / speed;
       const needAccel = (2 * best * Math.sin(Math.min(Math.max(0, angle), 1.4))) / Math.max(0.05, ttc * ttc);
+      const sideKind = options.left <= options.right ? 'left' : 'right';
       result = {
-        target, kind, angle: Math.max(0, angle), ttc, dist: best, baseYaw, basePitch,
+        target, kind, angle: Math.max(0, angle), ttc, dist: best, baseYaw, basePitch, sideKind,
         name: target.name || 'building',
         urgency: 1 - THREE.MathUtils.smoothstep(ttc, c.urgentTime, c.lookTime),
         brake: needAccel > maxAccel * c.brakeAbove,
@@ -129,4 +130,17 @@ export class ObstacleSensor {
     }
     return result;
   }
+}
+
+// Is a predicted path (list of points) clear of buildings and the ground?
+export function pathClear(points, colliders, margin = 2.5, groundMin = 1.5) {
+  for (const p of points) {
+    if (p.y < groundMin) return false;
+    for (const c of colliders) {
+      if (p.x > c.min.x - margin && p.x < c.max.x + margin &&
+          p.y > c.min.y - margin && p.y < c.max.y + margin &&
+          p.z > c.min.z - margin && p.z < c.max.z + margin) return false;
+    }
+  }
+  return true;
 }

@@ -14,7 +14,9 @@ import { Course } from '../world/course.js';
 import { CargoSystem } from '../world/cargo.js';
 import { ChaseDrone } from '../world/chase.js';
 import { MissileSystem } from '../world/missiles.js';
+import { storage } from '../core/storage.js';
 import { aeroForce, aeroSteering } from '../physics/aero.js';
+import { pathClear } from '../flight/avoidance.js';
 
 const Y = new THREE.Vector3(0, 1, 0);
 const SPHERES = CONFIG.collision.spheres.map((s) => ({ ...s, local: new THREE.Vector3(...s.pos) }));
@@ -41,7 +43,7 @@ export class Game {
     this.twr = 0;
     this.launchT = 0;
     this.launchCharge = 1;
-    this.caps = { maxLift: 0, assistGain: 1, aeroAccel: new THREE.Vector3(), colliders: this.world.colliders };
+    this.caps = { maxLift: 0, assistGain: 1, aeroAccel: new THREE.Vector3(), colliders: this.world.colliders, autoSteer: storage.get('autoSteer', 'full') };
     this.aero = new THREE.Vector3();
     this._Fsave = new THREE.Vector3();
     this._Tsave = new THREE.Vector3();
@@ -85,6 +87,8 @@ export class Game {
     this.caps.aeroAccel.set(0, 0, 0);
     this.snapState = null;
     this.jukeShove = null;
+    this.hopShove = null;
+    this.pendingSnap = null;
     this.launchT = 0;
     this.launchCharge = 1;
     this.syncMass();
@@ -119,7 +123,9 @@ export class Game {
     right.normalize();
     const shove = dir === 'left' ? right.clone().negate() : right;
     // Spread the sidestep over a short time so it moves with the roll instead of jumping ahead of it
-    this.jukeShove = { vec: shove, t: 0, dur: flying ? e.jukeSpread : 0.12, scale: flying ? 1 : e.hoverJukeScale };
+    const scale = flying ? (this.autoJukeScale ?? 1) : e.hoverJukeScale;
+    this.autoJukeScale = null;
+    this.jukeShove = { vec: shove, t: 0, dur: flying ? e.jukeSpread : 0.12, scale, fromRoll };
     if (flying) this.controller.jet.jink(fromRoll ? 0 : dir === 'left' ? 1 : -1);
     events.emit('maneuver', { name: 'juke', dir });
   }
@@ -132,6 +138,43 @@ export class Game {
     this.flares -= 1;
     this.missiles.fireFlares(this.body);
     events.emit('flares', { left: this.flares });
+  }
+
+  // Where would a hard turn take us? Points along the swing and a little beyond.
+  predictSnap(side) {
+    const s = CONFIG.flight.snap, v = this.body.vel, sp = Math.hypot(v.x, v.z);
+    const from = new THREE.Vector3(v.x / sp, 0, v.z / sp);
+    const to = from.clone().applyAxisAngle(Y, side * THREE.MathUtils.degToRad(s.angleDeg));
+    const pts = [], p = this.body.pos.clone(), dir = new THREE.Vector3(), step = 0.04;
+    for (let t = 0; t < s.time + s.checkAfter; t += step) {
+      const q = Math.min(1, t / s.time), e = q * q * (3 - 2 * q);
+      const k = q < 0.5 ? THREE.MathUtils.lerp(1, s.cornerFrac, q * 2) : THREE.MathUtils.lerp(s.cornerFrac, s.exitFrac, (q - 0.5) * 2);
+      dir.copy(from).lerp(to, e).normalize();
+      p.addScaledVector(dir, sp * k * step);
+      p.y += v.y * step;
+      pts.push(p.clone());
+    }
+    return { pts, from, to, speed: sp };
+  }
+
+  // Start a hard turn if its path is clear. Returns false if there's no room (or it can't start).
+  startSnap(side) {
+    const v = this.body.vel, sp = Math.hypot(v.x, v.z);
+    if (sp < 3) return false;
+    const pred = this.predictSnap(side);
+    if (!pathClear(pred.pts, this.world.colliders, CONFIG.flight.snap.clearance)) return false;
+    if (!this.controller.jet.snap(side, v.length())) return true;   // cooling down: don't queue it
+    this.snapState = { t: 0, from: pred.from, to: pred.to, speed: pred.speed };
+    this.pendingSnap = null;
+    events.emit('maneuver', { name: 'snap' });
+    return true;
+  }
+
+  // Where would a sidestep (juke) or hop take us over the next moment?
+  predictShove(vec, dv) {
+    const pts = [], b = this.body;
+    for (let t = 0.05; t <= 0.8; t += 0.05) pts.push(b.pos.clone().addScaledVector(b.vel, t).addScaledVector(vec, dv * Math.min(t, 0.5)));
+    return pts;
   }
 
   hoverFraction() {
@@ -164,22 +207,35 @@ export class Game {
         break;
       case 'jukeLeft': case 'jukeRight': {
         const dir = action === 'jukeLeft' ? 'left' : 'right';
-        if (this.controller.flying) this.controller.jet.startRoll(dir === 'left' ? 1 : -1);  // roll + juke
+        if (this.controller.flying) this.controller.jet.startRoll(dir === 'left' ? 1 : -1, true);  // roll + juke
         else this.juke(dir);
+        break;
+      }
+      case 'autosteer': {
+        const levels = ['off', 'light', 'full'];
+        this.caps.autoSteer = levels[(levels.indexOf(this.caps.autoSteer) + 1) % levels.length];
+        storage.set('autoSteer', this.caps.autoSteer);
+        const what = { off: 'Off', light: 'Light (nudges, hops, rolls)', full: 'Full (adds hard turns and braking)' }[this.caps.autoSteer];
+        events.emit('toast', { text: `Auto-steer: ${what}` });
         break;
       }
       case 'rollLeft': case 'rollRight':
         if (this.controller.flying) this.controller.jet.startRoll(action === 'rollLeft' ? 1 : -1);
         break;
+      case 'rollJukeLeft': case 'rollJukeRight':
+        if (this.controller.flying) this.controller.jet.addJuke(action === 'rollJukeLeft' ? 1 : -1);
+        break;
       case 'snapLeft': case 'snapRight': {
         const side = action === 'snapLeft' ? 1 : -1;
         if (this.controller.flying) {
-          const v = this.body.vel, sp = Math.hypot(v.x, v.z);
-          if (sp > 3 && this.controller.jet.snap(side, v.length())) {
-            const from = new THREE.Vector3(v.x / sp, 0, v.z / sp);
-            const to = from.clone().applyAxisAngle(Y, side * THREE.MathUtils.degToRad(CONFIG.flight.snap.angleDeg));
-            this.snapState = { t: 0, from, to, speed: sp };
-            events.emit('maneuver', { name: 'snap' });
+          if (this.jukeShove && this.jukeShove.fromRoll) {   // the first tap's sidestep becomes the hard turn instead
+            this.jukeShove = null;
+            this.evadeCharge = Math.min(CONFIG.evade.charges, this.evadeCharge + 1);
+          }
+          // Only turn when there's room: otherwise hold the turn and take it at the first opening
+          if (!this.startSnap(side)) {
+            this.pendingSnap = { side, until: this.time + CONFIG.flight.snap.waitWindow };
+            events.emit('toast', { text: 'Hard turn ready: waiting for room' });
           }
         } else if (this.controller.mode === 'assist') {
           this.controller.heading += side * Math.PI / 2;   // hover: quick quarter turn
@@ -255,6 +311,28 @@ export class Game {
     const jet = this.controller.jet;
     if (this.controller.flying) {
       // A fresh barrel roll carries a juke; a finished hard turn fires a burst
+      // Auto-steer moves
+      if (jet.autoMove) {
+        const m = jet.autoMove; jet.autoMove = null;
+        const cols = this.world.colliders;
+        if (m.type === 'roll') {
+          // Size the sidestep to what's needed, and only if that path is clear
+          const right = new THREE.Vector3().crossVectors(jet.direction, Y).normalize();
+          const vec = m.dir > 0 ? right.negate() : right;
+          const scale = THREE.MathUtils.clamp(m.need / CONFIG.avoid.rollShift, 0.35, 1);
+          if (pathClear(this.predictShove(vec, CONFIG.evade.jukeSpeed * scale), cols, 2)) {
+            this.autoJukeScale = scale;
+            jet.startRoll(m.dir, true);
+          } else jet.autoLabelT = 0;
+        }
+        if (m.type === 'hop' && !pathClear(this.predictShove(Y, m.dv), cols, 2)) { m.type = 'none'; jet.autoLabelT = 0; }
+        if (m.type === 'snap' && !this.startSnap(m.side)) jet.autoLabelT = 0;
+        if (m.type === 'hop') {
+          this.hopShove = { dv: m.dv, t: 0, dur: CONFIG.avoid.hopTime };
+          jet.jink(0);   // let the hop carry instead of being pulled straight back down
+          events.emit('maneuver', { name: 'hop' });
+        }
+      }
       if (jet.pendingJuke) { this.juke(jet.pendingJuke > 0 ? 'left' : 'right', true); jet.pendingJuke = 0; }
       if (jet.burstPending) {
         jet.burstPending = false;
@@ -305,12 +383,28 @@ export class Game {
 
     body.force.add(this.aero);
 
+    // Auto-steer hop in progress (stored charge, straight up)
+    if (this.hopShove) {
+      const h = this.hopShove;
+      body.force.y += (body.mass * h.dv) / h.dur;
+      h.t += dt;
+      if (h.t >= h.dur) this.hopShove = null;
+    }
+
     // Juke sidestep in progress
     if (this.jukeShove) {
       const j = this.jukeShove, e = CONFIG.evade;
       body.force.addScaledVector(j.vec, (body.mass * e.jukeSpeed * j.scale) / j.dur);
       j.t += dt;
       if (j.t >= j.dur) this.jukeShove = null;
+    }
+
+    // A hard turn waiting for room: take it at the first opening
+    if (this.pendingSnap) {
+      if (!this.controller.flying || this.time > this.pendingSnap.until) {
+        if (this.controller.flying) events.emit('toast', { text: 'No room to turn' });
+        this.pendingSnap = null;
+      } else this.startSnap(this.pendingSnap.side);
     }
 
     // Hard turn: a stored-charge dump that sheds speed, swings the motion round and fires you out
@@ -463,7 +557,10 @@ export class Game {
       launchCharge: this.launchCharge,
       carving: this.controller.flying && this.controller.jet.carving,
       avoiding: this.controller.flying ? this.controller.jet.avoiding : null,
+      autoLabel: this.controller.flying && this.controller.jet.autoLabelT > 0 ? this.controller.jet.autoLabel : '',
+      autoSteer: this.caps.autoSteer,
       snapping: this.controller.flying && this.controller.jet.snapT > 0,
+      snapWaiting: !!this.pendingSnap,
       evadeCharge: this.evadeCharge,
       flares: this.flares,
       missiles: {
