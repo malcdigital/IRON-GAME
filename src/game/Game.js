@@ -408,7 +408,9 @@ export class Game {
           else {
             // from a hover: tip forward into a dive (nose down), then pull out into level flight
             const A = CONFIG.launch.air;
-            this.launchClimb = { t: 0, air: true, to: this.controller.jet.pitch * 180 / Math.PI, time: A.diveTime + A.pullTime };
+            // (the tip starts from the body's real angle, so he leans over smoothly instead of snapping)
+            const headUp = Math.asin(THREE.MathUtils.clamp(this._c.set(0, 1, 0).applyQuaternion(body.quat).y, -1, 1)) * 180 / Math.PI;
+            this.launchClimb = { t: 0, air: true, from: Math.min(A.startDeg, headUp), to: this.controller.jet.pitch * 180 / Math.PI, time: A.diveTime + A.pullTime };
             this.airLaunchCount = (this.airLaunchCount ?? 0) + 1;   // (the suit plays its lean into flight)
           }
           this.launch(s.boosted, s.ground ? null : CONFIG.launch.air.rampTime, s.ground ? 1 : CONFIG.launch.air.kickMult, !s.ground);
@@ -439,7 +441,7 @@ export class Game {
         if (lc.air) {
           // two legs: from startDeg over into the dive, then pull out to level
           const A = CONFIG.launch.air;
-          deg = lc.t < A.diveTime ? A.startDeg + (A.diveDeg - A.startDeg) * THREE.MathUtils.smoothstep(lc.t, 0, A.diveTime)
+          deg = lc.t < A.diveTime ? lc.from + (A.diveDeg - lc.from) * THREE.MathUtils.smoothstep(lc.t, 0, A.diveTime)
             : A.diveDeg + (lc.to - A.diveDeg) * THREE.MathUtils.smoothstep(lc.t - A.diveTime, 0, A.pullTime);
         } else deg = c.pitchDeg + (c.levelDeg - c.pitchDeg) * THREE.MathUtils.smoothstep(lc.t, 0, c.time);
         jet.pitch = deg * Math.PI / 180;
