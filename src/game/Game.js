@@ -20,6 +20,7 @@ import { pathClear } from '../flight/avoidance.js';
 
 const Y = new THREE.Vector3(0, 1, 0);
 const SPHERES = CONFIG.collision.spheres.map((s) => ({ ...s, local: new THREE.Vector3(...s.pos) }));
+const FOOT = SPHERES.filter((s) => s.foot).reduce((a, s, _, all) => a.addScaledVector(s.local, 1 / all.length), new THREE.Vector3());   // middle of the feet
 
 // The simulation. No rendering, no DOM: it can run headless and is easy to port.
 export class Game {
@@ -36,6 +37,7 @@ export class Game {
     this.flareTimer = 0;
     this.time = 0;
     this.grounded = false;
+    this.hoverBrakeT = 0;
     this.anyContact = false;
     this.groundCollider = null;
     this.recoverTimer = 0;
@@ -225,6 +227,7 @@ export class Game {
       case 'flight':
         if (this.controller.flying) {
           this.controller.exitFlight(this.body, this.hoverFraction());
+          this.hoverBrakeT = CONFIG.assist.exitBrake.time;   // air-brake down to a hover
           events.emit('toast', { text: 'Hover mode' });
         } else {
           // From the ground, launch upward like a rocket
@@ -285,6 +288,7 @@ export class Game {
           this.fireFlares();   // in flight the hover-mode button drops flares
           break;
         }
+        if (!CONFIG.assist.allowManual) break;
         const hover = this.hoverFraction();
         const mode = this.controller.toggleMode(this.body, hover);
         events.emit('toast', { text: mode === 'assist' ? 'Assisted flight: suit levels itself' : 'Manual flight: you control the spin and throttle' });
@@ -343,6 +347,25 @@ export class Game {
 
     // 2. What does the pilot want?
     const cmd = this.controller.update(body, input, this.caps, this.grounded, dt);
+    // Walking: the feet grip the ground at the stick's walking speed (see collide)
+    this.walkVel = cmd.walk && this.grounded ? cmd.walk : null;
+    if (this.walkVel) {
+      // Legs balance you: cancel the tip from the feet being pushed ahead of the body
+      const a = this._c.set(this.walkVel.x - body.vel.x, 0, this.walkVel.z - body.vel.z).multiplyScalar(10)
+        .clampLength(0, CONFIG.physics.friction * CONFIG.physics.gravity).multiplyScalar(body.mass);
+      const foot = body.pointToWorld(FOOT, this._tmp).sub(body.pos);
+      body.torque.add(this._c.crossVectors(foot, a).negate());
+    }
+    // Just switched from flight to hover: brake hard to a hover (thrust + chest into the wind)
+    if (this.hoverBrakeT > 0) {
+      this.hoverBrakeT -= dt;
+      if (this.controller.flying) this.hoverBrakeT = 0;
+      else {
+        const eb = CONFIG.assist.exitBrake, g = CONFIG.physics.gravity;
+        const a = this._c.set(-body.vel.x, 0, -body.vel.z).multiplyScalar(eb.gain).clampLength(0, eb.maxG * g);
+        body.force.addScaledVector(a, body.mass);
+      }
+    }
     const jet = this.controller.jet;
     if (this.controller.flying) {
       // A fresh barrel roll carries a juke; a finished hard turn fires a burst
@@ -555,7 +578,7 @@ export class Game {
     for (const s of SPHERES) {
       b.pointToWorld(s.local, this._c);
       const found = sphereContacts(this._c, s.r, this.world.colliders, []);
-      for (const c of found) { c.sphere = s; contacts.push(c); }
+      for (const c of found) { c.sphere = s; if (s.foot && this.walkVel) c.surfaceVel = this.walkVel; contacts.push(c); }
     }
     if (!contacts.length) return;
     this.anyContact = true;

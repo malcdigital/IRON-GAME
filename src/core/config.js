@@ -105,6 +105,11 @@ export const CONFIG = {
     rollLockout: 4,                // after an auto roll, no other auto roll for this many seconds
     rollHeadOn: 0.5,               // auto roll only flying within ~60° of straight at the wall
     streetHold: 1.5,               // ...and for this long after (so crossings don't count as open)
+    // Between buildings, after a nudge: straighten along the street and ease toward the middle
+    alignTime: 2,                  // keeps at it this long after the last nudge (or until you steer)
+    alignMaxDeg: 40,               // only if you're within this of the street's direction
+    alignRateDeg: 45,              // how fast it turns you (°/s)
+    centerDegPerM: 1.5, centerMaxDeg: 8,   // aim this much toward the middle per metre off-centre
     streetWidth: 22,               // buildings this close on both sides = between buildings: no auto rolls
     lookTime: 2.2, lookExtra: 8,   // how far ahead to look: seconds of travel + metres
     margin: 4,                     // clearance kept from walls and rooftops (m)
@@ -138,7 +143,7 @@ export const CONFIG = {
   // Assisted flight: the suit holds altitude, levels itself and brakes when you let go.
   assist: {
     maxSpeed: 14, boostSpeed: 26,
-    climbRate: 5, boostClimbRate: 9, descendRate: 3.5,
+    climbRate: 9, boostClimbRate: 14, descendRate: 7,
     // Lift reserve: when you need to stop sinking or climb, briefly draw extra thrust from stored charge
     liftReserve: { thrustMult: 1.5, below: 1.0 },   // kicks in when you're sinking more than 1 m/s slower than wanted
     maxTiltDeg: 28, boostTiltDeg: 45,
@@ -147,6 +152,9 @@ export const CONFIG = {
     upright: true,    // slide around without tilting (hold boost to lean in for speed)
     uprightLeanDeg: 6, // tiny lean allowed in upright mode for snappier moves
     sideUse: 0.6,     // share of the swivel push the assist may use for sliding (rest keeps you up)
+    allowManual: false, // manual hover (tips with the stick, throttle stays put): off; set true to bring back the toggle
+    walkSpeed: 3, runSpeed: 6,   // on the ground the stick walks (boost = run)
+    exitBrake: { time: 1.2, gain: 3, maxG: 2.5 },          // leaving flight: brake to a hover
   },
 
   // Manual flight: keys set rotation rates, throttle stays where you leave it.
@@ -253,7 +261,7 @@ export const CONFIG = {
         flip: 1,      // Circle
         grab: 2,      // Square
         camera: 3,    // Triangle
-        mode: 4,      // L1 (hover: assist/manual · flight: flares)
+        mode: 4,      // L1 (flight: flares)
         help: 8,      // Create
         workshop: 9,  // Options
         reset: 17,    // Touchpad press

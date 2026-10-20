@@ -50,6 +50,7 @@ export class JetFlight {
     this.autoCool = 0;
     this.releaseT = 0;
     this.hold = null;
+    this.alignT = 0;
     this._own = new THREE.Vector3();
     this.steerDir = new THREE.Vector3(0, 0, -1);
     this.steerGain = 1;
@@ -238,7 +239,8 @@ export class JetFlight {
     // Look ahead: where will we be in a moment at this sink rate?
     const predicted = caps.altitude + Math.min(0, v.y) * ga.lookahead;
     const pitchFloor = predicted < ga.height && input.forward <= 0 ? ga.pitch : -Infinity;
-    const savedPitch = this.pitch, savedYaw = this.yaw;
+    const savedPitch = this.pitch;
+    let savedYaw = this.yaw;
     this.pitch = Math.max(this.pitch, pitchFloor);
 
     // Obstacle sensor: steer over or around whatever is ahead, harder the closer it gets.
@@ -327,6 +329,27 @@ export class JetFlight {
 
     // A building correction stays on until your own heading would clear that building, then
     // eases off. (Letting go as soon as the danger passed swung you back at it: back and forth.)
+    // Between buildings, after a nudge: line your heading up with the street and ease toward
+    // the middle, so the nudge doesn't send you at the buildings on the other side.
+    if (this.hold && this.hold.kind === 'side' && plan.street) this.alignT = as.alignTime;
+    if (steer > 0.1 || level === 'off') this.alignT = 0;
+    if (this.alignT > 0) {
+      this.alignT -= dt;
+      const st = plan.street;
+      if (st && speed > 10) {
+        let off = st.axisYaw - savedYaw;
+        off = Math.atan2(Math.sin(off), Math.cos(off));
+        if (Math.abs(off) < THREE.MathUtils.degToRad(as.alignMaxDeg)) {
+          const center = THREE.MathUtils.degToRad(clamp(st.offset * as.centerDegPerM, -as.centerMaxDeg, as.centerMaxDeg));
+          let want = off - center;   // (to go right, the yaw goes down)
+          want = Math.atan2(Math.sin(want), Math.cos(want));
+          const stepMax = THREE.MathUtils.degToRad(as.alignRateDeg) * dt;
+          savedYaw += clamp(want, -stepMax, stepMax);
+          this.yaw = savedYaw;
+        }
+      }
+    }
+
     const h = this.hold;
     if (h) {
       const own = this._own.set(-Math.sin(savedYaw) * Math.cos(savedPitch), Math.sin(savedPitch), -Math.cos(savedYaw) * Math.cos(savedPitch));

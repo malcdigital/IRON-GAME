@@ -57,7 +57,8 @@ export class FlightController {
   }
 
   exitFlight(body, hoverFraction) {
-    this.mode = this.hoverMode;
+    // Always back to the upright, assisted hover (manual hover only if it's switched on in config)
+    this.mode = this.cfg.assist.allowManual ? this.hoverMode : 'assist';
     this.heading = this.jet.yaw;
     if (this.mode === 'manual') this.throttle = Math.min(1, hoverFraction);
   }
@@ -66,7 +67,7 @@ export class FlightController {
   turnAround() { this.heading += Math.PI; }
 
   toggleMode(body, hoverFraction) {
-    if (this.mode === 'flight') return this.mode;
+    if (this.mode === 'flight' || !this.cfg.assist.allowManual) return this.mode;
     this.mode = this.mode === 'assist' ? 'manual' : 'assist';
     this.heading = yawOf(body.quat);
     if (this.mode === 'manual') this.throttle = Math.min(1, hoverFraction);
@@ -75,6 +76,7 @@ export class FlightController {
 
   update(body, input, caps, grounded, dt) {
     this.out.sideways = false;
+    this.out.walk = null;
     if (this.mode === 'flight') {
       const out = this.jet.update(body, input, caps, dt, this.out, this._attitude);
       this.heading = this.jet.yaw;
@@ -111,8 +113,10 @@ export class FlightController {
 
     this._qYaw.setFromAxisAngle(Y, h);
 
-    // Standing on the ground and not asking to lift off: thrusters idle.
+    // Standing on the ground and not asking to lift off: thrusters idle, the stick walks
     if (grounded && input.up <= 0) {
+      const walk = input.boost ? c.runSpeed : c.walkSpeed;
+      out.walk = this._vDes.copy(this._fwd).multiplyScalar(input.forward * walk).addScaledVector(this._right, input.strafe * walk);
       out.force.set(0, 0, 0);
       this.attitudeTorque(body, this._qYaw, caps.assistGain, out.torque);
       out.thrust = false;

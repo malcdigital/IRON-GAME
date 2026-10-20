@@ -71,8 +71,9 @@ export function resolveContact(body, contact, cfg) {
   const j = (-(1 + e) * vn) / k;
   body.applyImpulse(_imp.copy(n).multiplyScalar(j), contact.point);
 
-  // Friction
+  // Friction (toward the surface's own speed: a walking foot grips at walking speed)
   body.velocityAt(contact.point, _vp);
+  if (contact.surfaceVel) _vp.sub(contact.surfaceVel);
   _t.copy(_vp).addScaledVector(n, -_vp.dot(n));
   const vt = _t.length();
   if (vt > 1e-4) {

@@ -39,6 +39,7 @@ export class ObstacleSensor {
     this.plan = { active: false, kind: null, angle: 0, ttc: Infinity, dist: Infinity, urgency: 0, name: '' };
     this.lastTarget = null;
     this.lastKind = null;
+    this.street = { axisYaw: 0, offset: 0 };
   }
 
   // Looks along the current motion and along where you're steering; returns the most urgent plan.
@@ -47,9 +48,12 @@ export class ObstacleSensor {
     plan.active = false;
     plan.urgency = 0;
     const speed = vel.length();
+    plan.street = null;
+    plan.inStreet = false;
     if (!c.enabled || speed < c.minSpeed) { this.lastTarget = null; return plan; }
     _dir.copy(vel).divideScalar(speed);
-    plan.inStreet = this.betweenBuildings(pos, colliders);
+    plan.street = this.streetInfo(pos, colliders);
+    plan.inStreet = !!plan.street;
 
     let best = null;
     _dir.copy(vel).divideScalar(speed);
@@ -72,20 +76,25 @@ export class ObstacleSensor {
     return rayBox(pos, dir, target.min, target.max, this.cfg.margin, maxDist) < maxDist;
   }
 
-  // Buildings close on both your left and right (flying down a street)?
-  betweenBuildings(pos, colliders) {
+  // Between buildings (close on both sides)? Streets run along x or z: returns the street's
+  // heading (yaw) nearest to where you're going and how far the middle of the gap is to your
+  // right (negative = left), or null.
+  streetInfo(pos, colliders) {
     const w = this.cfg.streetWidth;
-    _side.set(-_dir.z, 0, _dir.x);
-    if (_side.lengthSq() < 1e-6) return false;
-    _side.normalize();
+    const along = Math.abs(_dir.x) > Math.abs(_dir.z) ? 'x' : 'z';
+    const axisYaw = along === 'x' ? (_dir.x > 0 ? -Math.PI / 2 : Math.PI / 2) : (_dir.z > 0 ? Math.PI : 0);
+    _side.set(Math.cos(axisYaw), 0, -Math.sin(axisYaw));   // right of the street heading
     _side2.copy(_side).negate();
-    let left = false, right = false;
+    let right = Infinity, left = Infinity;
     for (const col of colliders) {
-      if (!right && rayBox(pos, _side, col.min, col.max, 0, w) < w) right = true;
-      if (!left && rayBox(pos, _side2, col.min, col.max, 0, w) < w) left = true;
-      if (left && right) return true;
+      if (col.max.y < pos.y) continue;   // below you: not a wall
+      right = Math.min(right, rayBox(pos, _side, col.min, col.max, 0, w));
+      left = Math.min(left, rayBox(pos, _side2, col.min, col.max, 0, w));
     }
-    return false;
+    if (right >= w || left >= w) return null;
+    this.street.axisYaw = axisYaw;
+    this.street.offset = (right - left) / 2;
+    return this.street;
   }
 
   probe(pos, dir, speed, colliders, altitude, maxAccel) {
