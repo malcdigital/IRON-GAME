@@ -421,3 +421,9 @@ body:not(.device-gamepad) .start-kbd { display: none; }
 .pose-hands .studio-fields { margin-top: 6px; }
 body.posing .hud-tl, body.posing .hud-bl, body.posing .hud-tr, body.posing .hud-br > :not(.hud-buttons) { visibility: hidden; }
 .pose-tabs { grid-template-columns: repeat(4, 1fr); }
+
+.pose-timeline { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--amber); border-radius: 4px; }
+.pose-timeline h3 { margin: 0; font: 700 15px/1 var(--font-display); letter-spacing: 0.04em; text-transform: uppercase; color: var(--amber); }
+.tl-row { display: flex; align-items: center; gap: 10px; }
+.tl-row output { font-family: var(--font-data); font-size: 13px; color: var(--ink); }
+.tl-scrub { width: 100%; accent-color: var(--amber); }

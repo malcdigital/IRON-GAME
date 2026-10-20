@@ -1,5 +1,6 @@
 import * as THREE from '../lib/three.js';
 import { storage } from '../core/storage.js';
+import { CONFIG } from '../core/config.js';
 import { POSES, STATES } from '../render/SuitPoses.js';
 
 // Pose Studio (dev tool, not part of the finished game): look round the suit and set its poses.
@@ -30,6 +31,8 @@ const DEFAULTS = JSON.parse(JSON.stringify(POSES));
 const r2 = (v) => Math.round(v * 100) / 100;
 
 export function loadSavedPoses() {
+  const seq = storage.get('launchSeq');
+  if (seq) Object.assign(CONFIG.launch.seq, seq);
   const saved = storage.get('suitPoses');
   if (!saved) return;
   for (const s of STATES) if (saved[s]) POSES[s] = saved[s];
@@ -68,6 +71,13 @@ export class PoseStudio {
       <label class="studio-field pose-select"><span>Body part</span>
         <select data-act="part">${PARTS.map(([g, list]) => `<optgroup label="${g}">${list.map(([b, l]) => `<option value="${b}">${l}</option>`).join('')}</optgroup>`).join('')}</select>
       </label>
+      <section class="pose-timeline" data-timeline hidden>
+        <h3>Launch timeline</h3>
+        <label class="studio-check"><input type="checkbox" data-act="tl-on" checked> Play the launch sequence (untick to edit the pose)</label>
+        <div class="tl-row"><button class="btn primary" data-act="tl-play">Play</button><output data-tl-label></output></div>
+        <input type="range" class="tl-scrub" min="0" max="3" step="0.01" value="0" data-act="tl-scrub" aria-label="Time in the launch">
+        <div class="studio-fields" data-tl-fields></div>
+      </section>
       <div class="studio-fields" data-part-fields></div>
       <div class="studio-actions"><button class="btn ghost" data-act="reset-part">Reset part</button></div>
       <details class="pose-hands"><summary>Left hand</summary><div class="studio-fields" data-hand="Left"></div></details>
@@ -91,6 +101,38 @@ export class PoseStudio {
     r.querySelector('[data-act="reset"]').addEventListener('click', () => { POSES[this.state] = JSON.parse(JSON.stringify(DEFAULTS[this.state])); this.changed(); });
     r.querySelector('[data-act="copy"]').addEventListener('click', () => this.copy());
     this.copyEl = r.querySelector('.studio-copy');
+    // launch timeline
+    this.tl = { t: 0, playing: false, on: true, last: 0 };
+    this.tlBox = r.querySelector('[data-timeline]');
+    this.tlLabel = r.querySelector('[data-tl-label]');
+    this.tlScrub = r.querySelector('[data-act="tl-scrub"]');
+    this.tlPlay = r.querySelector('[data-act="tl-play"]');
+    r.querySelector('[data-act="tl-on"]').addEventListener('change', (e) => { this.tl.on = e.target.checked; if (!this.tl.on) this.setPlaying(false); });
+    this.tlPlay.addEventListener('click', () => { if (this.tl.t >= this.tlEnd() - 0.01) this.tl.t = 0; this.setPlaying(!this.tl.playing); });
+    this.tlScrub.addEventListener('input', () => { this.setPlaying(false); this.tl.t = +this.tlScrub.value; });
+    const tf = r.querySelector('[data-tl-fields]');
+    const seqSlider = (key, label, min, max, step, unit) => {
+      const el = document.createElement('label');
+      el.className = 'studio-field';
+      el.innerHTML = `<span>${label}</span><input type="range" min="${min}" max="${max}" step="${step}"><output></output>`;
+      const inp = el.querySelector('input'), out = el.querySelector('output');
+      const show = () => { inp.value = CONFIG.launch.seq[key]; out.textContent = `${(+CONFIG.launch.seq[key]).toFixed(2)}${unit}`; };
+      inp.addEventListener('input', () => {
+        const q = CONFIG.launch.seq;
+        q[key] = +inp.value;
+        if (q.fireAt < q.jumpAt + 0.05) { if (key === 'fireAt') q.jumpAt = Math.max(0, q.fireAt - 0.05); else q.fireAt = q.jumpAt + 0.05; }
+        storage.set('launchSeq', q);
+        this.tlFields.forEach((f) => f());
+      });
+      tf.appendChild(el);
+      return show;
+    };
+    this.tlFields = [
+      seqSlider('jumpAt', 'Jump at (crouch until then)', 0, 1.5, 0.01, ' s'),
+      seqSlider('fireAt', 'Thrusters fire at (the launch point)', 0.05, 2, 0.01, ' s'),
+      seqSlider('jumpSpeed', 'Jump strength', 0, 12, 0.5, ' m/s'),
+      seqSlider('airFireAt', 'In the air: fire at', 0, 0.6, 0.01, ' s'),
+    ];
   }
 
   slider(key, label, min, max, value, onInput) {
@@ -106,6 +148,7 @@ export class PoseStudio {
   entry(bone) { return (this.pose[bone] ??= {}); }
 
   refresh() {
+    if (this.tlBox) { this.tlBox.hidden = this.state !== 'launch'; this.tlFields.forEach((f) => f()); }
     this.root.querySelectorAll('[data-state]').forEach((el) => el.setAttribute('aria-pressed', String(el.dataset.state === this.state)));
     this.partEl.value = this.part;
     if (this.poser) this.poser.preview = this.state;
@@ -166,7 +209,8 @@ export class PoseStudio {
     this.root.hidden = true;
     this.overlay.hidden = true;
     this.copyEl.hidden = true;
-    if (this.poser) this.poser.preview = null;
+    if (this.poser) { this.poser.preview = null; this.poser.previewLaunch = null; }
+    this.setPlaying(false);
     this.suitView.viewQuat = null;
     this.suitView.hideFlames = false;
     document.body.classList.remove('posing');
@@ -179,6 +223,7 @@ export class PoseStudio {
   // Each frame while open: turn the suit to show the pose, place the camera, draw the joint dots
   update(game, camera) {
     if (!this.isOpen) return;
+    this.updateTimeline();
     this.camera = camera;
     if (this.poser && this.poser.preview !== this.state) this.poser.preview = this.state;
     const yawQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), game.controller.heading ?? 0);
@@ -282,13 +327,43 @@ export class PoseStudio {
     storage.set('suitPoses', POSES);
   }
 
+  // Launch timeline: how long it runs, play/pause, and the label for where you are in it
+  tlEnd() { return CONFIG.launch.seq.fireAt + CONFIG.launch.time + 0.4; }
+  setPlaying(on) {
+    if (!this.tl) return;
+    this.tl.playing = on; this.tl.last = performance.now();
+    if (this.tlPlay) this.tlPlay.textContent = on ? 'Pause' : 'Play';
+  }
+  updateTimeline() {
+    const p = this.poser;
+    if (!p) return;
+    const active = this.state === 'launch' && this.tl.on;
+    p.previewLaunch = active ? this.tl.t : null;
+    if (!active) return;
+    const now = performance.now();
+    if (this.tl.playing) {
+      this.tl.t += Math.min(0.1, (now - this.tl.last) / 1000);
+      if (this.tl.t > this.tlEnd()) this.tl.t = 0;   // loop
+    }
+    this.tl.last = now;
+    const q = CONFIG.launch.seq, t = this.tl.t;
+    this.tlScrub.max = this.tlEnd().toFixed(2);
+    this.tlScrub.value = t;
+    const phase = t < q.jumpAt ? 'Wind-up (crouch)' : t < q.fireAt ? 'Jump' : t < q.fireAt + CONFIG.launch.time - 0.5 ? 'Launch: thrusters firing' : 'Into flight';
+    this.tlLabel.textContent = `${t.toFixed(2)} s · ${phase}`;
+  }
+
   copy() {
     const fmt = (v) => JSON.stringify(v).replace(/"(\w+)":/g, '$1: ').replace(/,/g, ', ').replace(/\{/g, '{ ').replace(/\}/g, ' }');
     const text = `export const POSES = {\n${STATES.map((s) => `  ${s}: {\n${Object.entries(POSES[s]).map(([k, v]) => `    ${k}: ${fmt(v)},`).join('\n')}\n  },`).join('\n')}\n};`;
-    this.copyEl.value = text;
+    const q = CONFIG.launch.seq;
+    this.copyEl.value = `${text}
+
+Launch sequence (config.js launch.seq):
+    seq: { jumpAt: ${q.jumpAt}, fireAt: ${q.fireAt}, jumpSpeed: ${q.jumpSpeed}, airFireAt: ${q.airFireAt} },`;
     this.copyEl.hidden = false;
     this.copyEl.select();
-    try { navigator.clipboard.writeText(text); } catch { /* the text is selected to copy by hand */ }
+    try { navigator.clipboard.writeText(this.copyEl.value); } catch { /* the text is selected to copy by hand */ }
     const btn = this.root.querySelector('[data-act="copy"]');
     btn.textContent = 'Copied'; setTimeout(() => { btn.textContent = 'Copy poses'; }, 1500);
   }

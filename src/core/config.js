@@ -137,7 +137,10 @@ export const CONFIG = {
   // Launch burst: entering flight mode dumps a stored charge into the thrusters.
   // Works from the ground too (rocket takeoff). Recharges over a few seconds.
   launch: { time: 1.5, thrustMult: 3, kick: 18, recharge: 5, groundPitch: 0.6, gyroMult: 6, maxAccelG: 2,
-    boosted: 1.15 },   // hold boost while launching: a launch this much stronger (same 1.5 s)
+    boosted: 1.15,     // hold boost while launching: a launch this much stronger (same 1.5 s)
+    // The launch sequence (set it in the Pose Studio's Launch tab): from the ground, crouch until
+    // jumpAt s, jump (jumpSpeed m/s up), thrusters fire at fireAt s. In the air: fire at airFireAt s.
+    seq: { jumpAt: 0.3, fireAt: 0.55, jumpSpeed: 6, airFireAt: 0.15 } },
 
   // Thermal limiter: instead of cutting out at 100%, thrusters and the core
   // taper their output as they get hot, so you sink gently rather than drop.
@@ -243,17 +246,18 @@ export const CONFIG = {
   // Body language for the 3D suit (poses themselves are in src/render/SuitPoses.js)
   pose: {
     blendRate: 5,                   // how quickly it moves into a new pose
-    leanRate: 6, leanPerMs: 1.2, leanMax: 18,     // hover: degrees of lean per m/s of movement (up to leanMax)
+    leanRate: 9, leanPerMs: 1.2, leanMax: 18,     // hover: degrees of lean per m/s of movement (up to leanMax)
     turnRate: 5, turnPerMs2: 0.5, turnMax: 25,    // flight turns: degrees of lean into the turn per m/s² of turning
     landSpeedFull: 10, landTime: 0.45, crouchDeg: 35,   // landing crouch: full at this fall speed, back up in landTime s
     stepsPerMeter: 0.9, walkSwing: 28,            // walking legs
     limits: true,                   // keep every joint within real human ranges (SuitPoses.js LIMITS)
     groundRoom: 0.25,
     // Subtle touches: dive/climb pose at this nose angle (degrees), leg springs (how fast they swing
-    // back and how little they're damped: lower damping = more wiggle), airflow flutter, breathing, glances
-    subtle: { pitchFullDeg: 50, legSpring: 9, legDamping: 0.42, flutterDeg: 4, breathPeriod: 3.4, breathDeg: 1.6, glanceDeg: 7 },
-    // Moments: launch crouch length, hop-off-the-ground length, post-knockout recovery length (s), head shake
-    moments: { launchCrouch: 0.3, hopTime: 0.35, recoverTime: 1.6, shakeDeg: 28 },
+    // back and how little they're damped: lower damping = more wiggle), now-and-then leg shifts (every
+    // fidgetEvery s, about fidgetDeg degrees), airflow flutter, breathing, glances
+    subtle: { pitchFullDeg: 50, legSpring: 14, legDamping: 0.38, fidgetEvery: [2.5, 6], fidgetDeg: 4, flutterDeg: 4, breathPeriod: 3.4, breathDeg: 1.6, glanceDeg: 7 },
+    // Moments: hop-off-the-ground length, post-knockout recovery length (s), head shake
+    moments: { hopTime: 0.35, recoverTime: 1.6, shakeDeg: 28 },
     // Flight body language, from the physics. amount scales it all (0 = off).
     flight: {
       amount: 1,
@@ -266,7 +270,7 @@ export const CONFIG = {
     // Hover body language, from the physics. amount scales it all (1 = as tuned, 0 = off).
     hover: {
       amount: 1.3,
-      react: 5,                     // how quickly it reacts (higher = snappier)
+      react: 8,                     // how quickly it reacts (higher = snappier)
       tiltMax: 32,                  // most the body tilts (degrees)
       pushPerMs2: 1.4,              // extra tilt per m/s² of speeding up or braking
       legTrail: 1.6, armSweep: 1.7, // how far legs trail and arms sweep back behind, × the tilt

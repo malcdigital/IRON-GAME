@@ -46,6 +46,7 @@ export class Game {
     this.twr = 0;
     this.launchT = 0;
     this.rescue = null;      // coming round in the air (see stepRescue)
+    this.launchSeq = null;   // launching: { t, jumpAt, fireAt, ... } (see step)
     this.stunT = 0;          // knocked out by a crash: thrusters off, no control (seconds left)
     this.impactIn = Infinity; // seconds until the suit hits something on its current path
     this.launchCharge = 1;
@@ -97,6 +98,7 @@ export class Game {
     this.pendingSnap = null;
     this.launchT = 0;
     this.rescue = null;      // coming round in the air (see stepRescue)
+    this.launchSeq = null;
     this.stunT = 0;          // knocked out by a crash: thrusters off, no control (seconds left)
     this.impactIn = Infinity; // seconds until the suit hits something on its current path
     this.launchCharge = 1;
@@ -249,10 +251,12 @@ export class Game {
           this.controller.exitFlight(this.body, this.hoverFraction());
           this.hoverBrakeT = CONFIG.assist.exitBrake.time;   // air-brake down to a hover
           events.emit('toast', { text: 'Hover mode' });
-        } else {
-          // From the ground, launch upward like a rocket
-          this.controller.enterFlight(this.body, this.grounded ? CONFIG.launch.groundPitch : null);
-          this.launch(this.boostHeld || this.takeoffBoostHeld);
+        } else if (!this.launchSeq) {
+          // Launch sequence (CONFIG.launch.seq): wind up, jump, then the thrusters fire.
+          // From the ground it's a crouch and a real jump; in the air, a quick tuck and fire.
+          const seq = CONFIG.launch.seq, onGround = this.grounded || (this.caps.room ?? 9) < 0.6;
+          this.launchSeq = { t: 0, ground: onGround, jumped: !onGround, boosted: this.boostHeld || this.takeoffBoostHeld,
+            jumpAt: onGround ? seq.jumpAt : 0, fireAt: onGround ? seq.fireAt : seq.airFireAt };
         }
         break;
       case 'flip':
@@ -341,6 +345,21 @@ export class Game {
     }
     this.caps.attTarget = null;
     if (this.rescue) input = this.stepRescue(dt, input);
+    // Launch sequence: wind up, jump (a real push off the ground), then fire into flight
+    if (this.launchSeq) {
+      const s = this.launchSeq, seq = CONFIG.launch.seq;
+      s.t += dt;
+      s.boosted ||= !!(input.boost || input.takeoffBoost);
+      if (!s.jumped && s.t >= s.jumpAt) { s.jumped = true; body.vel.y += seq.jumpSpeed; }
+      if (s.t >= s.fireAt) {
+        this.launchSeq = null;
+        this.controller.enterFlight(body, s.ground ? CONFIG.launch.groundPitch : null);
+        this.launch(s.boosted);
+      } else {
+        // hold still while winding up; once off the ground the jets help the jump along
+        input = { ...input, forward: 0, strafe: 0, yaw: 0, down: 0, cut: false, up: s.jumped && s.ground ? 1 : 0 };
+      }
+    }
     // How soon will we hit something? (for the brace-for-impact pose)
     if ((this._impactTick = ((this._impactTick ?? 0) + 1) % 4) === 0) this.impactIn = this.timeToImpact();
 

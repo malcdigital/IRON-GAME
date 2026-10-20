@@ -174,6 +174,28 @@ const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _e = new THREE.
 const _v = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3();
 const _lq1 = new THREE.Quaternion(), _lq2 = new THREE.Quaternion(), _lq3 = new THREE.Quaternion(), _lq4 = new THREE.Quaternion(), _lq5 = new THREE.Quaternion(), _lv1 = new THREE.Vector3();
 
+// The launch timeline. Before the thrusters fire (seqT = time since you pressed launch): crouch
+// builds until jumpAt, then the legs drive straight while the body moves into the launch pose by
+// fireAt. In the air (jumpAt 0) it's a quick tuck. After firing (sinceFire s): the launch pose holds
+// for the burst and eases into flight over its last half second.
+function launchCurve(seqT, jumpAt, fireAt, sinceFire) {
+  if (seqT != null) {
+    if (jumpAt <= 0) { const u = Math.min(1, seqT / Math.max(0.01, fireAt)); return { crouch: 0.5 * Math.sin(Math.PI * u), launch: u }; }
+    if (seqT < jumpAt) { const u = seqT / jumpAt; return { crouch: u * u * (3 - 2 * u), launch: 0 }; }
+    const push = Math.max(0.06, (fireAt - jumpAt) * 0.6);
+    return { crouch: Math.max(0, 1 - (seqT - jumpAt) / push), launch: Math.min(1, (seqT - jumpAt) / Math.max(0.01, fireAt - jumpAt)) };
+  }
+  const lTime = CONFIG.launch.time, lt = sinceFire;
+  return { crouch: 0, launch: lt < lTime ? Math.min(1, 0.6 + lt / 0.1) * (lt > lTime - 0.5 ? (lTime - lt) / 0.5 : 1) : 0 };
+}
+// Pose Studio only: roughly how high the suit is at time t of the launch (so you can see the jump)
+function launchLift(t, q) {
+  if (t < q.jumpAt) return 0;
+  const tj = Math.min(t, q.fireAt) - q.jumpAt, hj = Math.max(0, q.jumpSpeed * tj - 4.9 * tj * tj);
+  const tf = Math.max(0, t - q.fireAt), vj = q.jumpSpeed - 9.8 * (q.fireAt - q.jumpAt);
+  return hj + vj * tf + 0.5 * 22 * tf * tf;
+}
+
 export class SuitPoser {
   // model: the placed glTF scene; suitRoot: the object that carries the suit's frame
   constructor(model, bones, suitRoot) {
@@ -264,6 +286,20 @@ export class SuitPoser {
   // Which pose the suit wants right now, and the extra motion on top
   update(game, boost, dt) {
     if (dt <= 0) return;
+    if (this.preview && this.previewLaunch != null) {
+      // Pose Studio launch timeline: play the sequence at time previewLaunch (s)
+      const q = CONFIG.launch.seq, t = this.previewLaunch;
+      const lc = t < q.fireAt ? launchCurve(t, q.jumpAt, q.fireAt, 9) : launchCurve(null, 0, 0, t - q.fireAt);
+      for (const s of STATES) this.w[s] = 0;
+      const base = t < q.fireAt ? 'stand' : 'flight';
+      this.w.launch = lc.launch; this.w[base] = 1 - lc.launch;
+      this.mom.crouch = lc.crouch; this.mom.hop = 0; this.mom.recover = 0;
+      this.crouch = 0; this.walk = 0; this.lean.set(0, 0); this.side = 0; this.brace = 0; this.limp = 0;
+      Object.assign(this.flt, { pull: 0, lat: 0, roll: 0, rollAcc: 0 });
+      this.previewLift = Math.min(3, launchLift(t, q));   // (capped so it stays in view)
+      return this.apply();
+    }
+    this.previewLift = 0;
     if (this.preview) {   // Pose Studio: hold one pose, no movement on top
       for (const s of STATES) this.w[s] = s === this.preview ? 1 : 0;
       this.crouch = 0; this.walk = 0; this.lean.set(0, 0); this.side = 0;
@@ -294,12 +330,12 @@ export class SuitPoser {
     if (mo.launchCount === null) mo.launchCount = game.launchCount ?? 0;
     if ((game.launchCount ?? 0) !== mo.launchCount) { mo.launchCount = game.launchCount ?? 0; mo.launchClock = 0; }
     mo.launchClock += dt;
-    const lt = mo.launchClock, lTime = CONFIG.launch.time;
-    mo.launch = lt < lTime ? Math.min(1, lt / 0.08) * (lt > lTime - 0.5 ? (lTime - lt) / 0.5 : 1) : 0;
-    mo.crouch = lt < M.launchCrouch ? Math.sin(Math.PI * lt / M.launchCrouch) : 0;
+    const seqNow = game.launchSeq;
+    const lc = launchCurve(seqNow ? seqNow.t : null, seqNow ? seqNow.jumpAt : 0, seqNow ? seqNow.fireAt : 0, mo.launchClock);
+    mo.launch = lc.launch; mo.crouch = lc.crouch;
     // hopping off the ground into a hover: a small crouch and spring
     const nearGround = (game.caps?.room ?? 9) < 0.6;
-    if (this.wasGroundedHop && !flying && body.vel.y > 1.2 && mo.hopClock > M.hopTime) mo.hopClock = 0;
+    if (this.wasGroundedHop && !flying && !game.launchSeq && body.vel.y > 1.2 && mo.hopClock > M.hopTime) mo.hopClock = 0;
     this.wasGroundedHop = nearGround && body.vel.y < 0.8;
     mo.hopClock += dt;
     mo.hop = mo.hopClock < M.hopTime ? Math.sin(Math.PI * mo.hopClock / M.hopTime) : 0;
@@ -536,10 +572,28 @@ export class SuitPoser {
     // legs swing on springs that slightly overshoot: after a turn or a stop they wiggle as they settle
     if (!this.preview) {
       const S = P.subtle, dt = Math.min(0.05, this.dtLast ?? 0.016);
+      // every so often (hover / flight): a small shift of one leg, and a hand flexes
+      const airborne = w.hover + w.flight + w.boost;
+      this.fidgetIn = (this.fidgetIn ?? 2) - dt;
+      if (this.fidgetIn <= 0) {
+        const [lo, hi] = S.fidgetEvery;
+        this.fidgetIn = lo + Math.random() * (hi - lo);
+        if (airborne > 0.5) {
+          const sd = Math.random() < 0.5 ? 'Left' : 'Right', k = S.fidgetDeg * S.legSpring;
+          this.legSpring[sd].vx += (Math.random() - 0.5) * 2 * k;
+          this.legSpring[sd].vz += (Math.random() - 0.5) * k;
+          this.handFlex = { side: Math.random() < 0.5 ? 'Left' : 'Right', t: 0 };
+        }
+      }
+      if (this.handFlex) {
+        this.handFlex.t += dt;
+        const u = this.handFlex.t / 0.7;
+        if (u >= 1) this.handFlex = null; else this.handCurl(this.handFlex.side, 18 * Math.sin(Math.PI * u));
+      }
       for (const [sd, om] of [['Left', S.legSpring], ['Right', S.legSpring * 1.13]]) {
         const sp = this.legSpring[sd], z2 = 2 * S.legDamping * om;
         // aim only within what the hip can do (so the overshoot is a small wiggle, not a big swing)
-        const tx = THREE.MathUtils.clamp(legT[sd].x, -32, 45), tz = THREE.MathUtils.clamp(legT[sd].z, -25, 25);
+        const tx = THREE.MathUtils.clamp(legT[sd].x, -32, w.flight + w.boost > 0.5 ? 45 : 18), tz = THREE.MathUtils.clamp(legT[sd].z, -25, 25);
         sp.vx += (om * om * (tx - sp.x) - z2 * sp.vx) * dt; sp.x += sp.vx * dt;
         sp.vz += (om * om * (tz - sp.z) - z2 * sp.vz) * dt; sp.z += sp.vz * dt;
         add(`${sd}UpLeg`, sp.x, 0, sp.z);
@@ -567,7 +621,8 @@ export class SuitPoser {
       add('Spine02', -cr * 0.5, 0, 0);
     }
     const th = R.LeftUpLeg?.len ?? 0.45, sh = R.LeftLeg?.len ?? 0.45;
-    this.model.position.y = this.baseY - (th + sh) * (1 - Math.cos(cr * D2R)) * 0.9;
+    const lowered = Math.max(cr, 55 * Math.max(this.mom.crouch, this.mom.hop * 0.7));   // landing / launch crouch
+    this.model.position.y = this.baseY - (th + sh) * (1 - Math.cos(lowered * D2R)) * 0.9 + (this.previewLift ?? 0);
 
     // 3. set each bone: carry the parent's motion, aim, then the extra turn
     for (const b of this.list) {
