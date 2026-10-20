@@ -262,7 +262,7 @@ export class SuitPoser {
     if (this.preview) {   // Pose Studio: hold one pose, no movement on top
       for (const s of STATES) this.w[s] = s === this.preview ? 1 : 0;
       this.crouch = 0; this.walk = 0; this.lean.set(0, 0); this.side = 0;
-      this.accH.set(0, 0); this.yawRate = 0; this.vy = 0;
+      this.accH.set(0, 0); this.yawRate = 0; this.vy = 0; this.upS = 0; this.upV = 0;
       Object.assign(this.flt, { pull: 0, lat: 0, roll: 0, rollAcc: 0 });
       this.brace = 0; this.limp = 0;
       Object.assign(this.mom, { crouch: 0, hop: 0, recover: 0 });
@@ -334,11 +334,15 @@ export class SuitPoser {
     this.accH.x += (THREE.MathUtils.clamp(acc.x, -40, 40) - this.accH.x) * kh;
     this.accH.y += (THREE.MathUtils.clamp(-acc.z, -40, 40) - this.accH.y) * kh;
     this.yawRate += ((body.angVel?.y ?? 0) - this.yawRate) * kh;
-    // climbing / dropping reacts fast: to the vertical speed, plus a kick from the vertical push
-    const kv = 1 - Math.exp(-H.vertReact * dt);
-    this.vy += (body.vel.y - this.vy) * kv;
-    this.ay = (this.ay ?? 0) + (THREE.MathUtils.clamp((body.vel.y - (this._lastVyH ?? body.vel.y)) / dt, -40, 40) - (this.ay ?? 0)) * kv;
-    this._lastVyH = body.vel.y;
+    // climbing / dropping: aim for the vertical speed plus what you're asking for (the climb /
+    // descend buttons), then ease there on a spring that settles without overshoot (smooth
+    // between climbing, dropping and idle)
+    const inp = game.lastInput ?? {}, intent = flying ? 0 : (inp.up ?? 0) - (inp.down ?? 0);
+    const upWant = THREE.MathUtils.clamp(body.vel.y / H.climbFull + intent * H.intentShare, -1, 1);
+    const om = H.vertSpring, ud = (this.upV ?? 0);
+    const accU = om * om * (upWant - (this.upS ?? 0)) - 2 * om * ud;
+    this.upV = ud + accU * dt;
+    this.upS = THREE.MathUtils.clamp((this.upS ?? 0) + this.upV * dt, -1.2, 1.2);
     // gravity as the body feels it: real gravity minus its own acceleration (in free fall: nothing)
     const gw = _v3.set(0, -CONFIG.physics.gravity, 0).sub(_v.copy(body.vel).sub(this._prevVel ?? body.vel).multiplyScalar(1 / dt));
     this._prevVel = (this._prevVel ?? new THREE.Vector3()).copy(body.vel);
@@ -437,7 +441,7 @@ export class SuitPoser {
     add('Spine01', 0, yaw * 0.6, 0); add('Head', 0, yaw * 0.5, 0);
     add('LeftUpLeg', 0, -yaw * 0.5, 0); add('RightUpLeg', 0, -yaw * 0.5, 0);
     // climbing: arms press down to the sides, toes point; dropping: arms lift out, knees tuck
-    const up = THREE.MathUtils.clamp(this.vy / H.climbFull + (this.ay ?? 0) / H.climbPushFull, -1, 1) * hv;
+    const up = THREE.MathUtils.clamp(this.upS ?? 0, -1, 1) * hv;
     const climb = Math.max(0, up), drop = Math.max(0, -up);
     add('LeftArm', 0, 0, climb * 14 - drop * 28); add('RightArm', 0, 0, -climb * 14 + drop * 28);
     add('LeftFoot', -climb * 18 + drop * 15, 0, 0); add('RightFoot', -climb * 18 + drop * 15, 0, 0);

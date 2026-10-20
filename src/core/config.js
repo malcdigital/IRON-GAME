@@ -269,9 +269,9 @@ export const CONFIG = {
       legTrail: 1.6, armSweep: 1.7, // how far legs trail and arms sweep back behind, × the tilt
       sideHips: 0.12, sideTrail: 0.45, sideStraight: 1.2,   // moving sideways: pelvis tilt, legs swinging out at the hip joints, how much the knees straighten
       twistPerRads: 14, twistMax: 25,   // turning: chest twist per rad/s of turn (degrees)
-      climbFull: 7,                 // climb / drop speed (m/s) for the full arms-and-legs reaction
-      climbPushFull: 14,            // ...or this much upward / downward push (m/s²), so it reacts as the climb starts
-      vertReact: 14,                // how quickly the climb / drop pose reacts (higher = snappier)
+      climbFull: 10,                // climb / drop speed (m/s) for the full arms-and-legs reaction
+      intentShare: 0.6,             // how much pressing climb / descend leans into the pose before the speed builds
+      vertSpring: 7,                // how quickly the climb / drop / idle poses ease into each other (higher = snappier)
     },               // counts as standing when the feet are within this of the ground (m)
   },
   suitModel: { url: 'assets/suit.json', height: 1.9, feetY: -1.03, turn: Math.PI,
