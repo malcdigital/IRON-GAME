@@ -144,7 +144,7 @@ export const CONFIG = {
     // at fireAt s. In the air: fire at airFireAt s.
     // Launching from a hover: the nose tips from startDeg over into a dive at diveDeg (diveTime s),
     // then pulls out to level flight (pullTime s)
-    air: { startDeg: 85, diveDeg: -18, diveTime: 1.8, pullTime: 1.5,
+    air: { startDeg: 25, diveDeg: -18, diveTime: 1.0, pullTime: 1.5,
       rampTime: 0.25, kickMult: 3.6,   // explosive: the thrust and kick hit almost at once (kick x3.6)
       // the blast as it fires: flames flare to flame x their length, the camera is knocked back
       // (camBack of its distance) and widens fov degrees, with a sharp shake; all fading over time s
