@@ -117,16 +117,17 @@ export const POSES = {
     LeftLeg: { aim: [-0.03, -1, 0.06] }, RightLeg: { aim: [0.03, -1, 0.06] },
     LeftFoot: { rot: [-45, 0, 0] }, RightFoot: { rot: [-45, 0, 0] },
   },
-  // Coming round after a knockout: arms and legs spread wide for balance, palms down firing the
-  // hand thrusters to steady the suit (the head shake is added on top)
+  // Coming round after a knockout: spread out like a skydiver to face the ground and steady the
+  // fall, arms out and forward with the palms down (hand thrusters), legs spread, knees soft,
+  // head up to see what's coming (the head shake is added on top)
   recover: {
     hands: { Left: { curl: -20, thumb: -10 }, Right: { curl: -20, thumb: -10 } },
-    Spine02: { rot: [-6, 0, 0] },
-    LeftArm: { aim: [-0.85, -0.5, -0.1] }, RightArm: { aim: [0.85, -0.5, -0.1] },
-    LeftForeArm: { aim: [-0.9, -0.42, -0.1] }, RightForeArm: { aim: [0.9, -0.42, -0.1] },
-    LeftUpLeg: { aim: [-0.32, -0.94, -0.05] }, RightUpLeg: { aim: [0.32, -0.94, -0.05] },
-    LeftLeg: { aim: [-0.25, -0.94, 0.22] }, RightLeg: { aim: [0.25, -0.94, 0.22] },
-    LeftFoot: { rot: [-15, 0, 0] }, RightFoot: { rot: [-15, 0, 0] },
+    Spine02: { rot: [8, 0, 0] }, Spine01: { rot: [6, 0, 0] }, neck: { rot: [14, 0, 0] }, Head: { rot: [18, 0, 0] },
+    LeftArm: { aim: [-0.85, 0.3, -0.3] }, RightArm: { aim: [0.85, 0.3, -0.3] },
+    LeftForeArm: { aim: [-0.6, 0.62, -0.5] }, RightForeArm: { aim: [0.6, 0.62, -0.5] },
+    LeftUpLeg: { aim: [-0.35, -0.93, 0.05] }, RightUpLeg: { aim: [0.35, -0.93, 0.05] },
+    LeftLeg: { aim: [-0.3, -0.8, 0.52] }, RightLeg: { aim: [0.3, -0.8, 0.52] },
+    LeftFoot: { rot: [-20, 0, 0] }, RightFoot: { rot: [-20, 0, 0] },
   },
 };
 
@@ -302,7 +303,10 @@ export class SuitPoser {
     this.wasStunned = game.stunT > 0;
     mo.recoverClock += dt;
     const rc = mo.recoverClock;
-    mo.recover = rc < M.recoverTime ? Math.min(1, rc / 0.2) * Math.min(1, (M.recoverTime - rc) / 0.5) : 0;
+    // held while the suit rights itself in the air (game.rescue), then a short fade
+    if (game.rescue) mo.recoverHold = 0; else mo.recoverHold = (mo.recoverHold ?? 9) + dt;
+    const hold = game.rescue ? 1 : Math.max(0, 1 - mo.recoverHold / 0.6);
+    mo.recover = Math.max(hold * Math.min(1, rc / 0.15), rc < M.recoverTime ? Math.min(1, rc / 0.2) * Math.min(1, (M.recoverTime - rc) / 0.5) : 0);
     const special = { brace: this.brace, flare: mo.flare, launch: mo.launch, recover: mo.recover };
     let sp = 0;
     for (const v of Object.values(special)) sp = Math.max(sp, v);

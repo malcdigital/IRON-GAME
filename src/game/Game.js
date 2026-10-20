@@ -25,6 +25,7 @@ const FOOT = SPHERES.filter((s) => s.foot).reduce((a, s, _, all) => a.addScaledV
 // The simulation. No rendering, no DOM: it can run headless and is easy to port.
 export class Game {
   constructor(loadout) {
+    this._qTmp = new THREE.Quaternion(); this._qTmp2 = new THREE.Quaternion(); this._xAxis = new THREE.Vector3();
     this.world = new World(RANGE);
     this.body = new RigidBody();
     this.controller = new FlightController(CONFIG);
@@ -44,6 +45,7 @@ export class Game {
     this.powerLimited = false;
     this.twr = 0;
     this.launchT = 0;
+    this.rescue = null;      // coming round in the air (see stepRescue)
     this.stunT = 0;          // knocked out by a crash: thrusters off, no control (seconds left)
     this.impactIn = Infinity; // seconds until the suit hits something on its current path
     this.launchCharge = 1;
@@ -94,6 +96,7 @@ export class Game {
     this.hopShove = null;
     this.pendingSnap = null;
     this.launchT = 0;
+    this.rescue = null;      // coming round in the air (see stepRescue)
     this.stunT = 0;          // knocked out by a crash: thrusters off, no control (seconds left)
     this.impactIn = Infinity; // seconds until the suit hits something on its current path
     this.launchCharge = 1;
@@ -333,7 +336,11 @@ export class Game {
     if (this.stunT > 0) {
       this.stunT = Math.max(0, this.stunT - dt);
       input = { ...input, cut: true, up: 0, down: 0, forward: 0, strafe: 0, yaw: 0, pitch: 0, roll: 0, boost: false, takeoffBoost: false };
+      // Coming round in the air: twist to face the ground, burn to stop the fall, then upright
+      if (this.stunT === 0 && !this.grounded && (this.caps.room ?? 0) > CONFIG.crash.rescueMinRoom) this.rescue = { phase: 'orient', t: 0 };
     }
+    this.caps.attTarget = null;
+    if (this.rescue) input = this.stepRescue(dt, input);
     // How soon will we hit something? (for the brace-for-impact pose)
     if ((this._impactTick = ((this._impactTick ?? 0) + 1) % 4) === 0) this.impactIn = this.timeToImpact();
 
@@ -396,6 +403,7 @@ export class Game {
     this.catchGrace = Math.max(0, (this.catchGrace ?? 0) - dt);
     this.caps.room = body.pos.y - CONFIG.pilot.feetHeight - this.surfaceBelow(body.pos);   // height above whatever's below
     this.caps.stunned = this.stunT > 0;
+    if (this.rescue && !input.cut) this.rescue = null;   // the safety catch took over
     const cmd = this.controller.update(body, input, this.caps, this.grounded, dt);
     // Vertical steering jets: reach the climb / descent speed quickly, and catch you after a drop
     if (this.controller.mode === 'assist' && !this.controller.flying && !this.grounded && !input.cut && this.hoverBrakeT <= 0) {
@@ -522,6 +530,16 @@ export class Game {
     body.torque.add(this._T.applyQuaternion(body.quat));
 
     body.force.add(this.aero);
+    // Rescue burn: the hand and boot thrusters fire at the ground (shown on the flames)
+    if (this.rescue?.phase === 'brake' && this.rescue.level > 0.02) {
+      const upBody = this._c.set(0, 1, 0).applyQuaternion(this._qTmp.copy(body.quat).invert());
+      for (const t of thr) {
+        const slot = t.comp?.slot ?? t.slot;
+        if (slot !== 'gauntlets' && slot !== 'boots') continue;
+        t.throttle = Math.max(t.throttle, this.rescue.level);
+        t.thrustDir.copy(upBody);
+      }
+    }
 
     // Auto-steer hop in progress (stored charge, straight up)
     if (this.hopShove) {
@@ -687,6 +705,41 @@ export class Game {
   }
 
   // Lying on the ground? Get back up after a moment.
+  // After a knockout in the air: (1) gyros twist the suit to face the ground, spread like a
+  // skydiver; (2) the hand and boot jets burn to stop the fall; (3) back to the normal upright hover.
+  stepRescue(dt, input) {
+    const r = this.rescue, c = CONFIG.crash, b = this.body, g = CONFIG.physics.gravity;
+    r.t += dt;
+    // too close to the ground: hand over to the safety catch and the normal hover
+    if ((this.caps.room ?? 0) < c.rescueAbortRoom) { this.rescue = null; return input; }
+    const heading = this.controller.heading ?? yawOf(b.quat);
+    const target = (this._rescueQ ??= new THREE.Quaternion()).setFromAxisAngle(Y, heading)
+      .multiply(this._qTmp2.setFromAxisAngle(this._xAxis.set(1, 0, 0), -Math.PI / 2));   // head forward, chest to the ground
+    this.caps.attTarget = target;
+    this.caps.attGain = c.rescueTurnGain;
+    r.level = 0;
+    // the hand and boot jets twist the suit (much stronger than the gyros): spin toward the
+    // target at up to rescueSpin rad/s, settling as it arrives
+    const qe = this._qTmp.copy(target).multiply(this._qTmp2.copy(b.quat).invert());
+    if (qe.w < 0) qe.set(-qe.x, -qe.y, -qe.z, -qe.w);
+    const ang = 2 * Math.acos(Math.min(1, qe.w)), sn = Math.sqrt(Math.max(1e-9, 1 - qe.w * qe.w));
+    const wDes = this._c.set(qe.x / sn, qe.y / sn, qe.z / sn).multiplyScalar(Math.min(c.rescueSpin, ang * 5));
+    const alpha = wDes.sub(b.angVel).multiplyScalar(10);
+    b.torque.add(b.inertiaWorld(alpha, alpha));
+    r.err = ang;
+    if (r.phase === 'orient') {
+      if (r.err < c.rescueFacedDeg * Math.PI / 180 || r.t > c.rescueOrientMax) { r.phase = 'brake'; r.t = 0; }
+    } else if (r.phase === 'brake') {
+      // burn: bring the fall down to a gentle sink, and kill the drift
+      const want = -c.rescueSinkSpeed, a = THREE.MathUtils.clamp((want - b.vel.y) * 3, 0, c.rescueBrakeAccel);
+      b.force.y += b.mass * (g + a);
+      b.force.x -= b.vel.x * b.mass * 1.5; b.force.z -= b.vel.z * b.mass * 1.5;
+      r.level = Math.min(1, (g + a) / (g + c.rescueBrakeAccel) * 1.3);
+      if (b.vel.y > -c.rescueSinkSpeed - 1 && r.t > 0.35) { this.rescue = null; events.emit('toast', { text: 'Systems back online' }); }
+    }
+    return { ...input, cut: true, up: 0, down: 0, forward: 0, strafe: 0, yaw: 0, pitch: 0, roll: 0, boost: false, takeoffBoost: false };
+  }
+
   // A hard hit knocks the pilot out for a moment (longer for harder hits)
   knockOut(speed, before) {
     const c = CONFIG.crash;

@@ -317,7 +317,12 @@ export const CONFIG = {
   // suit tumbles and falls on its own physics, then reboots into hover. Above braceSpeed the suit
   // braces when it will hit something within braceTime seconds.
   crash: { knockSpeed: 14, stunMin: 1.0, stunPerMs: 0.04, stunMax: 3, braceSpeed: 12, braceTime: 0.45,
-    tumble: 0.09 },   // spin from an off-centre hit: rad/s per m/s of impact speed
+    tumble: 0.09,     // spin from an off-centre hit: rad/s per m/s of impact speed
+    // Coming round in the air (more than rescueMinRoom m up): twist to face the ground (gyros at
+    // rescueTurnGain × normal, until within rescueFacedDeg or rescueOrientMax s), then burn to slow
+    // the fall to rescueSinkSpeed (up to rescueBrakeAccel m/s² extra), then upright hover.
+    rescueMinRoom: 5, rescueAbortRoom: 2.5, rescueTurnGain: 2.5, rescueFacedDeg: 20, rescueOrientMax: 1.2, rescueSpin: 7,
+    rescueSinkSpeed: 1.5, rescueBrakeAccel: 22 },
 
   // Key bindings. Values are KeyboardEvent.code names.
   keys: {

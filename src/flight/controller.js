@@ -124,6 +124,7 @@ export class FlightController {
     if (input.cut && !grounded) {
       out.force.set(0, 0, 0);
       if (caps.stunned) out.torque.set(0, 0, 0);   // knocked out: nothing holds you upright
+      else if (caps.attTarget) this.attitudeTorque(body, caps.attTarget, caps.assistGain * (caps.attGain ?? 1), out.torque, turnMax * (caps.attGain ?? 1));   // rescue: face the ground
       else this.attitudeTorque(body, this._qYaw, caps.assistGain, out.torque, turnMax, ff);
       out.thrust = false;
       return out;
