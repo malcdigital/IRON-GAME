@@ -369,7 +369,10 @@ export class SuitPoser {
     if (game.rescue) mo.recoverHold = 0; else mo.recoverHold = (mo.recoverHold ?? 9) + dt;
     const hold = game.rescue ? 1 : Math.max(0, 1 - mo.recoverHold / 0.6);
     mo.recover = Math.max(hold * Math.min(1, rc / 0.15), rc < M.recoverTime ? Math.min(1, rc / 0.2) * Math.min(1, (M.recoverTime - rc) / 0.5) : 0);
-    const special = { brace: this.brace, flare: mo.flare, launch: mo.launch * (1 - mo.crouch), recover: mo.recover, crouch: Math.max(mo.crouch, mo.hop * 0.7) };
+    // charging up (L1 + R1 on the ground): sink into the crouch and hold it
+    mo.charge = (mo.charge ?? 0) + ((game.charging ? 1 : 0) - (mo.charge ?? 0)) * (1 - Math.exp(-(game.charging ? 12 : 8) * dt));
+    if (game.launchSeq) mo.charge = 0;   // (launching from the crouch: the launch timeline takes it from here)
+    const special = { brace: this.brace, flare: mo.flare, launch: mo.launch * (1 - mo.crouch), recover: mo.recover, crouch: Math.max(mo.crouch, mo.hop * 0.7, mo.charge) };
     let sp = 0;
     for (const v of Object.values(special)) sp = Math.max(sp, v);
     for (const s of STATES) if (!(s in special)) want[s] *= 1 - sp;
@@ -515,6 +518,17 @@ export class SuitPoser {
     add('LeftLeg', -drop * 38, 0, 0); add('RightLeg', -drop * 30, 0, 0);
     // coming round: a couple of quick head shakes, dying away
     const mo = this.mom;
+    // charged up and tensed: a fine tremble through the body, with a slow sway on top
+    if ((mo.charge ?? 0) > 0.01 && !this.preview) {
+      const S = P.subtle, a = S.tremble * mo.charge, t = this.t;
+      const n = (f, ph) => Math.sin(t * f + ph) * 0.6 + Math.sin(t * f * 1.73 + ph * 2.1) * 0.4;   // jittery, never repeating quite the same
+      add('Spine02', a * n(31, 0.3) + a * 0.8 * Math.sin(t * 2.3), 0, a * n(27, 1.1));
+      add('Spine01', a * n(37, 2.0), a * 0.6 * n(29, 0.7), 0);
+      add('Head', a * 0.6 * n(23, 1.7), a * 0.8 * n(19, 0.2), 0);
+      add('LeftArm', a * n(33, 0.9), 0, a * n(41, 1.4)); add('RightArm', a * n(35, 2.4), 0, a * n(39, 0.5));
+      add('LeftUpLeg', a * 0.7 * n(29, 1.9), 0, a * 0.5 * n(43, 0.8)); add('RightUpLeg', a * 0.7 * n(31, 0.6), 0, a * 0.5 * n(37, 2.2));
+      this.handCurl('Left', 10 * mo.charge + a * 2 * n(45, 0.1)); this.handCurl('Right', 10 * mo.charge + a * 2 * n(47, 1.3));
+    }
     if (mo.recover > 0.01) {
       const rc = mo.recoverClock, shake = Math.sin(rc * 22) * Math.exp(-rc * 2.2) * P.moments.shakeDeg * mo.recover;
       add('neck', 0, shake * 0.6, shake * 0.15); add('Head', 0, shake, -shake * 0.2);
@@ -762,7 +776,7 @@ export class SuitPoser {
     this.brace = 0; this.limp = 0; this.crouch = 0; this.walk = 0; this.walkPhase = 0;
     this.lean.set(0, 0); this.side = 0; this.accH.set(0, 0); this.yawRate = 0; this.vy = 0; this.upS = 0; this.upV = 0; this.ay = 0;
     Object.assign(this.flt, { pull: 0, lat: 0, roll: 0, rollAcc: 0, lastRoll: 0 });
-    this.mom = { flare: 0, launch: 0, crouch: 0, hop: 0, recover: 0, launchCount: null, launchClock: 9, hopClock: 9, recoverClock: 9 };
+    this.mom = { flare: 0, launch: 0, crouch: 0, hop: 0, recover: 0, charge: 0, launchCount: null, launchClock: 9, hopClock: 9, recoverClock: 9 };
     for (const sp of Object.values(this.legSpring)) Object.assign(sp, { x: 0, vx: 0, z: 0, vz: 0 });
     this.limbs = {}; this.handFlex = null; this.fidgetIn = 2; this.pitch = 0;
     this.geff.set(0, -9.8, 0); this._prevVel = null; this.primed = false;

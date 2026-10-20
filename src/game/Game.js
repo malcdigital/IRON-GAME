@@ -268,6 +268,8 @@ export class Game {
           const seq = CONFIG.launch.seq, onGround = this.grounded || (this.caps.room ?? 9) < 0.6;
           this.launchSeq = { t: 0, ground: onGround, jumped: !onGround, boosted: this.boostHeld || this.takeoffBoostHeld,
             jumpAt: onGround ? seq.jumpAt : 0, fireAt: onGround ? seq.fireAt : seq.airFireAt };
+          // already crouched and charged up (L1 + R1 held): skip the wind-up and jump straight away
+          if (onGround && this.charging && this.chargeT > CONFIG.launch.chargeReady) this.launchSeq.t = this.launchSeq.jumpAt;
         }
         break;
       case 'flip':
@@ -343,8 +345,14 @@ export class Game {
 
   step(dt, input) {
     const { body, suit } = this;
-    // Climb and descend held together (L1 + R1, e.g. getting ready for a boosted takeoff): hold height
-    if (input.up > 0 && input.down > 0 && !this.controller.flying) input = { ...input, up: 0, down: 0 };
+    // Climb and descend held together (L1 + R1): in the air, hold height. Standing on the ground,
+    // crouch and charge up (the boosted takeoff's wind-up): press launch to go straight away.
+    const both = input.up > 0 && input.down > 0 && !this.controller.flying;
+    const onGround = this.grounded || (this.caps.room ?? 9) < 0.3;
+    this.charging = both && onGround && !this.launchSeq;
+    this.chargeT = this.charging ? (this.chargeT ?? 0) + dt : 0;
+    if (both) input = { ...input, up: 0, down: 0 };
+    if (this.charging) input = { ...input, forward: 0, strafe: 0 };   // (tensed up: no walking)
     this.time += dt;
     suit.time = this.time;
 
