@@ -218,6 +218,15 @@ export class Game {
     return pts;
   }
 
+  // Height of the ground or rooftop directly below a point
+  surfaceBelow(p) {
+    let top = 0;
+    for (const c of this.world.colliders) {
+      if (p.x > c.min.x && p.x < c.max.x && p.z > c.min.z && p.z < c.max.z && c.max.y <= p.y + 0.5 && c.max.y > top) top = c.max.y;
+    }
+    return top;
+  }
+
   hoverFraction() {
     return (this.body.mass * CONFIG.physics.gravity) / Math.max(1, this.caps.maxLift);
   }
@@ -285,7 +294,7 @@ export class Game {
         break;
       }
       case 'flare':
-        this.fireFlares();
+        if (this.controller.flying) this.fireFlares();   // (in hover the same key cuts the thrusters)
         break;
       case 'mode': {
         if (this.controller.flying) {
@@ -355,7 +364,28 @@ export class Game {
     this.caps.aeroAccel.lerp(this._tmp.copy(this.aero).divideScalar(body.mass), k);
 
     // 2. What does the pilot want?
+    // Thruster cut-off (hover): free-fall while held. Safety catch: if whatever is below is
+    // coming up too fast to stop in time, the thrusters fire anyway.
+    const hovering = this.controller.mode === 'assist' && !this.controller.flying;
+    if (input.cut && hovering && !this.grounded) {
+      const co = CONFIG.assist.cutoff, fall = Math.max(0, -body.vel.y);
+      const room = body.pos.y - CONFIG.pilot.feetHeight - this.surfaceBelow(body.pos);
+      const stop = (fall * fall) / (2 * co.catchAccel);
+      if (room < stop * co.safetyMargin + co.safetyExtra) {
+        input.cut = false;
+        if (!this.safetyCatch) events.emit('toast', { text: 'Thrusters back on: too close to land' });
+        this.safetyCatch = true;
+      }
+    } else if (!input.cut) this.safetyCatch = false;
+    this.cutting = !!input.cut && hovering && !this.grounded;
     const cmd = this.controller.update(body, input, this.caps, this.grounded, dt);
+    // Vertical steering jets: reach the climb / descent speed quickly, and catch you after a drop
+    if (this.controller.mode === 'assist' && !this.controller.flying && !this.grounded && !input.cut && this.hoverBrakeT <= 0) {
+      const a = CONFIG.assist, vyWant = input.up * (input.boost ? a.boostClimbRate : a.climbRate) - input.down * (input.boost ? a.boostClimbRate : a.descendRate);
+      const err = vyWant - body.vel.y;
+      const lim = err > 0 && body.vel.y < -2 ? a.cutoff.catchAccel : a.vertical.accel;   // braking a fall gets the strongest push
+      body.force.y += body.mass * THREE.MathUtils.clamp(err * a.vertical.gain, -a.vertical.accel, lim);
+    }
     // Walking: the feet grip the ground at the stick's walking speed (see collide)
     this.walkVel = cmd.walk && this.grounded ? cmd.walk : null;
     if (this.walkVel) {
@@ -657,6 +687,7 @@ export class Game {
       twr: this.twr,
       mass: b.mass,
       mode: this.controller.mode,
+      cutting: this.cutting,
       throttle: this.controller.flying ? this.controller.jet.throttle : this.controller.throttle,
       gLoad: this.controller.flying ? this.controller.jet.gLoad : 1,
       launchCharge: this.launchCharge,

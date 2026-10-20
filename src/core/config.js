@@ -144,7 +144,12 @@ export const CONFIG = {
   // Assisted flight: the suit holds altitude, levels itself and brakes when you let go.
   assist: {
     maxSpeed: 22, boostSpeed: 30,
-    climbRate: 9, boostClimbRate: 14, descendRate: 7,
+    climbRate: 18, boostClimbRate: 25, descendRate: 14,
+    // Vertical steering jets: help reach and hold the climb/descent speed quickly (m/s²)
+    vertical: { gain: 5, accel: 16 },
+    // Thruster cut-off (hold Z / press L2 all the way): free-fall, then the jets catch you.
+    // If the ground (or a roof) is coming up too fast, they fire on their own to save the landing.
+    cutoff: { padThreshold: 0.92, catchAccel: 22, safetyMargin: 1.4, safetyExtra: 3 },
     // Lift reserve: when you need to stop sinking or climb, briefly draw extra thrust from stored charge
     liftReserve: { thrustMult: 1.5, below: 1.0 },   // kicks in when you're sinking more than 1 m/s slower than wanted
     maxTiltDeg: 28, boostTiltDeg: 45,
@@ -252,6 +257,7 @@ export const CONFIG = {
       up: ['Space'],
       down: ['KeyC', 'ControlLeft'],
       boost: ['ShiftLeft', 'ShiftRight'],
+      cut: ['KeyZ'],             // hover: hold to cut the thrusters and drop
     },
     actions: {
       mode: ['KeyM'],

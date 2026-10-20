@@ -84,7 +84,7 @@ export class Hud {
     if (time - this.lastSlow < 0.08) return;
     this.lastSlow = time;
 
-    const mode = t.mode === 'assist' ? 'Hover · assist'
+    const mode = t.mode === 'assist' ? (t.cutting ? 'Hover · thrusters off' : 'Hover · assist')
       : t.mode === 'manual' ? `Hover · manual · ${Math.round(t.throttle * 100)}%`
       : t.snapWaiting ? 'Flight · hard turn ready…'
       : t.autoLabel ? `Flight · ${t.autoLabel}`

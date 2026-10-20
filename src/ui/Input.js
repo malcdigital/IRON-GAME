@@ -70,9 +70,11 @@ export class Input {
     a.up = Math.max(d('up'), g.up);
     a.down = Math.max(d('down'), g.down);
     a.boost = this.down('boost') || g.boost;
+    a.cut = this.down('cut') || !!g.cut;
     if (!this.enabled) {
       a.forward = a.strafe = a.yaw = a.roll = a.up = a.down = 0;
       a.boost = false;
+      a.cut = false;
     }
     return a;
   }

@@ -118,6 +118,14 @@ export class FlightController {
 
     this._qYaw.setFromAxisAngle(Y, h);
 
+    // Thrusters cut (hold to drop): no thrust, the gyro keeps you upright, you free-fall
+    if (input.cut && !grounded) {
+      out.force.set(0, 0, 0);
+      this.attitudeTorque(body, this._qYaw, caps.assistGain, out.torque, turnMax, ff);
+      out.thrust = false;
+      return out;
+    }
+
     // Standing on the ground and not asking to lift off: thrusters idle, the stick walks
     if (grounded && input.up <= 0) {
       const walk = input.boost ? c.runSpeed : c.walkSpeed;

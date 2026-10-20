@@ -1,3 +1,4 @@
+import { CONFIG } from '../core/config.js';
 import { events } from '../core/events.js';
 
 // Controller input through the browser Gamepad API (PS5 DualSense, Xbox, etc.).
@@ -85,6 +86,7 @@ export class GamepadInput {
       a.roll = Math.abs(rx) > m.rollFlick ? -Math.sign(rx) : 0;  // flight: flick to barrel roll
       a.up = btn(m.analog.up).value;
       a.down = btn(m.analog.down).value;
+      a.cut = a.down >= CONFIG.assist.cutoff.padThreshold;   // L2 all the way: cut the thrusters (hover)
       a.boost = btn(m.hold.boost).pressed;
     }
     this.prev = p.buttons.map((b) => b.pressed);
