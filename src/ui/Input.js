@@ -10,7 +10,11 @@ export class Input {
     this.held = new Set();
     this.queue = [];
     this.enabled = true;
-    this.axesOut = { forward: 0, strafe: 0, yaw: 0, roll: 0, up: 0, down: 0, boost: false };
+    this.axesOut = { forward: 0, strafe: 0, yaw: 0, roll: 0, up: 0, down: 0, boost: false, brake: false, cut: false, takeoffBoost: false };
+    this.clock = 0;
+    this.cReleased = -1;
+    this.cWasDown = false;
+    this.cCut = false;
     this.gamepad = new GamepadInput(bindings.gamepad);
     this.lastDevice = 'keyboard';
 
@@ -47,6 +51,12 @@ export class Input {
     if (gst.press) this.queue.push(gst.press > 0 ? 'rollLeft' : 'rollRight');
     if (gst.tap) this.queue.push(gst.tap > 0 ? 'rollJukeLeft' : 'rollJukeRight');
     if (gst.double) this.queue.push(gst.double > 0 ? 'snapLeft' : 'snapRight');
+    // Double-tap C and hold the second press: cut the thrusters (hover)
+    this.clock += dt;
+    const c = this.enabled && this.down('down');
+    if (c && !this.cWasDown) this.cCut = this.clock - this.cReleased < this.bindings.gamepad.doubleTap;
+    if (!c && this.cWasDown) { this.cReleased = this.clock; this.cCut = false; }
+    this.cWasDown = c;
     const g = this.gamepad.axes;
     if (this.queue.length > before || g.forward || g.strafe || g.yaw || g.up || g.down || g.boost) {
       this.lastDevice = 'gamepad';
@@ -70,11 +80,13 @@ export class Input {
     a.up = Math.max(d('up'), g.up);
     a.down = Math.max(d('down'), g.down);
     a.boost = this.down('boost') || g.boost;
-    a.cut = this.down('cut') || !!g.cut;
+    a.cut = this.down('cut') || this.cCut || !!g.cut;
+    a.brake = this.down('brake') || !!g.brake;
+    a.takeoffBoost = !!g.takeoffBoost;
     if (!this.enabled) {
       a.forward = a.strafe = a.yaw = a.roll = a.up = a.down = 0;
       a.boost = false;
-      a.cut = false;
+      a.cut = a.brake = a.takeoffBoost = false;
     }
     return a;
   }

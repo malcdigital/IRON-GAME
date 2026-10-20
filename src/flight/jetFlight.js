@@ -364,6 +364,13 @@ export class JetFlight {
     const vTargetBase = fast ? c.boostSpeed : c.minSpeed + (c.cruiseSpeed - c.minSpeed) * this.throttle;
     // Carving brakes to cornering speed: slower = tighter. A hard turn brakes harder.
     let vTarget = this.carving ? Math.min(vTargetBase, c.carve.cornerSpeed) : vTargetBase;
+    // Brake (hold L1 / Ctrl): slow to 20% of the speed you had when you started braking
+    if (input.brake && !caps.launching) {
+      if (this.brakeFrom == null) this.brakeFrom = speed;
+      vTarget = Math.min(vTarget, Math.max(this.brakeFrom * c.brake.keep, c.minSpeed));
+      this.brakeTarget = vTarget;
+    } else this.brakeFrom = null;
+    this.braking = !!input.brake && this.brakeFrom != null;
 
     // Wanted acceleration: speed along the path, plus pulling the velocity onto the path
     const d = this.direction;
@@ -388,7 +395,7 @@ export class JetFlight {
     this.steerGain = this.carving ? c.carve.turnGain : c.turnGain;
     this.steerMaxA = maxG;
     const accelCap = (caps.launching ? this.cfg.launch.maxAccelG * (caps.launchPower ?? 1) : 2) * g;
-    this._A.copy(d).multiplyScalar(clamp((vTarget - along) * c.speedGain, -2 * g, accelCap)).add(this._aPerp);
+    this._A.copy(d).multiplyScalar(clamp((vTarget - along) * c.speedGain, -(this.braking ? c.brake.accelG : 2) * g, accelCap)).add(this._aPerp);
     this._A.y += g;
     this.gLoad = this._A.length() / g;
 

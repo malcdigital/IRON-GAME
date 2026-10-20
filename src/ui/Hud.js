@@ -91,6 +91,7 @@ export class Hud {
       : t.snapping ? 'Flight · hard turn'
       : t.avoiding === 'up' ? 'Flight · auto pull-up'
       : t.avoiding ? `Flight · auto-steer ${t.avoiding}`
+      : t.braking ? 'Flight · braking'
       : t.carving ? 'Flight · carving' : `Flight · throttle ${Math.round(t.throttle * 100)}%`;
     const twrClass = t.twr < 1 ? 'bad' : t.twr < 1.15 ? 'warn' : '';
     this.readout.innerHTML = `

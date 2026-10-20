@@ -1,4 +1,3 @@
-import { CONFIG } from '../core/config.js';
 import { events } from '../core/events.js';
 
 // Controller input through the browser Gamepad API (PS5 DualSense, Xbox, etc.).
@@ -10,7 +9,10 @@ export class GamepadInput {
     this.prev = [];
     this.menuRepeat = 0;
     this.supported = typeof navigator.getGamepads === 'function';
-    this.axes = { forward: 0, strafe: 0, yaw: 0, roll: 0, up: 0, down: 0, boost: false };
+    this.axes = { forward: 0, strafe: 0, yaw: 0, roll: 0, up: 0, down: 0, boost: false, brake: false, cut: false, takeoffBoost: false };
+    this.clock = 0;
+    this.l1Released = -1;
+    this.cutHold = false;
 
     window.addEventListener('gamepadconnected', (e) => {
       this.index = e.gamepad.index;
@@ -53,7 +55,8 @@ export class GamepadInput {
     const p = this.pad();
     const a = this.axes;
     a.forward = a.strafe = a.yaw = a.roll = a.up = a.down = 0;
-    a.boost = false;
+    a.boost = a.brake = a.cut = a.takeoffBoost = false;
+    this.clock += dt;
     if (!p) return;
 
     const m = this.map;
@@ -84,10 +87,22 @@ export class GamepadInput {
       if (flying && m.invertFlightY) a.forward = ly;
       a.yaw = -rx;                           // hover: right stick turns
       a.roll = Math.abs(rx) > m.rollFlick ? -Math.sign(rx) : 0;  // flight: flick to barrel roll
-      a.up = btn(m.analog.up).value;
-      a.down = btn(m.analog.down).value;
-      a.cut = a.down >= CONFIG.assist.cutoff.padThreshold;   // L2 all the way: cut the thrusters (hover)
-      a.boost = btn(m.hold.boost).pressed;
+      const h = m.hover, l1 = btn(h.down).pressed;
+      if (flying) {
+        a.up = btn(m.analog.up).value;        // R2 / L2: throttle
+        a.down = btn(m.analog.down).value;
+        a.boost = btn(m.hold.boost).pressed;  // R1: boost
+        a.brake = btn(m.flightBrake).pressed; // L1: brake
+      } else {
+        a.up = btn(h.up).pressed ? 1 : 0;     // R1: climb
+        a.down = l1 ? 1 : 0;                  // L1: descend
+        a.boost = btn(h.boost).value > 0.5;   // R2: boost
+        a.takeoffBoost = btn(h.up).pressed && l1;   // L1 + R1 while pressing ✕: boosted takeoff
+      }
+      // Double-tap L1 and hold the second press: cut the thrusters (hover)
+      if (l1 && !this.prev[h.down]) this.cutHold = this.clock - this.l1Released < m.doubleTap;
+      if (!l1 && this.prev[h.down]) { this.l1Released = this.clock; this.cutHold = false; }
+      a.cut = this.cutHold && !flying;
     }
     this.prev = p.buttons.map((b) => b.pressed);
   }

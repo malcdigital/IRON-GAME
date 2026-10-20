@@ -113,7 +113,9 @@ export class FlightController {
 
     // Vertical: hold altitude unless climbing or descending
     const climb = input.boost ? c.boostClimbRate : c.climbRate;
-    const vyDes = input.up * climb - input.down * (input.boost ? c.boostClimbRate : c.descendRate);
+    let vyDes = input.up * climb - input.down * (input.boost ? c.boostClimbRate : c.descendRate);
+    // Fast descents ease off near the ground or a roof, so you touch down gently
+    if (caps.room != null) vyDes = Math.max(vyDes, -Math.sqrt(2 * c.landingBrake * Math.max(0, caps.room - 0.5)) - 1);
     const aY = (vyDes - body.vel.y) * c.climbGain + g;
 
     this._qYaw.setFromAxisAngle(Y, h);

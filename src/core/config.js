@@ -55,6 +55,7 @@ export const CONFIG = {
 
   // Flight mode: fast, nose-first, banked turns. Hover modes are separate.
   flight: {
+    brake: { keep: 0.2, accelG: 2.5 },   // hold L1 / Ctrl: slow to 20% of your speed (never below minSpeed)
     minSpeed: 24, cruiseSpeed: 58, boostSpeed: 133,  // m/s targets (thrust and drag decide what you really get)
     throttleRamp: 0.6,
     speedGain: 0.8,
@@ -144,12 +145,13 @@ export const CONFIG = {
   // Assisted flight: the suit holds altitude, levels itself and brakes when you let go.
   assist: {
     maxSpeed: 22, boostSpeed: 30,
-    climbRate: 18, boostClimbRate: 25, descendRate: 14,
+    climbRate: 18, boostClimbRate: 25, descendRate: 24,
+    landingBrake: 12,  // fast descents ease off near the ground/roofs so you never hit hard (m/s² planned stop)
     // Vertical steering jets: help reach and hold the climb/descent speed quickly (m/s²)
     vertical: { gain: 5, accel: 16 },
     // Thruster cut-off (hold Z / press L2 all the way): free-fall, then the jets catch you.
     // If the ground (or a roof) is coming up too fast, they fire on their own to save the landing.
-    cutoff: { padThreshold: 0.92, catchAccel: 22, safetyMargin: 1.4, safetyExtra: 3 },
+    cutoff: { catchAccel: 22, safetyMargin: 1.4, safetyExtra: 3, noDamageTime: 2 },
     // Lift reserve: when you need to stop sinking or climb, briefly draw extra thrust from stored charge
     liftReserve: { thrustMult: 1.5, below: 1.0 },   // kicks in when you're sinking more than 1 m/s slower than wanted
     maxTiltDeg: 28, boostTiltDeg: 45,
@@ -255,9 +257,10 @@ export const CONFIG = {
       yawLeft: ['KeyQ'],
       yawRight: ['KeyE'],
       up: ['Space'],
-      down: ['KeyC', 'ControlLeft'],
+      down: ['KeyC'],
+      brake: ['ControlLeft', 'ControlRight'],   // flight: hold to brake
       boost: ['ShiftLeft', 'ShiftRight'],
-      cut: ['KeyZ'],             // hover: hold to cut the thrusters and drop
+      cut: ['KeyZ'],             // hover: hold to cut the thrusters and drop (or double-tap C and hold)
     },
     actions: {
       mode: ['KeyM'],
@@ -285,14 +288,17 @@ export const CONFIG = {
       rollFlick: 0.75,        // right stick pushed this far sideways in flight = barrel roll (hold = corkscrew)
       invertFlightY: false,   // true: pull the stick back to dive
       sticks: { moveX: 0, moveY: 1, lookX: 2, lookY: 3 },
-      analog: { up: 7, down: 6 },       // R2 climb / throttle up, L2 descend / throttle down
-      hold: { boost: 5 },               // R1 boost / afterburner
+      analog: { up: 7, down: 6 },       // flight: R2 throttle up, L2 throttle down
+      hold: { boost: 5 },               // flight: R1 boost / afterburner
+      flightBrake: 4,                   // flight: hold L1 to brake
+      hover: { up: 5, down: 4, boost: 7 },   // hover: R1 climb, L1 descend (double-tap L1 and hold: cut thrusters), R2 boost
+      doubleTap: 0.3,                   // seconds between taps for the L1 double-tap
       actions: {
         flight: 0,    // Cross
         flip: 1,      // Circle
         grab: 2,      // Square
         camera: 3,    // Triangle
-        mode: 4,      // L1 (flight: flares)
+        flare: 13,    // D-pad down: flares (flight)
         help: 8,      // Create
         workshop: 9,  // Options
         reset: 17,    // Touchpad press

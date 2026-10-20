@@ -245,7 +245,7 @@ export class Game {
         } else {
           // From the ground, launch upward like a rocket
           this.controller.enterFlight(this.body, this.grounded ? CONFIG.launch.groundPitch : null);
-          this.launch(this.boostHeld);
+          this.launch(this.boostHeld || this.takeoffBoostHeld);
         }
         break;
       case 'flip':
@@ -338,6 +338,7 @@ export class Game {
     this.liftReserve = this.controller.mode === 'assist' && !this.grounded && !launching && !input.boost
       && vyWant - body.vel.y > a.liftReserve.below;
     this.boostHeld = input.boost;
+    this.takeoffBoostHeld = !!input.takeoffBoost;
     this.lastInput = input;
     const extra = launching ? l.thrustMult * (this.launchPower ?? 1) : this.liftReserve ? a.liftReserve.thrustMult : 1;
     updateThrusterAvailability(suit, input.boost, dt, extra);
@@ -375,14 +376,19 @@ export class Game {
         input.cut = false;
         if (!this.safetyCatch) events.emit('toast', { text: 'Thrusters back on: too close to land' });
         this.safetyCatch = true;
+        this.catchGrace = CONFIG.assist.cutoff.noDamageTime;
       }
     } else if (!input.cut) this.safetyCatch = false;
     this.cutting = !!input.cut && hovering && !this.grounded;
+    this.catchGrace = Math.max(0, (this.catchGrace ?? 0) - dt);
+    this.caps.room = body.pos.y - CONFIG.pilot.feetHeight - this.surfaceBelow(body.pos);   // height above whatever's below
     const cmd = this.controller.update(body, input, this.caps, this.grounded, dt);
     // Vertical steering jets: reach the climb / descent speed quickly, and catch you after a drop
     if (this.controller.mode === 'assist' && !this.controller.flying && !this.grounded && !input.cut && this.hoverBrakeT <= 0) {
       const a = CONFIG.assist, vyWant = input.up * (input.boost ? a.boostClimbRate : a.climbRate) - input.down * (input.boost ? a.boostClimbRate : a.descendRate);
-      const err = vyWant - body.vel.y;
+      // Descending fast: ease off near whatever's below so you never hit hard
+      const vyFloor = -Math.sqrt(2 * a.landingBrake * Math.max(0, this.caps.room - 0.5)) - 1;
+      const err = Math.max(vyWant, vyFloor) - body.vel.y;
       const lim = err > 0 && body.vel.y < -2 ? a.cutoff.catchAccel : a.vertical.accel;   // braking a fall gets the strongest push
       body.force.y += body.mass * THREE.MathUtils.clamp(err * a.vertical.gain, -a.vertical.accel, lim);
     }
@@ -402,6 +408,11 @@ export class Game {
       const a = this._c.set(cmd.hoverVel.x - body.vel.x, 0, cmd.hoverVel.z - body.vel.z).multiplyScalar(ag.gain)
         .clampLength(0, input.boost ? ag.boostAccel : ag.accel);
       body.force.addScaledVector(a, body.mass);
+    }
+    // Flight brake: an air-brake (spread out into the wind) down to the brake's target speed
+    if (this.controller.flying && this.controller.jet.braking) {
+      const sp = body.vel.length(), want = this.controller.jet.brakeTarget, b = CONFIG.flight.brake;
+      if (sp > want + 0.5) body.force.addScaledVector(body.vel, -body.mass * Math.min(b.accelG * CONFIG.physics.gravity, (sp - want) * 3) / sp);
     }
     // Just switched from flight to hover: brake hard to a hover (thrust + chest into the wind)
     if (this.hoverBrakeT > 0) {
@@ -640,7 +651,7 @@ export class Game {
         this.groundCollider = c.collider;
       }
       const dmg = impactDamage(speed);
-      if (dmg > 0) applyZoneDamage(this.suit, c.sphere.zone, dmg);
+      if (dmg > 0 && !(this.catchGrace > 0)) applyZoneDamage(this.suit, c.sphere.zone, dmg);   // (never hurt by a safety catch)
       if (speed > hardest) hardest = speed;
       if (speed > 3) events.emit('impact', { point: c.point.clone(), speed });
     }
@@ -688,6 +699,7 @@ export class Game {
       mass: b.mass,
       mode: this.controller.mode,
       cutting: this.cutting,
+      braking: this.controller.flying && this.controller.jet.braking,
       throttle: this.controller.flying ? this.controller.jet.throttle : this.controller.throttle,
       gLoad: this.controller.flying ? this.controller.jet.gLoad : 1,
       launchCharge: this.launchCharge,
