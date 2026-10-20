@@ -26,6 +26,9 @@ export class JetFlight {
     this.jinkSide = 0;
     this._qJink = new THREE.Quaternion();
     this.gripTrim = 0;
+    this.bankSign = 1;
+    this._upPerp = new THREE.Vector3();
+    this._bankDir = new THREE.Vector3();
     this._dq = new THREE.Quaternion();
     this._qPrev = new THREE.Quaternion();
     this._hasPrev = false;
@@ -201,8 +204,14 @@ export class JetFlight {
 
     // Bank: put the back (+Z) toward where we need lift (turn center and up).
     // In a flare the back faces away from the wind.
-    this._lift.lerp(this._tmpW.copy(w).negate(), flare);
-    this._z.copy(this._lift).addScaledVector(this._y, -this._lift.dot(this._y));
+    // Keep the back facing roughly up: a mostly-downward push comes from dipping the nose
+    // (negative angle of attack), not from rolling upside down. Hysteresis stops flip-flopping.
+    this._upPerp.copy(Y).addScaledVector(w, -w.y);
+    const upDot = this._upPerp.lengthSq() > 1e-4 ? this._lift.dot(this._upPerp.normalize()) : 1;
+    if (this.bankSign > 0 && upDot < -0.35) this.bankSign = -1;
+    else if (this.bankSign < 0 && upDot > -0.1) this.bankSign = 1;
+    this._bankDir.copy(this._lift).multiplyScalar(this.bankSign).lerp(this._tmpW.copy(w).negate(), flare);
+    this._z.copy(this._bankDir).addScaledVector(this._y, -this._bankDir.dot(this._y));
     if (this._z.lengthSq() < 0.05) this._z.copy(Y).addScaledVector(this._y, -this._y.y);
     if (this._z.lengthSq() < 1e-4) this._z.set(0, 0, 1);
     this._z.normalize();
@@ -234,6 +243,10 @@ export class JetFlight {
       const ang = 2 * Math.acos(Math.min(1, dq.w)), sn = Math.sqrt(Math.max(1e-12, 1 - dq.w * dq.w));
       this._rateNow.set(dq.x, dq.y, dq.z).multiplyScalar(ang / sn / Math.max(dt, 1e-4));
       if (this.rollT > 0 || this.flipT > 0 || this._rateNow.length() > 8) this._rateNow.set(0, 0, 0);
+      // Fades in with speed: at low speed the target swings around too much to trust
+      // (always on while you're steering, so turns stay sharp)
+      const ffScale = steer > 0.2 ? 1 : THREE.MathUtils.smoothstep(speed, c.feedForwardFrom, c.feedForwardFull);
+      this._rateNow.multiplyScalar(c.feedForward * ffScale);
       this._ffRate.lerp(this._rateNow, Math.min(1, 10 * dt));
     }
     this._qPrev.copy(qDes);

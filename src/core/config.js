@@ -65,6 +65,7 @@ export const CONFIG = {
     // Carve = steer + pull back (S / stick down): full spread, much tighter, bleeds speed.
     spread: { turn: 1.8, carve: 3.2, rate: 6 },
     carve: { maxG: 14, turnRate: 3.6, cornerSpeed: 34, maxLeadDeg: 60, turnGain: 4 },
+    feedForward: 1, feedForwardFrom: 30, feedForwardFull: 50,  // turn anticipation, faded in by speed (m/s)
     gripLearn: 3,                   // how fast the assist corrects for less grip than expected
     maxAoaDeg: 32,                  // best-grip body angle; beyond this you'd stall
     maxLeadDeg: 35,                 // how far the aim can get ahead of where you're actually going
