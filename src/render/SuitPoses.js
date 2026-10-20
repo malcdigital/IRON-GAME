@@ -31,20 +31,21 @@ export const POSES = {
   },
   // Hovering (set in the Pose Studio from the hover reference sheet)
   hover: {
-    hands: { Left: { curl: -40, thumb: -8 }, Right: { curl: -1, thumb: -8 } },
-    LeftArm: { aim: [-0.41, -0.91, 0.03] },
-    RightArm: { aim: [0.62, -0.78, 0.08] },
-    LeftForeArm: { aim: [-0.61, -0.7, -0.37] },
-    RightForeArm: { aim: [0.62, -0.68, -0.38] },
-    LeftHand: { aim: [-0.93, -0.29, -0.24], twist: 0 },
-    RightHand: { aim: [0.71, -0.34, -0.62], twist: 0 },
-    LeftUpLeg: { aim: [-0.41, -0.9, -0.11] },
-    RightUpLeg: { aim: [0.12, -1, -0.14] },
-    LeftLeg: { aim: [-0.1, -0.78, 0.62] },
+    hands: { Left: { curl: -6, thumb: -8 }, Right: { curl: -7, thumb: -8 } },
+    LeftArm: { aim: [-0.23, -0.97, 0.07] },
+    RightArm: { aim: [0.25, -0.96, -0.14] },
+    LeftForeArm: { aim: [-0.45, -0.89, 0.01] },
+    RightForeArm: { aim: [0.43, -0.9, -0.03] },
+    LeftHand: { aim: [-0.98, -0.1, -0.17], twist: 0 },
+    RightHand: { aim: [0.82, -0.26, -0.52], twist: -32, rot: [3, 0, 0] },
+    LeftUpLeg: { aim: [0.01, -0.99, -0.11] },
+    RightUpLeg: { aim: [0.11, -0.99, 0.01] },
+    LeftLeg: { aim: [-0.55, -0.81, 0.21] },
     RightLeg: { aim: [0.1, -1, 0.16] },
-    LeftFoot: { rot: [0, 0, 0], aim: [-0.59, -0.8, -0.11] },
-    RightFoot: { rot: [-30, 0, 0] },
+    LeftFoot: { rot: [0, 0, 0], aim: [-0.39, -0.73, -0.56] },
+    RightFoot: { rot: [0, 0, 0], aim: [0.34, -0.91, -0.22] },
   },
+
   // Flight: head up to look where you're going, arms back along the body
   flight: {
     hands: { Right: { curl: -20, thumb: 30 }, Left: { curl: 8, thumb: 0 } },
