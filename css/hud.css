@@ -393,7 +393,7 @@ body:not(.device-gamepad) .start-kbd { display: none; }
 }
 .studio-head { display: flex; align-items: center; justify-content: space-between; }
 .studio-head h2 { font: 900 22px/1 var(--font-display); letter-spacing: 0.04em; text-transform: uppercase; color: var(--amber); margin: 0; }
-.studio-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.studio-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
 .studio-tab {
   font: 600 14px/1 var(--font-ui); letter-spacing: 0.06em; text-transform: uppercase;
   padding: 8px 6px; border-radius: 3px; border: 1px solid var(--edge); background: transparent; color: var(--ink-dim); cursor: pointer;

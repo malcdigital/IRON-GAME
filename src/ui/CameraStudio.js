@@ -6,7 +6,7 @@ import { SHOT_KEYS } from '../render/CameraRig.js';
 // Drag on the view to orbit, scroll to zoom, Shift+drag (or right-drag) to shift the framing.
 // Changes are saved in this browser; "Copy settings" gives text to paste into config.js.
 
-const SHOTS = [['hover', 'Hover'], ['flight', 'Flight'], ['boost', 'Boost']];
+const SHOTS = [['hover', 'Hover'], ['flight', 'Flight'], ['boost', 'Boost'], ['charge', 'Charge']];
 const FIELDS = {
   distance:  { label: 'Distance', min: 2, max: 30, step: 0.1, unit: ' m' },
   orbit:     { label: 'Orbit round you', min: -180, max: 180, step: 1, unit: '°' },

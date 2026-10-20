@@ -10,7 +10,7 @@ export const SHOT_KEYS = ['distance', 'orbit', 'height', 'shoulder', 'lookUp', '
 
 // Which shot fits what the suit is doing right now
 export function shotFor(game, boost) {
-  if (!game.controller.flying) return 'hover';
+  if (!game.controller.flying) return game.charging ? 'charge' : 'hover';
   return boost ? 'boost' : 'flight';
 }
 
@@ -101,7 +101,9 @@ export class CameraRig {
       this.shotName = name;
       this.from = { ...this.cur };
       this.blendT = this.snapNext ? 1 : 0;
-      this.blendDur = (this.flyingBefore !== ctrl.flying) ? cc.modeBlendTime : cc.shotBlendTime;
+      this.blendDur = (this.flyingBefore !== ctrl.flying) ? cc.modeBlendTime
+        : (name === 'charge' || this.from && this.lastShot === 'charge') ? cc.charge.blendTime : cc.shotBlendTime;
+      this.lastShot = name;
     }
     const shot = cc.shots[this.shotName];
     this.blendT = Math.min(1, this.blendT + dt / this.blendDur);
@@ -145,7 +147,7 @@ export class CameraRig {
     // Charging up (L1 + R1 crouch): punch in, narrow the view, a little shake
     this.spring('charge', game.charging ? 1 : 0, cc.charge.spring, dt);
     const cw = THREE.MathUtils.clamp(this.sp.charge.x, 0, 1.2);
-    const zoom = this.sp.zoom.x * (1 - m.punch.distance * punch) * (1 - cc.charge.punchIn * cw);
+    const zoom = this.sp.zoom.x * (1 - m.punch.distance * punch);
     const fovMult = 1 + m.moveFov * this.sp.move.x + m.hardTurnFov * this.sp.hard.x;   // widens with the same easing
     const shoulder = s.shoulder + this.sp.side.x;
 
@@ -231,7 +233,7 @@ export class CameraRig {
     this.camera.lookAt(this.look);
 
     // Field of view: the shot's, a little wider at speed
-    const wantFov = s.fov * fovMult * (1 + cc.burst.fovMult * bw) * (1 - cc.charge.fovCut * cw) - cc.moments.punch.fov * punch + Math.min(cc.speedFovMax, Math.max(0, speed - cc.speedFovFrom) * cc.speedFovPer);
+    const wantFov = s.fov * fovMult * (1 + cc.burst.fovMult * bw) - cc.moments.punch.fov * punch + Math.min(cc.speedFovMax, Math.max(0, speed - cc.speedFovFrom) * cc.speedFovPer);
     this.camera.fov += (wantFov - this.camera.fov) * (this.snapNext ? 1 : Math.min(1, 3 * dt));
     if (bw > 0.01) this.camera.up.copy(Y), this.up.copy(Y);   // (boosted takeoff: horizon held level)
     this.camera.updateProjectionMatrix();
