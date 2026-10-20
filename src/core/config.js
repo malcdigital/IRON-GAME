@@ -248,7 +248,17 @@ export const CONFIG = {
     landSpeedFull: 10, landTime: 0.45, crouchDeg: 35,   // landing crouch: full at this fall speed, back up in landTime s
     stepsPerMeter: 0.9, walkSwing: 28,            // walking legs
     limits: true,                   // keep every joint within real human ranges (SuitPoses.js LIMITS)
-    groundRoom: 0.25,               // counts as standing when the feet are within this of the ground (m)
+    groundRoom: 0.25,
+    // Hover body language, from the physics. amount scales it all (1 = as tuned, 0 = off).
+    hover: {
+      amount: 1.3,
+      react: 5,                     // how quickly it reacts (higher = snappier)
+      tiltMax: 32,                  // most the body tilts (degrees)
+      pushPerMs2: 1.4,              // extra tilt per m/s² of speeding up or braking
+      legTrail: 1.6, armSweep: 1.0, // how far legs trail and arms sweep back, × the tilt
+      twistPerRads: 14, twistMax: 25,   // turning: chest twist per rad/s of turn (degrees)
+      climbFull: 12,                // climb / drop speed (m/s) for the full arms-and-legs reaction
+    },               // counts as standing when the feet are within this of the ground (m)
   },
   suitModel: { url: 'assets/suit.json', height: 1.9, feetY: -1.03, turn: Math.PI,
     pods: false,                    // the winged back pods (sheet A has none: a vent between the shoulders instead)

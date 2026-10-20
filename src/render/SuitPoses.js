@@ -34,10 +34,10 @@ export const POSES = {
     hands: { Left: { curl: -6, thumb: -8 }, Right: { curl: -7, thumb: -8 } },
     LeftArm: { aim: [-0.23, -0.97, 0.07] },
     RightArm: { aim: [0.25, -0.96, -0.14] },
-    LeftForeArm: { aim: [-0.45, -0.89, 0.01] },
-    RightForeArm: { aim: [0.43, -0.9, -0.03] },
-    LeftHand: { aim: [-0.98, -0.1, -0.17], twist: 0 },
-    RightHand: { aim: [0.82, -0.26, -0.52], twist: -32, rot: [3, 0, 0] },
+    LeftForeArm: { aim: [-0.45, -0.89, 0.01], twist: 30 },     // forearm twists turn the palms (hand thrusters) to the ground
+    RightForeArm: { aim: [0.43, -0.9, -0.03], twist: -40 },
+    LeftHand: { aim: [-0.98, -0.1, -0.17], twist: -15 },
+    RightHand: { aim: [0.82, -0.26, -0.52], twist: -10, rot: [3, 0, 0] },
     LeftUpLeg: { aim: [0.01, -0.99, -0.11] },
     RightUpLeg: { aim: [0.11, -0.99, 0.01] },
     LeftLeg: { aim: [-0.55, -0.81, 0.21] },
@@ -172,9 +172,10 @@ export class SuitPoser {
       let flexAxis;
       if (b.hinge) flexAxis = b.hinge.clone();
       else if (/Hand$/.test(b.name)) {
-        const palmSide = this.byName[b.name + 'Middle1'] && this.byName[b.name + 'Middle1'].hinge
-          ? new THREE.Vector3().crossVectors(this.byName[b.name + 'Middle1'].hinge, b.dir) : new THREE.Vector3(0, 0, -1);
+        // at rest the arms hang with the palms facing the thighs (inward)
+        const palmSide = new THREE.Vector3(b.name.startsWith('Left') ? 1 : -1, 0, 0);
         flexAxis = new THREE.Vector3().crossVectors(b.dir, palmSide);
+        b.palm = palmSide.clone().addScaledVector(b.dir, -palmSide.dot(b.dir)).normalize();   // the way the palm faces (thrusters fire out of it)
       } else flexAxis = new THREE.Vector3(1, 0, 0);
       flexAxis.addScaledVector(b.dir, -flexAxis.dot(b.dir)).normalize();
       if (flexAxis.lengthSq() < 0.5) continue;
@@ -189,6 +190,9 @@ export class SuitPoser {
     this.walkPhase = 0;
     this.lean = new THREE.Vector2();    // smoothed hover movement (right, forward) m/s
     this.side = 0;                      // smoothed sideways push in flight, m/s²
+    this.accH = new THREE.Vector2();    // smoothed push in hover (right, forward), m/s²
+    this.yawRate = 0;                   // smoothed turning speed, rad/s
+    this.vy = 0;                        // smoothed climb speed, m/s
     this.lastVel = new THREE.Vector3();
     this.wasGrounded = true;
     this.lastVy = 0;
@@ -202,6 +206,7 @@ export class SuitPoser {
     if (this.preview) {   // Pose Studio: hold one pose, no movement on top
       for (const s of STATES) this.w[s] = s === this.preview ? 1 : 0;
       this.crouch = 0; this.walk = 0; this.lean.set(0, 0); this.side = 0;
+      this.accH.set(0, 0); this.yawRate = 0; this.vy = 0;
       return this.apply();
     }
     const P = CONFIG.pose;
@@ -222,6 +227,11 @@ export class SuitPoser {
     this.lean.x += (vL.x - this.lean.x) * kl;
     this.lean.y += (-vL.z - this.lean.y) * kl;
     this.side += (THREE.MathUtils.clamp(acc.x, -80, 80) - this.side) * (1 - Math.exp(-P.turnRate * dt));
+    const H = P.hover, kh = 1 - Math.exp(-H.react * dt);
+    this.accH.x += (THREE.MathUtils.clamp(acc.x, -40, 40) - this.accH.x) * kh;
+    this.accH.y += (THREE.MathUtils.clamp(-acc.z, -40, 40) - this.accH.y) * kh;
+    this.yawRate += ((body.angVel?.y ?? 0) - this.yawRate) * kh;
+    this.vy += (body.vel.y - this.vy) * kh;
 
     // landing: crouch by how hard you came down, then stand back up
     if (grounded && !this.wasGrounded) this.crouch = Math.min(1, Math.max(this.crouch, -this.lastVy / P.landSpeedFull));
@@ -268,13 +278,28 @@ export class SuitPoser {
     }
     // 2. motion on top
     const add = (n, x, y, z) => { const b = R[n]; if (b) { b.rot.x += x; b.rot.y += y; b.rot.z += z; } };
-    // hover: the body tilts into the way you're moving and the legs trail
-    const hv = w.hover + w.stand * 0.3;
-    const fwd = THREE.MathUtils.clamp(this.lean.y * P.leanPerMs, -P.leanMax, P.leanMax) * hv;
-    const rt = THREE.MathUtils.clamp(this.lean.x * P.leanPerMs, -P.leanMax, P.leanMax) * hv;
-    add('Spine02', -fwd * 0.6, 0, -rt * 0.6);
-    for (const n of ['LeftUpLeg', 'RightUpLeg']) add(n, -fwd * 1.1, 0, -rt * 1.1);
-    for (const n of ['LeftArm', 'RightArm']) add(n, -fwd * 0.5, 0, -rt * 0.4);
+    // hover: body language from the physics, a little exaggerated (CONFIG.pose.hover)
+    const H = P.hover, hv = (w.hover + w.stand * 0.3) * H.amount;
+    const clampD = (v, m) => THREE.MathUtils.clamp(v, -m, m);
+    // tilt into where you're going (speed) with an extra lurch when you speed up or brake (push)
+    const fwd = clampD(this.lean.y * P.leanPerMs + this.accH.y * H.pushPerMs2, H.tiltMax) * hv;
+    const rt = clampD(this.lean.x * P.leanPerMs + this.accH.x * H.pushPerMs2, H.tiltMax) * hv;
+    add('Spine02', -fwd * 0.5, 0, -rt * 0.5); add('Spine01', -fwd * 0.3, 0, -rt * 0.3);
+    add('Head', fwd * 0.45, 0, rt * 0.3);                                   // eyes stay on where you're going
+    for (const n of ['LeftUpLeg', 'RightUpLeg']) add(n, -fwd * H.legTrail, 0, -rt * H.legTrail);   // legs trail behind
+    for (const n of ['LeftLeg', 'RightLeg']) add(n, -Math.abs(fwd) * 0.5, 0, 0);                 // knees fold as they swing back
+    for (const n of ['LeftArm', 'RightArm']) add(n, -fwd * H.armSweep, 0, -rt * H.armSweep * 0.7);   // arms sweep back
+    // turning: the chest leads into the turn, the hips and legs lag behind
+    const yaw = clampD(this.yawRate * H.twistPerRads, H.twistMax) * hv;
+    add('Spine01', 0, yaw * 0.6, 0); add('Head', 0, yaw * 0.5, 0);
+    add('LeftUpLeg', 0, -yaw * 0.5, 0); add('RightUpLeg', 0, -yaw * 0.5, 0);
+    // climbing: arms press down to the sides, toes point; dropping: arms lift out, knees tuck
+    const up = THREE.MathUtils.clamp(this.vy / H.climbFull, -1, 1) * hv;
+    const climb = Math.max(0, up), drop = Math.max(0, -up);
+    add('LeftArm', 0, 0, climb * 14 - drop * 28); add('RightArm', 0, 0, -climb * 14 + drop * 28);
+    add('LeftFoot', -climb * 18 + drop * 15, 0, 0); add('RightFoot', -climb * 18 + drop * 15, 0, 0);
+    add('LeftUpLeg', drop * 22, 0, 0); add('RightUpLeg', drop * 16, 0, 0);
+    add('LeftLeg', -drop * 38, 0, 0); add('RightLeg', -drop * 30, 0, 0);
     // flight turns: legs swing out, the lead arm and head lean into the turn
     const fl = w.flight + w.boost;
     const turn = THREE.MathUtils.clamp(-this.side * P.turnPerMs2, -P.turnMax, P.turnMax) * fl;
@@ -349,5 +374,12 @@ export class SuitPoser {
     tAng = THREE.MathUtils.clamp(tAng / D2R, L.twist[0], L.twist[1]) * D2R;
     tw.setFromAxisAngle(r, tAng);
     b.cur.copy(P).multiply(sw.multiply(tw)).multiply(b.rest);
+  }
+
+  // Which way a hand's palm faces right now, in the suit's frame
+  palmDir(side, out = new THREE.Vector3()) {
+    const b = this.byName[`${side}Hand`];
+    if (!b?.palm) return null;
+    return out.copy(b.palm).applyQuaternion(_q.copy(b.rest).invert()).applyQuaternion(b.cur);
   }
 }
