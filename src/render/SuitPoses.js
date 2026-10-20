@@ -351,6 +351,8 @@ export class SuitPoser {
     const seqNow = game.launchSeq;
     const lc = launchCurve(seqNow ? seqNow.t : null, seqNow ? seqNow.jumpAt : 0, seqNow ? seqNow.fireAt : 0, mo.launchClock);
     mo.launch = lc.launch; mo.crouch = lc.crouch;
+    // boosted takeoff: the upright launch pose while the path climbs steeply, easing into flight as it levels
+    if (game.burst) mo.launch = THREE.MathUtils.clamp((game.burst.pitch * 180 / Math.PI - 15) / 45, 0, 1);
     // hopping off the ground into a hover: a small crouch and spring
     const nearGround = (game.caps?.room ?? 9) < 0.6;
     if (this.wasGroundedHop && !flying && !game.launchSeq && body.vel.y > 1.2 && mo.hopClock > M.hopTime) mo.hopClock = 0;

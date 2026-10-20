@@ -145,7 +145,17 @@ export const CONFIG = {
     seq: { jumpAt: 0.35, fireAt: 0.55, jumpSpeed: 8, jumpAngleDeg: 17, airFireAt: 0.15,
       tipRate: 14 },   // during the jump the thrusters are off and the body tips forward (up to tipRate rad/s) to line up with it
     // Climb-out after launching from the ground: nose starts pitchDeg up, eases to levelDeg over time s
-    climb: { pitchDeg: 28, levelDeg: 4, time: 1.4, alignTime: 0.8 } },   // alignTime: s the body is held lined up with the path
+    climb: { pitchDeg: 28, levelDeg: 4, time: 1.4, alignTime: 0.8 },
+    // Boosted takeoff (hold boost as you launch from the ground): jump nearly straight up, then fly
+    // this curve (height y against distance forward x, metres; from art/burst_curve.pdf) toward
+    // where you face, speeding up to speed m/s over rampTime s, body lined up with the path.
+    burst: {
+      jumpAngleDeg: 88, speed: 96, rampTime: 1.6, velGain: 10, posGain: 25, turnRate: 20,   // gains: how tightly it holds the path; turnRate: body turn (rad/s)
+      curve: [
+        { x: 0, y: 0, in: [0, -13.68564], out: [0, 92.17321] },
+        { x: 100, y: 50, in: [-88.11446, -2.798209], out: [36.23938, 1.150837] },
+      ],
+    } },   // alignTime: s the body is held lined up with the path
 
   // Thermal limiter: instead of cutting out at 100%, thrusters and the core
   // taper their output as they get hot, so you sink gently rather than drop.

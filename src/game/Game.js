@@ -17,6 +17,7 @@ import { MissileSystem } from '../world/missiles.js';
 import { storage } from '../core/storage.js';
 import { aeroForce, aeroSteering } from '../physics/aero.js';
 import { pathClear, rayBox } from '../flight/avoidance.js';
+import { BurstPath } from '../flight/burstPath.js';
 
 const Y = new THREE.Vector3(0, 1, 0);
 const SPHERES = CONFIG.collision.spheres.map((s) => ({ ...s, local: new THREE.Vector3(...s.pos) }));
@@ -25,7 +26,7 @@ const FOOT = SPHERES.filter((s) => s.foot).reduce((a, s, _, all) => a.addScaledV
 // The simulation. No rendering, no DOM: it can run headless and is easy to port.
 export class Game {
   constructor(loadout) {
-    this._qTmp = new THREE.Quaternion(); this._qTmp2 = new THREE.Quaternion(); this._qTmp3 = new THREE.Quaternion(); this._jumpQ = new THREE.Quaternion(); this._jumpQ2 = new THREE.Quaternion(); this._xAxis = new THREE.Vector3();
+    this._qTmp = new THREE.Quaternion(); this._qTmp2 = new THREE.Quaternion(); this._qTmp3 = new THREE.Quaternion(); this._v1 = new THREE.Vector3(); this._v2 = new THREE.Vector3(); this._v3 = new THREE.Vector3(); this._v4 = new THREE.Vector3(); this._jumpQ = new THREE.Quaternion(); this._jumpQ2 = new THREE.Quaternion(); this._xAxis = new THREE.Vector3();
     this.world = new World(RANGE);
     this.body = new RigidBody();
     this.controller = new FlightController(CONFIG);
@@ -48,6 +49,7 @@ export class Game {
     this.rescue = null;      // coming round in the air (see stepRescue)
     this.launchKick = null;
     this.launchClimb = null;
+    this.burst = null;       // boosted takeoff along the burst curve (see stepBurst)
     this.launchSeq = null;   // launching: { t, jumpAt, fireAt, ... } (see step)
     this.stunT = 0;          // knocked out by a crash: thrusters off, no control (seconds left)
     this.impactIn = Infinity; // seconds until the suit hits something on its current path
@@ -101,6 +103,7 @@ export class Game {
     this.pendingSnap = null;
     this.launchT = 0;
     this.rescue = null;      // coming round in the air (see stepRescue)
+    this.burst = null;
     this.launchClimb = null;
     this.launchKick = null;
     this.launchSeq = null;
@@ -340,6 +343,8 @@ export class Game {
 
   step(dt, input) {
     const { body, suit } = this;
+    // Climb and descend held together (L1 + R1, e.g. getting ready for a boosted takeoff): hold height
+    if (input.up > 0 && input.down > 0 && !this.controller.flying) input = { ...input, up: 0, down: 0 };
     this.time += dt;
     suit.time = this.time;
 
@@ -370,7 +375,9 @@ export class Game {
       if (!s.jumped && s.t >= s.jumpAt) {
         // jump forward and up at jumpAngleDeg (the way you're facing), so you leave the pad already moving
         s.jumped = true;
-        const h = this.controller.heading ?? 0, a = seq.jumpAngleDeg * Math.PI / 180;
+        const h = this.controller.heading ?? 0, a = (s.boosted ? CONFIG.launch.burst.jumpAngleDeg : seq.jumpAngleDeg) * Math.PI / 180;
+        s.jumpBoosted = s.boosted;
+        s.origin = body.pos.clone().setY(body.pos.y - CONFIG.pilot.feetHeight);   // (the boosted path starts here)
         const up = seq.jumpSpeed * Math.sin(a), fwd = seq.jumpSpeed * Math.cos(a);
         body.vel.y += up;
         body.vel.x += -Math.sin(h) * fwd; body.vel.z += -Math.cos(h) * fwd;
@@ -378,9 +385,16 @@ export class Game {
       if (s.t >= s.fireAt) {
         this.launchSeq = null;
         const c = CONFIG.launch.climb;
-        this.controller.enterFlight(body, s.ground ? c.pitchDeg * Math.PI / 180 : null);
-        if (s.ground) this.launchClimb = { t: 0 };   // ease the nose down over the climb (below)
-        this.launch(s.boosted);
+        if (s.ground && s.jumpBoosted && s.origin) {
+          // Boosted takeoff: fly the burst curve (see stepBurst)
+          this.startBurst(s.origin);
+          this.launch(true);
+          this.launchKick = null;   // (the path sets the speed)
+        } else {
+          this.controller.enterFlight(body, s.ground ? c.pitchDeg * Math.PI / 180 : null);
+          if (s.ground) this.launchClimb = { t: 0 };   // ease the nose down over the climb (below)
+          this.launch(s.boosted);
+        }
       } else {
         // hold still while winding up
         input = { ...input, forward: 0, strafe: 0, yaw: 0, down: 0, cut: false, up: 0 };
@@ -388,7 +402,7 @@ export class Game {
           // in the jump: thrusters off (a real leap), and the body throws itself forward until it
           // lines up with the jump, head first, ready to fire along it
           input.cut = true;
-          const a = (90 - seq.jumpAngleDeg) * Math.PI / 180, h = this.controller.heading ?? 0;
+          const a = (90 - (s.jumpBoosted ? CONFIG.launch.burst.jumpAngleDeg : seq.jumpAngleDeg)) * Math.PI / 180, h = this.controller.heading ?? 0;
           const full = this._jumpQ.setFromAxisAngle(Y, h).multiply(this._qTmp2.setFromAxisAngle(this._xAxis.set(1, 0, 0), -a));
           this.caps.attTarget = full; this.caps.attGain = 3;
           this.spinToward(full, CONFIG.launch.seq.tipRate, 12);
@@ -478,7 +492,14 @@ export class Game {
     this.caps.room = body.pos.y - CONFIG.pilot.feetHeight - this.surfaceBelow(body.pos);   // height above whatever's below
     this.caps.stunned = this.stunT > 0;
     if (this.rescue && !input.cut) this.rescue = null;   // the safety catch took over
+    if (this.burst) this.stepBurst(dt, input);
     const cmd = this.controller.update(body, input, this.caps, this.grounded, dt);
+    if (this.burst) {
+      // the thrusters push whatever the path needs (body frame); turning is done in stepBurst
+      cmd.force.copy(this.burst.need).applyQuaternion(this._qTmp.copy(body.quat).invert());
+      cmd.torque.set(0, 0, 0);
+      cmd.thrust = true;
+    }
     // Vertical steering jets: reach the climb / descent speed quickly, and catch you after a drop
     if (this.controller.mode === 'assist' && !this.controller.flying && !this.grounded && !input.cut && this.hoverBrakeT <= 0) {
       const a = CONFIG.assist, vyWant = input.up * (input.boost ? a.boostClimbRate : a.climbRate) - input.down * (input.boost ? a.boostClimbRate : a.descendRate);
@@ -601,6 +622,9 @@ export class Game {
     this._T.copy(this._gyro);
     this.mixer.apply(this._F, this._T);
     body.force.add(this._F.applyQuaternion(body.quat));
+    // boosted takeoff: anything the thrusters couldn't give (sideways pull round the curve, or past
+    // their power) is topped up so the suit stays on the path
+    if (this.burst) body.force.add(this._c.copy(this.burst.need).sub(this._F));
     body.torque.add(this._T.applyQuaternion(body.quat));
 
     body.force.add(this.aero);
@@ -819,6 +843,51 @@ export class Game {
       if (b.vel.y > -c.rescueSinkSpeed - 1 && r.t > 0.35) { this.rescue = null; events.emit('toast', { text: 'Systems back online' }); }
     }
     return { ...input, cut: true, up: 0, down: 0, forward: 0, strafe: 0, yaw: 0, pitch: 0, roll: 0, boost: false, takeoffBoost: false };
+  }
+
+  // Boosted takeoff along the burst curve (CONFIG.launch.burst): starts at the jump point, in the
+  // direction you face. Speed builds smoothly to burst.speed; the body points along the path
+  // (upright at the start, head first once it levels); at the end, normal flight takes over.
+  startBurst(origin) {
+    const B = CONFIG.launch.burst;
+    this.burstPath ??= new BurstPath(B.curve);
+    const h = this.controller.heading ?? 0, fwd = new THREE.Vector3(-Math.sin(h), 0, -Math.cos(h));
+    const rel = this._c.copy(this.body.pos).sub(origin);
+    const x = rel.dot(fwd), y = this.body.pos.y - CONFIG.pilot.feetHeight - origin.y;   // (origin is at the feet)
+    const d = this.burstPath.nearest(Math.max(0, x), Math.max(0, y));
+    this.burst = { origin: origin.clone(), fwd, heading: h, d, t: 0, v0: this.body.vel.length(), need: new THREE.Vector3(), pitch: Math.PI / 2 };
+    this.controller.enterFlight(this.body, this.burstPath.angle(d));
+  }
+
+  stepBurst(dt) {
+    const B = CONFIG.launch.burst, r = this.burst, path = this.burstPath, b = this.body, g = CONFIG.physics.gravity;
+    r.t += dt;
+    // speed along the path: builds smoothly from launch to burst.speed
+    const u = THREE.MathUtils.smoothstep(r.t, 0, B.rampTime);
+    const v = r.v0 + (B.speed - r.v0) * u;
+    const dNext = r.d + v * dt;
+    // where we should be and how we should be moving, now and a moment from now
+    const p = path.at(dNext), a1 = path.angle(dNext), a0 = path.angle(r.d);
+    const tgt = this._c.copy(r.origin).addScaledVector(r.fwd, p.x); tgt.y += p.y + CONFIG.pilot.feetHeight;
+    const vPrev = r.v ?? r.v0;   // (last step's path speed: the feed-forward includes speeding up)
+    const vNow = this._v1.copy(r.fwd).multiplyScalar(Math.cos(a0) * vPrev); vNow.y = Math.sin(a0) * vPrev;
+    r.v = v;
+    const vNext = this._v2.copy(r.fwd).multiplyScalar(Math.cos(a1) * v); vNext.y = Math.sin(a1) * v;
+    // wanted acceleration: follow the curve (feed-forward), match its speed, close any gap
+    const aDes = this._v3.copy(vNext).sub(vNow).divideScalar(Math.max(dt, 1e-4))
+      .addScaledVector(this._v4.copy(vNext).sub(b.vel), B.velGain)
+      .addScaledVector(this._v4.copy(tgt).sub(b.pos), B.posGain);
+    // force the thrusters must give: that, plus holding up against gravity, minus the air's push
+    r.need.copy(aDes).multiplyScalar(b.mass); r.need.y += b.mass * g; r.need.sub(this.aero);
+    r.d = dNext;
+    r.pitch = a1;
+    // the flight controls hold the same heading and climb angle, ready to take over
+    const jet = this.controller.jet;
+    jet.yaw = r.heading; jet.pitch = a1;
+    // body lined up with the path: upright at the start, head first once level
+    const q = this._jumpQ.setFromAxisAngle(Y, r.heading).multiply(this._qTmp2.setFromAxisAngle(this._xAxis.set(1, 0, 0), -(Math.PI / 2 - a1)));
+    this.spinToward(q, B.turnRate, 16);
+    if (r.d >= path.length) this.burst = null;   // end of the curve: normal flight from here
   }
 
   // Turn the body toward an orientation with a strong jet-assisted spin (up to maxRate rad/s)
