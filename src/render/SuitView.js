@@ -176,6 +176,13 @@ export class SuitView {
     this.flames = [];  // { comp, mesh, core }
     this._qInv = new THREE.Quaternion(); this._podQ = new THREE.Quaternion(); this._qId = new THREE.Quaternion();
     this._inv = new THREE.Matrix4(); this._tmpV = new THREE.Vector3(); this._tmpV2 = new THREE.Vector3();
+    events.on('respawn', () => this.resetLook());
+  }
+
+  // After a reset: standing pose, nothing left over from before (poses, springs, streaks)
+  resetLook() {
+    this.poser?.reset();
+    for (const f of this.flames) { f.trail.pts.length = 0; f.trail.mesh.visible = false; f.holder.visible = false; }
   }
 
   build(suit) {

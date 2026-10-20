@@ -81,6 +81,7 @@ export class Game {
   respawn() {
     const b = this.body;
     b.pos.copy(this.world.spawn.pos);
+    b.pos.y = this.surfaceBelow(b.pos) + CONFIG.pilot.feetHeight;   // standing on the pad (not hovering just above it)
     b.vel.set(0, 0, 0);
     b.angVel.set(0, 0, 0);
     b.quat.setFromAxisAngle(Y, this.world.spawn.heading);
@@ -107,6 +108,8 @@ export class Game {
     this.impactIn = Infinity; // seconds until the suit hits something on its current path
     this.launchCharge = 1;
     this.syncMass();
+    this.grounded = true;
+    events.emit('respawn');   // (the suit's look starts fresh too: see SuitView)
   }
 
   // Dump the stored charge into the thrusters for a burst of speed

@@ -739,4 +739,18 @@ export class SuitPoser {
     const a = L.getWorldPosition(_v).applyMatrix4(inv).y, b = Rf.getWorldPosition(_v).applyMatrix4(inv).y;
     return Math.min(a, b);
   }
+
+  // Back to a clean start (after a reset): standing, nothing carried over
+  reset() {
+    for (const s of STATES) this.w[s] = s === 'stand' ? 1 : 0;
+    this.brace = 0; this.limp = 0; this.crouch = 0; this.walk = 0; this.walkPhase = 0;
+    this.lean.set(0, 0); this.side = 0; this.accH.set(0, 0); this.yawRate = 0; this.vy = 0; this.upS = 0; this.upV = 0; this.ay = 0;
+    Object.assign(this.flt, { pull: 0, lat: 0, roll: 0, rollAcc: 0, lastRoll: 0 });
+    this.mom = { flare: 0, launch: 0, crouch: 0, hop: 0, recover: 0, launchCount: null, launchClock: 9, hopClock: 9, recoverClock: 9 };
+    for (const sp of Object.values(this.legSpring)) Object.assign(sp, { x: 0, vx: 0, z: 0, vz: 0 });
+    this.limbs = {}; this.handFlex = null; this.fidgetIn = 2; this.pitch = 0;
+    this.geff.set(0, -9.8, 0); this._prevVel = null; this.primed = false;
+    this.wasGrounded = true; this.wasGroundedHop = true; this.wasStunned = false; this.lastVy = 0;
+    this.apply();
+  }
 }
