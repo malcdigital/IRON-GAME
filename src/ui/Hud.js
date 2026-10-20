@@ -81,7 +81,7 @@ export class Hud {
 
     const mode = t.mode === 'assist' ? 'Hover · assist'
       : t.mode === 'manual' ? `Hover · manual · ${Math.round(t.throttle * 100)}%`
-      : `Flight · throttle ${Math.round(t.throttle * 100)}%`;
+      : t.carving ? 'Flight · carving' : `Flight · throttle ${Math.round(t.throttle * 100)}%`;
     const twrClass = t.twr < 1 ? 'bad' : t.twr < 1.15 ? 'warn' : '';
     this.readout.innerHTML = `
       <span class="chip ${t.mode}">${mode}</span>

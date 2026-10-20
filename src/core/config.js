@@ -47,6 +47,7 @@ export const CONFIG = {
   // belly-first catches lots of air (that's what gives lift and braking).
   aero: {
     plates: [0.8, 0.11, 4],  // N per (m/s)^2 against air hitting the side, head, belly/back
+    wing: { coeff: 8, base: 0.3, liftToDrag: 5, stallDeg: 35 },  // spread arms and legs as wings
     steerPerV2: 0.2,           // at speed the pilot steers with arms and legs (N·m per (m/s)^2)
     steerMax: 1500,
     smoothing: 0.1,            // seconds, for the flight assist's lift estimate
@@ -57,9 +58,15 @@ export const CONFIG = {
     minSpeed: 24, cruiseSpeed: 58, boostSpeed: 95,  // m/s targets (thrust and drag decide what you really get)
     throttleRamp: 0.6,
     speedGain: 0.8,
-    turnRate: 1.6, pitchRate: 1.4,  // rad/s
+    turnRate: 2.2, pitchRate: 1.4,  // rad/s
     turnGain: 3,
-    maxG: 4, boostMaxG: 6,
+    maxG: 6, boostMaxG: 7.5,
+    // Turning spreads the arms and legs to catch more air (more lift, more drag).
+    // Carve = steer + pull back (S / stick down): full spread, much tighter, bleeds speed.
+    spread: { turn: 1.8, carve: 3.2, rate: 6 },
+    carve: { maxG: 14, turnRate: 3.6, cornerSpeed: 34, maxLeadDeg: 60, turnGain: 4 },
+    gripLearn: 3,                   // how fast the assist corrects for less grip than expected
+    maxAoaDeg: 32,                  // best-grip body angle; beyond this you'd stall
     maxLeadDeg: 35,                 // how far the aim can get ahead of where you're actually going
     rollTime: 0.6, dodgeAccel: 16, rollMaxRate: 14,  // barrel roll
     flipTime: 0.9, flipMaxG: 10, flipMaxRate: 4.5,  // 180° reverse

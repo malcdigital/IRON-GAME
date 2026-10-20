@@ -11,6 +11,7 @@ import { CargoView } from './render/CargoView.js';
 import { Effects } from './render/Effects.js';
 import { CameraRig } from './render/CameraRig.js';
 import { SpeedLines } from './render/SpeedLines.js';
+import { VaporTrails } from './render/VaporTrails.js';
 import { ChaseView } from './render/ChaseView.js';
 import { Hud } from './ui/Hud.js';
 import { Workshop } from './ui/Workshop.js';
@@ -28,6 +29,7 @@ function start(hotData) {
   const effects = new Effects(renderer.scene);
   const cam = new CameraRig(renderer.camera);
   const speedLines = new SpeedLines(renderer.scene);
+  const vapor = new VaporTrails(renderer.scene);
   const chaseView = new ChaseView(renderer.scene, game.chase);
 
   const hud = new Hud(document);
@@ -145,6 +147,7 @@ function start(hotData) {
     worldView.update(game.course, clockTime);
     effects.update(dt);
     speedLines.update(game.body, dt);
+    vapor.update(game, dt);
     chaseView.update(dt, clockTime);
     cam.update(game, dt);
     renderer.follow(game.body.pos);

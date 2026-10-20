@@ -1,5 +1,6 @@
 import * as THREE from '../lib/three.js';
 import { events } from '../core/events.js';
+import { wingCoeff } from '../physics/aero.js';
 
 const Y = new THREE.Vector3(0, 1, 0);
 const clamp = THREE.MathUtils.clamp;
@@ -20,6 +21,14 @@ export class JetFlight {
     this.flipT = 0;
     this.prevRoll = 0;
     this.gLoad = 1;
+    this.spread = 1;
+    this.gripTrim = 0;
+    this._dq = new THREE.Quaternion();
+    this._qPrev = new THREE.Quaternion();
+    this._hasPrev = false;
+    this._rateNow = new THREE.Vector3();
+    this._ffRate = new THREE.Vector3();
+    this.carving = false;
 
     this._d = new THREE.Vector3();
     this._v = new THREE.Vector3();
@@ -49,6 +58,8 @@ export class JetFlight {
     if (pitchOverride != null) this.pitch = pitchOverride;
     this.throttle = 0.5;
     this.rollT = this.flipT = 0;
+    this._hasPrev = false;
+    this._ffRate.set(0, 0, 0);
   }
 
   flip() {
@@ -77,13 +88,21 @@ export class JetFlight {
 
     // Steer the flight path. Turn rate drops at speed so turns stay within the G limit.
     const fast = input.boost || caps.launching;
-    const maxG = (this.flipT > 0 ? c.flipMaxG : fast ? c.boostMaxG : c.maxG) * g;
-    const turnRate = Math.min(c.turnRate, maxG / Math.max(speed, 1));
+    // Carve: steering hard while pulling back. Pull no longer climbs; it tightens the turn.
+    const steer = Math.abs(input.strafe);
+    this.carving = steer > 0.3 && input.forward < -0.3 && this.flipT <= 0;
+    const turnMaxG = this.carving ? c.carve.maxG : fast ? c.boostMaxG : c.maxG;
+    const maxG = (this.flipT > 0 ? c.flipMaxG : turnMaxG) * g;
+    const rateCap = this.carving ? c.carve.turnRate : c.turnRate;
+    const turnRate = Math.min(rateCap, maxG / Math.max(speed, 1));
+    // Spread the body to catch air: some when turning, full when carving
+    const spreadWant = 1 + (this.carving ? c.spread.carve - 1 : (c.spread.turn - 1) * steer);
+    this.spread += (spreadWant - this.spread) * Math.min(1, c.spread.rate * dt);
     const oldYaw = this.yaw, oldPitch = this.pitch;
     const vDir = speed > 1 ? this._v.copy(v).divideScalar(speed) : null;
     const leadBefore = vDir ? Math.acos(clamp(this.direction.dot(vDir), -1, 1)) : 0;
     this.yaw -= input.strafe * turnRate * dt;
-    this.pitch = clamp(this.pitch - input.forward * c.pitchRate * dt, -1.45, 1.45);
+    if (!this.carving) this.pitch = clamp(this.pitch - input.forward * c.pitchRate * dt, -1.45, 1.45);
     if (this.flipT > 0) {
       this.yaw += (Math.PI * dt) / c.flipTime;
       this.flipT -= dt;
@@ -91,7 +110,7 @@ export class JetFlight {
     // Don't let the aim run too far ahead of where the suit is really going
     if (speed > 10 && this.flipT <= 0) {
       const lead = Math.acos(clamp(this.direction.dot(vDir), -1, 1));
-      if (lead > THREE.MathUtils.degToRad(c.maxLeadDeg) && lead > leadBefore) {
+      if (lead > THREE.MathUtils.degToRad(this.carving ? c.carve.maxLeadDeg : c.maxLeadDeg) && lead > leadBefore) {
         this.yaw = oldYaw;
         this.pitch = oldPitch;
       }
@@ -101,20 +120,22 @@ export class JetFlight {
     this.throttle = clamp(this.throttle + (input.up - input.down) * c.throttleRamp * dt, 0, 1);
     // Close to the ground and not diving on purpose: lift the nose
     // Hands off the pitch: the path eases back to level
-    if (input.forward === 0 && this.flipT <= 0) this.pitch *= Math.exp(-c.autoLevel * dt);
+    if ((input.forward === 0 || this.carving) && this.flipT <= 0) this.pitch *= Math.exp(-c.autoLevel * dt);
     const ga = c.groundAvoid;
     // Look ahead: where will we be in a moment at this sink rate?
     const predicted = caps.altitude + Math.min(0, v.y) * ga.lookahead;
     const pitchFloor = predicted < ga.height && input.forward <= 0 ? ga.pitch : -Infinity;
     const savedPitch = this.pitch;
     this.pitch = Math.max(this.pitch, pitchFloor);
-    const vTarget = fast ? c.boostSpeed : c.minSpeed + (c.cruiseSpeed - c.minSpeed) * this.throttle;
+    const vTargetBase = fast ? c.boostSpeed : c.minSpeed + (c.cruiseSpeed - c.minSpeed) * this.throttle;
+    // Carving brakes to cornering speed: slower = tighter
+    const vTarget = this.carving ? Math.min(vTargetBase, c.carve.cornerSpeed) : vTargetBase;
 
     // Wanted acceleration: speed along the path, plus pulling the velocity onto the path
     const d = this.direction;
     this.pitch = savedPitch;
     const along = v.dot(d);
-    this._aPerp.copy(v).addScaledVector(d, -along).multiplyScalar(-c.turnGain);
+    this._aPerp.copy(v).addScaledVector(d, -along).multiplyScalar(-(this.carving ? c.carve.turnGain : c.turnGain));
     // Keep height-keeping (vertical) and turning (sideways) on separate budgets
     const vert = clamp(this._aPerp.y, -c.verticalMaxG * g, c.verticalMaxG * g);
     this._aPerp.y = 0;
@@ -142,16 +163,24 @@ export class JetFlight {
     const need = body.mass * this._lift.length();
     if (this._lift.lengthSq() > 1e-6) this._lift.normalize();
     else this._lift.copy(Y).addScaledVector(w, -w.y).normalize();
-    const avail = 0.5 * this.cfg.aero.plates[2] * speed * speed + caps.maxLift * 0.7;
-    const aoa = 0.5 * Math.asin(clamp(need / Math.max(avail, 1), 0, 1));
+    // Grip available at the best angle: belly plate + wings + some thrust
+    // Sideways grip per unit of sin(angle): belly plate + wings + some thrust
+    const avail = (this.cfg.aero.plates[2] + wingCoeff(this.cfg.aero, this.spread)) * speed * speed + caps.maxLift * 0.7;
+    // Never tilt past the best-grip angle (past it the body stalls: less grip, much more drag)
+    // Learn from what the air actually gave last moment: if grip fell short, tilt more
+    const got = body.mass * this._tmpW.copy(caps.aeroAccel).addScaledVector(w, -caps.aeroAccel.dot(w)).length();
+    if (speed > 15 && need > 500) this.gripTrim = clamp(this.gripTrim + (need - got) / need * c.gripLearn * dt, 0, 1.5);
+    else this.gripTrim *= Math.exp(-2 * dt);
+    const aoa = Math.min(THREE.MathUtils.degToRad(c.maxAoaDeg), Math.asin(clamp((need / Math.max(avail, 1)) * (1 + this.gripTrim), 0, 1)));
     this._yFast.copy(w).multiplyScalar(Math.cos(aoa)).addScaledVector(this._lift, Math.sin(aoa));
 
     // Use the fast style only when moving quickly AND roughly where we want to go.
     // Aiming far off the path (a flip) means a braking burn: thrust straight at the new direction.
-    const blend = THREE.MathUtils.smoothstep(speed, 10, 22) * THREE.MathUtils.smoothstep(d.dot(w), 0.3, 0.8);
+    const aligned = this.carving ? 1 : THREE.MathUtils.smoothstep(d.dot(w), 0.3, 0.8);
+    const blend = THREE.MathUtils.smoothstep(speed, 10, 22) * aligned;
     // Flare: aiming way off the path at speed -> swing upright, chest into the wind.
     // The body becomes an air brake, then thrust takes over once slow.
-    const flare = THREE.MathUtils.smoothstep(speed, 12, 25) * (1 - THREE.MathUtils.smoothstep(d.dot(w), -0.1, 0.5));
+    const flare = this.carving ? 0 : THREE.MathUtils.smoothstep(speed, 12, 25) * (1 - THREE.MathUtils.smoothstep(d.dot(w), -0.1, 0.5));
     this._yFlare.copy(Y).addScaledVector(w, -w.y);
     if (this._yFlare.lengthSq() < 1e-3) this._yFlare.copy(d);
     this._yFlare.normalize();
@@ -180,8 +209,20 @@ export class JetFlight {
     this._up.copy(Y).applyQuaternion(body.quat);
     this._A.sub(caps.aeroAccel);
     out.force.set(0, Math.max(0, body.mass * this._A.dot(this._up)), 0);
+    // How fast the target attitude is turning (feed-forward), smoothed
+    if (this._hasPrev) {
+      const dq = this._dq.multiplyQuaternions(qDes, this._qPrev.invert());
+      if (dq.w < 0) dq.set(-dq.x, -dq.y, -dq.z, -dq.w);
+      const ang = 2 * Math.acos(Math.min(1, dq.w)), sn = Math.sqrt(Math.max(1e-12, 1 - dq.w * dq.w));
+      this._rateNow.set(dq.x, dq.y, dq.z).multiplyScalar(ang / sn / Math.max(dt, 1e-4));
+      if (this.rollT > 0 || this.flipT > 0 || this._rateNow.length() > 8) this._rateNow.set(0, 0, 0);
+      this._ffRate.lerp(this._rateNow, Math.min(1, 10 * dt));
+    }
+    this._qPrev.copy(qDes);
+    this._hasPrev = true;
+
     const rate = this.rollT > 0 ? c.rollMaxRate : this.flipT > 0 ? c.flipMaxRate : this.cfg.attitude.maxRate;
-    attitude(body, qDes, caps.assistGain * c.attitudeGain, out.torque, rate);
+    attitude(body, qDes, caps.assistGain * c.attitudeGain, out.torque, rate, this._ffRate);
     out.thrust = true;
     return out;
   }

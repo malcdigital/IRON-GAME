@@ -36,6 +36,7 @@ export class FlightController {
     this._qErr = new THREE.Quaternion();
     this._e = new THREE.Vector3();
     this._w = new THREE.Vector3();
+    this._ff = new THREE.Vector3();
   }
 
   reset(heading = 0) {
@@ -150,7 +151,8 @@ export class FlightController {
   }
 
   // PD controller that rotates the body toward qDes
-  attitudeTorque(body, qDes, gain, out, maxRate = this.cfg.attitude.maxRate) {
+  // ffRate (optional, world frame): how fast the target itself is turning, so we keep up instead of lagging
+  attitudeTorque(body, qDes, gain, out, maxRate = this.cfg.attitude.maxRate, ffRate = null) {
     const a = this.cfg.attitude;
     this._qInv.copy(body.quat).invert();
     this._qErr.multiplyQuaternions(qDes, this._qInv);
@@ -167,6 +169,7 @@ export class FlightController {
     // Turn the angle error into a wanted spin rate (capped), then torque toward that rate.
     // Capping the rate stops big moves from asking for more torque than the suit has.
     this._e.multiplyScalar(kp / kd).clampLength(0, maxRate);
+    if (ffRate) this._e.add(this._ff.copy(ffRate).applyQuaternion(this._qInv));
     out.set(
       (this._e.x - this._w.x) * kd * body.inertia.x,
       (this._e.y - this._w.y) * kd * body.inertia.y,

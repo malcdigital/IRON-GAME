@@ -163,7 +163,7 @@ export class Game {
     this.twr = maxLift / (body.mass * CONFIG.physics.gravity);
 
     // Air on the body: lift, drag. The flight assist works with a smoothed estimate.
-    aeroForce(body, CONFIG.aero, this.aero);
+    aeroForce(body, CONFIG.aero, this.aero, this.controller.flying ? this.controller.jet.spread : 1);
     const k = 1 - Math.exp(-dt / CONFIG.aero.smoothing);
     this.caps.aeroAccel.lerp(this._tmp.copy(this.aero).divideScalar(body.mass), k);
 
@@ -337,6 +337,7 @@ export class Game {
       throttle: this.controller.flying ? this.controller.jet.throttle : this.controller.throttle,
       gLoad: this.controller.flying ? this.controller.jet.gLoad : 1,
       launchCharge: this.launchCharge,
+      carving: this.controller.flying && this.controller.jet.carving,
       launching: this.launchT > 0,
       powerDraw: s.powerDraw,
       powerOut: s.powerOutput(),
