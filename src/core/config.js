@@ -220,15 +220,15 @@ export const CONFIG = {
   // Look: painted sunset sky, low warm sun, lavender haze, glow and a palette grade (see Renderer)
   art: {
     style: 'anime',                 // suit shading: 'anime' (soft, warm rim light), 'toon' (hard bands) or 'realistic'
-    exposure: 1.0,
-    sunElevation: 9, sunAzimuth: 35,   // low sun (degrees above the horizon; direction round from -Z)
-    sunColor: 0xffc58a, sunIntensity: 2.6,
-    skyLight: 0xb9a8e0, groundLight: 0x3f8f8c, ambient: 0.95,   // lavender above, teal bounce below
-    haze: 0xd9b3b8, hazeNear: 90, hazeFar: 820,                 // distance haze (warm lavender-pink)
-    sky: { top: 0x2b3266, mid: 0x7a6aa8, horizon: 0xffbe7a, below: 0x5e7c96, sun: 0xffd9a0,
+    exposure: 1.25,
+    sunElevation: 14, sunAzimuth: 35,   // low sun (degrees above the horizon; direction round from -Z)
+    sunColor: 0xffc994, sunIntensity: 3.2,
+    skyLight: 0xc6b8ec, groundLight: 0x6fa8a4, ambient: 1.4,   // lavender above, teal bounce below
+    haze: 0xe6c4c4, hazeNear: 90, hazeFar: 820,                 // distance haze (warm lavender-pink)
+    sky: { top: 0x3c4a8c, mid: 0x8f80c0, horizon: 0xffbe7a, below: 0x7d9ab0, sun: 0xffd9a0,
            cloudLit: 0xffd2a8, cloudShade: 0x6b5f8f },
     bloom: { strength: 0.35, radius: 0.5, threshold: 0.93 },    // glow on bright things
-    grade: { warm: 0xffeedd, cool: 0xd2dcf4, saturation: 1.12, vignette: 0.28 },
+    grade: { warm: 0xffeedd, cool: 0xd2dcf4, saturation: 1.12, vignette: 0.15 },
     rim: { color: 0xffa860, strength: 0.45, power: 3.2 },        // warm edge light on the suit
     // Thrust streaks: each nozzle leaves a glowing ribbon. life = how long a bit of it lasts (s);
     // it drifts out of the nozzle at exhaustSpeed (m/s) plus carry × the suit's own speed
