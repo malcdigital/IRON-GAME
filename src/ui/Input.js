@@ -18,11 +18,25 @@ export class Input {
     }
     const gameCodes = new Set([...Object.values(bindings.axes).flat(), ...this.actionByCode.keys()]);
 
+    // Double-tap detection for jukes
+    this.tapAxis = new Map();
+    for (const axis of ['left', 'right', 'forward', 'back']) {
+      for (const code of bindings.axes[axis]) this.tapAxis.set(code, axis);
+    }
+    this.lastTap = {};
+
     target.addEventListener('keydown', (e) => {
       if (isTyping(e.target)) return;
       this.lastDevice = 'keyboard';
       if (gameCodes.has(e.code)) e.preventDefault();
       if (!e.repeat && this.actionByCode.has(e.code)) this.queue.push(this.actionByCode.get(e.code));
+      if (!e.repeat && this.tapAxis.has(e.code)) {
+        const axis = this.tapAxis.get(e.code), now = performance.now() / 1000, dt = bindings.doubleTap;
+        if (now - (this.lastTap[axis] ?? -9) < dt.window) {
+          this.queue.push(dt[axis]);
+          this.lastTap[axis] = -9;
+        } else this.lastTap[axis] = now;
+      }
       this.held.add(e.code);
     });
     target.addEventListener('keyup', (e) => this.held.delete(e.code));

@@ -22,6 +22,9 @@ export class JetFlight {
     this.prevRoll = 0;
     this.gLoad = 1;
     this.spread = 1;
+    this.jinkT = 0;
+    this.jinkSide = 0;
+    this._qJink = new THREE.Quaternion();
     this.gripTrim = 0;
     this._dq = new THREE.Quaternion();
     this._qPrev = new THREE.Quaternion();
@@ -62,6 +65,12 @@ export class JetFlight {
     this._ffRate.set(0, 0, 0);
   }
 
+  // Juke: the shove is applied by the game; here the assist lets it carry and banks the suit
+  jink(side) {
+    this.jinkT = this.cfg.evade.jinkTime;
+    this.jinkSide = side;
+  }
+
   flip() {
     if (this.flipT > 0) return false;
     this.flipT = this.cfg.flight.flipTime;
@@ -79,7 +88,8 @@ export class JetFlight {
 
     // Barrel roll on a fresh Q/E press
     const roll = input.roll || 0;
-    if (roll !== 0 && this.prevRoll === 0 && this.rollT <= 0) {
+    // Fresh press = one roll; holding (corkscrew) keeps rolling
+    if (roll !== 0 && this.rollT <= 0 && (this.prevRoll === 0 || this.cfg.evade.corkscrew)) {
       this.rollT = c.rollTime;
       this.rollDir = roll;
       events.emit('maneuver', { name: 'roll' });
@@ -137,6 +147,8 @@ export class JetFlight {
     const along = v.dot(d);
     this._aPerp.copy(v).addScaledVector(d, -along).multiplyScalar(-(this.carving ? c.carve.turnGain : c.turnGain));
     // Keep height-keeping (vertical) and turning (sideways) on separate budgets
+    // During a juke, let the shove carry instead of pulling straight back onto the path
+    if (this.jinkT > 0) this._aPerp.multiplyScalar(0.15);
     const vert = clamp(this._aPerp.y, -c.verticalMaxG * g, c.verticalMaxG * g);
     this._aPerp.y = 0;
     this._aPerp.clampLength(0, maxG);
@@ -199,6 +211,12 @@ export class JetFlight {
     this._m.makeBasis(this._x, this._y, this._z);
     const qDes = this._qRoll.setFromRotationMatrix(this._m);
 
+    if (this.jinkT > 0) {
+      const t = 1 - this.jinkT / this.cfg.evade.jinkTime;
+      const bank = THREE.MathUtils.degToRad(this.cfg.evade.jinkBankDeg) * Math.sin(Math.PI * t) * this.jinkSide;
+      qDes.multiply(this._qJink.setFromAxisAngle(Y, bank));
+      this.jinkT -= dt;
+    }
     if (this.rollT > 0) {
       const t = 1 - this.rollT / c.rollTime;
       const eased = t * t * (3 - 2 * t);

@@ -121,6 +121,8 @@ kbd + kbd { margin-left: 3px; }
 .readout dd.warn { color: var(--warm); }
 .readout dd.bad { color: var(--hot); }
 .readout dd.good { color: var(--good); }
+.readout dd.pips { color: var(--cool); letter-spacing: 0.1em; }
+.readout dd.pips span { color: var(--ink-dim); opacity: 0.6; }
 
 .chip {
   align-self: flex-start;
@@ -355,3 +357,24 @@ body:not(.has-gamepad) .pad-map { order: 1; }
 
 /* Controls help takes the right side while open */
 .hud:has(#help:not([hidden])) .hud-tr { display: none; }
+
+/* Missile markers */
+.threats { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.threat { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+.threat i {
+  position: absolute; left: -16px; top: -16px; width: 32px; height: 32px;
+  border: 2px solid var(--hot); border-radius: 2px;
+  animation: blink 0.4s steps(2) infinite;
+}
+.threat.edge i {
+  left: -14px; top: -10px; width: 0; height: 0; border-radius: 0;
+  border: 0; border-top: 10px solid transparent; border-bottom: 10px solid transparent;
+  border-left: 26px solid var(--hot);
+  transform-origin: 14px 10px;
+}
+.threat span {
+  position: absolute; left: 20px; top: -8px; white-space: nowrap;
+  font: 500 12px/1 var(--font-data); color: var(--hot);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+@media (prefers-reduced-motion: reduce) { .threat i { animation: none; } }

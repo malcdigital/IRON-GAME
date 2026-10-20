@@ -12,10 +12,12 @@ import { Effects } from './render/Effects.js';
 import { CameraRig } from './render/CameraRig.js';
 import { SpeedLines } from './render/SpeedLines.js';
 import { VaporTrails } from './render/VaporTrails.js';
+import { MissileView } from './render/MissileView.js';
 import { ChaseView } from './render/ChaseView.js';
 import { Hud } from './ui/Hud.js';
 import { Workshop } from './ui/Workshop.js';
 import { Input } from './ui/Input.js';
+import { ThreatMarkers } from './ui/ThreatMarkers.js';
 
 function start(hotData) {
   const loadout = validLoadout(hotData?.loadout ?? storage.get('loadout') ?? STARTER_LOADOUT);
@@ -30,12 +32,14 @@ function start(hotData) {
   const cam = new CameraRig(renderer.camera);
   const speedLines = new SpeedLines(renderer.scene);
   const vapor = new VaporTrails(renderer.scene);
+  const missileView = new MissileView(renderer.scene, game.missiles);
   const chaseView = new ChaseView(renderer.scene, game.chase);
 
   const hud = new Hud(document);
   hud.buildSystems(game.suit);
   const workshop = new Workshop(document.getElementById('workshop'));
   const input = new Input(window, CONFIG.keys);
+  const threats = new ThreatMarkers(document.getElementById('hud'));
 
   let started = false;
   let paused = true;
@@ -69,6 +73,9 @@ function start(hotData) {
   });
   events.on('crash', ({ speed }) => input.gamepad.rumble(Math.min(1, speed / 20), Math.min(1, speed / 12), 120 + speed * 8));
   events.on('overheat', () => input.gamepad.rumble(0.2, 0.6, 250));
+  events.on('missile:hit', ({ pos }) => { effects.burst(pos, 40, 10); input.gamepad.rumble(1, 1, 500); });
+  events.on('missile:dodged', ({ pos }) => effects.burst(pos, 25, 8));
+  events.on('missile:launch', () => input.gamepad.rumble(0.1, 0.4, 200));
   events.on('launch', () => input.gamepad.rumble(0.7, 1, 450));
   events.on('maneuver', () => input.gamepad.rumble(0, 0.35, 140));
   events.on('gamepad:connected', () => {
@@ -148,11 +155,15 @@ function start(hotData) {
     effects.update(dt);
     speedLines.update(game.body, dt);
     vapor.update(game, dt);
+    missileView.update(dt, clockTime);
     chaseView.update(dt, clockTime);
     cam.update(game, dt);
     renderer.follow(game.body.pos);
     renderer.render();
-    if (started) hud.update(game.telemetry(), clockTime);
+    if (started) {
+      hud.update(game.telemetry(), clockTime);
+      threats.update(renderer.camera, game.missiles.missiles, game.body.pos);
+    }
 
     requestAnimationFrame(frame);
   }

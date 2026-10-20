@@ -19,6 +19,21 @@ function downtown({ cols = 8, rows = 8, spacing = 40, footprint = 24, originZ = 
   return boxes;
 }
 
+// Evasion range: tall pillars to break a missile's line of sight
+function pillars({ center, radius, count, seed }) {
+  let s = seed;
+  const rand = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    const a = rand() * Math.PI * 2, r = 60 + rand() * (radius - 80);
+    const h = Math.round(30 + rand() * 60), w = 6 + Math.round(rand() * 6);
+    out.push({ id: `pillar-${i}`, kind: 'pillar', pos: [center[0] + Math.cos(a) * r, h / 2, center[1] + Math.sin(a) * r], size: [w, h, w] });
+  }
+  return out;
+}
+
+const EVASION = { center: [460, -380], radius: 300 };
+
 export const RANGE = {
   groundSize: 3000,
   spawn: { pos: [0, 1.05, 0], heading: 0 },
@@ -46,7 +61,15 @@ export const RANGE = {
     { id: 'junk3', kind: 'junk', pos: [18, 1.25, -52], size: [4, 2.5, 3] },
     { id: 'junk4', kind: 'junk', pos: [4, 0.6, -100], size: [2.5, 1.2, 2.5] },
     ...downtown({}),
+    ...pillars({ center: EVASION.center, radius: EVASION.radius, count: 14, seed: 11 }),
   ],
+
+  // Missile launchers fire while you're airborne inside this zone
+  evasion: {
+    center: EVASION.center,
+    radius: EVASION.radius,
+    launchers: [[460, 0, -380], [590, 0, -250], [350, 0, -560]],
+  },
 
   // Drone chase: the drone flies this loop (through the downtown streets) when you get close.
   chasePath: [

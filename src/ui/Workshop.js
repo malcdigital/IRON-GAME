@@ -1,3 +1,4 @@
+import { CONFIG } from '../core/config.js';
 import { events } from '../core/events.js';
 import { SLOTS, SLOT_LABELS, STARTER_LOADOUT, partsForSlot } from '../data/parts.js';
 import { Suit } from '../suit/Suit.js';
@@ -5,10 +6,10 @@ import { Suit } from '../suit/Suit.js';
 function partStats(p) {
   if (p.thrusters) {
     const t = p.thrusters[0], n = p.thrusters.length;
-    return `${n > 1 ? `${n} × ` : ''}${t.thrust} N · heat ${t.heatRate}/s · ${t.hp} hp · ${p.mass} kg`;
+    return `${n > 1 ? `${n} × ` : ''}${t.thrust} N · heat ${t.heatRate}/s · ${t.hp * CONFIG.damage.durability} hp · ${p.mass} kg`;
   }
-  if (p.slot === 'core') return `${p.power} kW output · ${p.hp} hp · ${p.mass} kg`;
-  if (p.slot === 'chest') return `Armor ×${p.armor} · cooling ×${p.coolMult} · ${p.hp} hp · ${p.mass} kg`;
+  if (p.slot === 'core') return `${p.power} kW output · ${p.hp * CONFIG.damage.durability} hp · ${p.mass} kg`;
+  if (p.slot === 'chest') return `Armor ×${p.armor} · cooling ×${p.coolMult} · ${p.hp * CONFIG.damage.durability} hp · ${p.mass} kg`;
   if (p.slot === 'helmet') return `Gyro ${p.gyro} N·m · assist ${Math.round(p.assist * 100)}% · ${p.mass} kg`;
   return `${p.mass} kg`;
 }

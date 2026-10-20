@@ -49,7 +49,8 @@ export class Suit {
     this.list = ORDER.map((id) => this.components.get(id)).filter(Boolean);
   }
 
-  addComponent(id, label, slot, partId, part, hp, heatRate, cool) {
+  addComponent(id, label, slot, partId, part, baseHp, heatRate, cool) {
+    const hp = baseHp * CONFIG.damage.durability;
     const comp = {
       id, label, slot, partId, part,
       hp, maxHp: hp, heat: 0, heatRate, cool,

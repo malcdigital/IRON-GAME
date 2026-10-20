@@ -2,7 +2,7 @@ import * as THREE from '../lib/three.js';
 import { concreteTexture, hazardTexture, padTexture, sheetMetalTexture, windowsTexture } from './textures.js';
 
 const BUILDING_TINTS = [0xffffff, 0xd9d2c4, 0xc4ccd2, 0xe3d6c0, 0xb9bdb6];
-const KIND_COLORS = { tower: 0x8e8a80, wall: 0x7d6e5c, block: 0x6f7570, junk: 0x8a5a3a, shed: 0xb0b4b4 };
+const KIND_COLORS = { tower: 0x8e8a80, wall: 0x7d6e5c, block: 0x6f7570, junk: 0x8a5a3a, shed: 0xb0b4b4, pillar: 0x6b6259 };
 
 // Draws the test range from World data.
 export class WorldView {

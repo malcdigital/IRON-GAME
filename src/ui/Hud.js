@@ -32,6 +32,10 @@ export class Hud {
     events.on('chase:start', () => this.toast('The drone is running. Stay close to tag it.', 'hot'));
     events.on('chase:caught', ({ time, record }) => this.toast(`Drone caught in ${clock(time)}${record ? ' · new best' : ''}`, 'good'));
     events.on('chase:lost', () => this.toast('Lost the drone. It went back to its start point.'));
+    events.on('missile:hit', ({ damage }) => this.toast(`Missile hit (${Math.round(damage)} damage)`, 'hot'));
+    events.on('missile:dodged', () => this.toast('Missile dodged', 'good'));
+    events.on('missile:decoyed', () => this.toast('Missile took the flare', 'good'));
+    events.on('flares', ({ left }) => this.toast(`Flares out (${left} left)`));
     events.on('cargo:delivered', ({ crate }) => this.toast(`${crate.name} delivered to Tower A`, 'good'));
   }
 
@@ -93,6 +97,8 @@ export class Hud {
           : `<div><dt>Climb</dt><dd>${t.vs >= 0 ? '+' : ''}${fmt(t.vs)}<small>m/s</small></dd></div>`}
         <div><dt>Thrust / wt</dt><dd class="${twrClass}">${fmt(t.twr, 2)}</dd></div>
         <div><dt>Power</dt><dd class="${t.powerLimited ? 'warn' : ''}">${Math.round(t.powerDraw)}<small>/${Math.round(t.powerOut)} kW</small></dd></div>
+        <div><dt>Juke</dt><dd class="pips">${'●'.repeat(Math.floor(t.evadeCharge))}<span>${'○'.repeat(3 - Math.floor(t.evadeCharge))}</span></dd></div>
+        <div><dt>Flares</dt><dd class="${t.flares === 0 ? 'bad' : ''}">${t.flares}</dd></div>
         <div><dt>Burst</dt><dd class="${t.launching ? 'warn' : t.launchCharge >= 1 ? 'good' : ''}">${t.launching ? 'Go!' : t.launchCharge >= 1 ? 'Ready' : `${Math.round(t.launchCharge * 100)}%`}</dd></div>
       </dl>`;
 
@@ -115,6 +121,11 @@ export class Hud {
     const cargoLine = cg.held
       ? `Carrying <b>${cg.held.name}</b>. Press <kbd>G</kbd> to drop.`
       : cg.inRange ? `Press <kbd>G</kbd> to pick up ${cg.inRange}` : 'Fly next to a crate and press <kbd>G</kbd>';
+    const ms = t.missiles;
+    const evasionBody = ms.inZone || ms.fired > 0
+      ? `<p>${ms.inZone ? '<b>In the zone.</b> Launchers are live.' : 'Outside the zone.'}</p>
+         <p>Dodged ${ms.dodged} · Hit ${ms.hits}</p>`
+      : `<p>Fly east to the red ring (${Math.round(ms.zoneDistance)} m). Missiles fire while you're airborne inside.</p>`;
     const ch = t.chase;
     const chaseBody = ch.state === 'running'
       ? `<p class="big">${clock(ch.elapsed)}</p>
@@ -124,6 +135,10 @@ export class Hud {
         ? `<p>Caught in ${clock(ch.elapsed)}</p>`
         : `<p>Fly to the red beacon (${Math.round(ch.distance)} m) to start. Best ${clock(ch.best)}</p>`;
     this.objectives.innerHTML = `
+      <section>
+        <h3>Evasion range</h3>
+        ${evasionBody}
+      </section>
       <section>
         <h3>Drone chase</h3>
         ${chaseBody}
@@ -147,6 +162,10 @@ export class Hud {
       if (c.hp <= 0) list.push([`${c.label} destroyed`, 'bad']);
       else if (c.overheated) list.push([`${c.label} overheated`, 'bad']);
       else if (c.heat > 85) list.push([`${c.label} hot`, 'warn']);
+    }
+    if (t.missiles.incoming > 0) {
+      const lt = t.missiles.lockTime;
+      list.unshift([`Missile${t.missiles.incoming > 1 ? 's' : ''} incoming${Number.isFinite(lt) ? ` · ${lt.toFixed(1)} s` : ''}`, 'bad']);
     }
     if (t.powerLimited) list.push(['Power limit: core can’t keep up', 'warn']);
     if (t.mode !== 'flight' && t.twr < 1 && t.twr > 0) list.push(['Too heavy to climb', 'bad']);

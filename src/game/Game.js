@@ -13,6 +13,7 @@ import { World } from '../world/World.js';
 import { Course } from '../world/course.js';
 import { CargoSystem } from '../world/cargo.js';
 import { ChaseDrone } from '../world/chase.js';
+import { MissileSystem } from '../world/missiles.js';
 import { aeroForce, aeroSteering } from '../physics/aero.js';
 
 const Y = new THREE.Vector3(0, 1, 0);
@@ -27,6 +28,10 @@ export class Game {
     this.course = new Course(this.world.rings);
     this.cargo = new CargoSystem(RANGE.crates, this.world);
     this.chase = new ChaseDrone(RANGE.chasePath);
+    this.missiles = new MissileSystem(RANGE.evasion, this.world);
+    this.evadeCharge = CONFIG.evade.charges;
+    this.flares = CONFIG.evade.flares;
+    this.flareTimer = 0;
     this.time = 0;
     this.grounded = false;
     this.anyContact = false;
@@ -72,6 +77,9 @@ export class Game {
     this.suit.repair();
     if (this.cargo.held) this.cargo.release();
     this.chase?.reset();
+    this.missiles?.reset();
+    this.evadeCharge = CONFIG.evade.charges;
+    this.flares = CONFIG.evade.flares;
     this.u.fill(0);
     this.caps.aeroAccel.set(0, 0, 0);
     this.launchT = 0;
@@ -90,6 +98,35 @@ export class Game {
     this.launchT = l.time;
     this.body.vel.addScaledVector(this.controller.jet.direction, l.kick);
     events.emit('launch');
+  }
+
+  // Sharp sidestep: a burst from the stored charge
+  juke(dir) {
+    const e = CONFIG.evade;
+    if (this.evadeCharge < 1) {
+      events.emit('toast', { text: 'Juke recharging' });
+      return;
+    }
+    this.evadeCharge -= 1;
+    const flying = this.controller.flying;
+    const fwd = flying ? this.controller.jet.direction.clone() : new THREE.Vector3(-Math.sin(this.controller.heading), 0, -Math.cos(this.controller.heading));
+    const right = new THREE.Vector3().crossVectors(fwd, Y);
+    if (right.lengthSq() < 1e-4) right.set(1, 0, 0);
+    right.normalize();
+    const shove = { left: right.clone().negate(), right, up: Y.clone(), down: Y.clone().negate() }[dir];
+    this.body.vel.addScaledVector(shove, e.jukeSpeed);
+    if (flying) this.controller.jet.jink(dir === 'left' ? 1 : dir === 'right' ? -1 : 0);
+    events.emit('maneuver', { name: 'juke', dir });
+  }
+
+  fireFlares() {
+    if (this.flares <= 0) {
+      events.emit('toast', { text: 'Out of flares, reloading' });
+      return;
+    }
+    this.flares -= 1;
+    this.missiles.fireFlares(this.body);
+    events.emit('flares', { left: this.flares });
   }
 
   hoverFraction() {
@@ -115,9 +152,15 @@ export class Game {
       case 'flip':
         if (this.controller.flying && this.controller.jet.flip()) events.emit('maneuver', { name: 'flip' });
         break;
+      case 'jukeLeft': case 'jukeRight': case 'jukeUp': case 'jukeDown':
+        this.juke(action.slice(4).toLowerCase());
+        break;
+      case 'flare':
+        this.fireFlares();
+        break;
       case 'mode': {
         if (this.controller.flying) {
-          events.emit('toast', { text: 'Press F to leave flight mode first' });
+          this.fireFlares();   // in flight the hover-mode button drops flares
           break;
         }
         const hover = this.hoverFraction();
@@ -244,6 +287,15 @@ export class Game {
     this.course.update(body.pos, this.time);
     this.cargo.update(dt, body, CONFIG.physics);
     this.chase.update(dt, body.pos, this.time);
+    this.missiles.update(dt, body, suit);
+
+    // Evade charges and flares refill over time
+    const e = CONFIG.evade;
+    this.evadeCharge = Math.min(e.charges, this.evadeCharge + dt / e.rechargeTime);
+    if (this.flares < e.flares) {
+      this.flareTimer += dt;
+      if (this.flareTimer >= e.flareRecharge) { this.flareTimer = 0; this.flares++; }
+    } else this.flareTimer = 0;
   }
 
   // Legs keep you upright while standing
@@ -338,6 +390,15 @@ export class Game {
       gLoad: this.controller.flying ? this.controller.jet.gLoad : 1,
       launchCharge: this.launchCharge,
       carving: this.controller.flying && this.controller.jet.carving,
+      evadeCharge: this.evadeCharge,
+      flares: this.flares,
+      missiles: {
+        inZone: this.missiles.inZone,
+        zoneDistance: this.missiles.zoneDistance(b.pos),
+        incoming: this.missiles.missiles.filter((m) => m.target === 'player').length,
+        lockTime: this.missiles.lockTime,
+        ...this.missiles.stats,
+      },
       launching: this.launchT > 0,
       powerDraw: s.powerDraw,
       powerOut: s.powerOutput(),

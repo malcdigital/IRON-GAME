@@ -109,6 +109,7 @@ export const CONFIG = {
   heat: { overheatAt: 100, restartBelow: 55, wearAbove: 92, wearRate: 3, passiveCool: 2 },
 
   damage: {
+    durability: 2,          // multiplies every part's condition (2 = takes twice the punishment)
     safeImpactSpeed: 5.5,   // m/s; slower hits do nothing
     impactScale: 4, impactExp: 1.35,
     minEfficiency: 0.4,     // a thruster at 1 hp still gives 40%
@@ -116,6 +117,26 @@ export const CONFIG = {
   },
 
   recover: { delay: 1.6 },
+
+  // Evasive moves. Jukes and flares use charges that refill over time.
+  evade: {
+    charges: 3, rechargeTime: 2,    // juke charges, seconds per charge
+    jukeSpeed: 24,                   // sideways shove (m/s)
+    jinkTime: 0.45,                  // flight assist lets the shove carry you this long
+    jinkBankDeg: 70,                 // the suit snaps into a bank toward the dodge
+    doubleTapWindow: 0.25,           // seconds between taps for a keyboard juke
+    corkscrew: true,                 // hold Q/E to keep rolling
+    flares: 4, flareRecharge: 6, flaresPerShot: 3, flareBurn: 3,
+  },
+
+  // Evasion range: launchers fire guided missiles while you're airborne in the red zone.
+  missiles: {
+    speed: 100, boostTime: 1, maxG: 7, navGain: 5, lead: 0.6,  // faster than you, but turns wider
+    seekerUpdate: 0.18,              // the seeker only refreshes this often, so jukes fool it
+    fuel: 9, proximity: 4, damage: 60,
+    fireInterval: 5, maxAlive: 2, range: 450, minAltitude: 4,
+    flareCone: 30, flareChance: 0.4,
+  },
 
   chase: { startRadius: 40, tagRadius: 16, tagTime: 4, loseDistance: 450, minSpeed: 18, maxSpeed: 72, catchUpGain: 0.6 },  // seconds lying still before the pilot stands back up
 
@@ -147,6 +168,7 @@ export const CONFIG = {
     },
     actions: {
       mode: ['KeyM'],
+      flare: ['KeyZ'],
       flight: ['KeyF'],
       flip: ['KeyX'],
       grab: ['KeyG'],
@@ -155,6 +177,9 @@ export const CONFIG = {
       camera: ['KeyV'],
       help: ['KeyH'],
     },
+
+    // Double-tap a direction key to juke that way (W = drop, S = pop up)
+    doubleTap: { window: 0.25, left: 'jukeLeft', right: 'jukeRight', forward: 'jukeDown', back: 'jukeUp' },
 
     // PS5 DualSense (any controller with the standard layout works).
     // Button numbers follow the browser's standard gamepad layout:
@@ -172,10 +197,11 @@ export const CONFIG = {
         flip: 1,      // Circle
         grab: 2,      // Square
         camera: 3,    // Triangle
-        mode: 4,      // L1
+        mode: 4,      // L1 (hover: assist/manual · flight: flares)
         help: 8,      // Create
         workshop: 9,  // Options
         reset: 17,    // Touchpad press
+        jukeLeft: 14, jukeRight: 15, jukeUp: 12, jukeDown: 13,  // D-pad
       },
       menu: { select: 0, back: 1, up: 12, down: 13 },
       rumble: true,
