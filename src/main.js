@@ -18,6 +18,7 @@ import { Hud } from './ui/Hud.js';
 import { Workshop } from './ui/Workshop.js';
 import { Input } from './ui/Input.js';
 import { ThreatMarkers } from './ui/ThreatMarkers.js';
+import { prompts } from './ui/prompts.js';
 
 function start(hotData) {
   const loadout = validLoadout(hotData?.loadout ?? storage.get('loadout') ?? STARTER_LOADOUT);
@@ -40,6 +41,7 @@ function start(hotData) {
   const workshop = new Workshop(document.getElementById('workshop'));
   const input = new Input(window, CONFIG.keys);
   const threats = new ThreatMarkers(document.getElementById('hud'));
+  prompts.apply(document);
 
   let started = false;
   let paused = true;
@@ -70,7 +72,7 @@ function start(hotData) {
     storage.set('loadout', game.suit.loadout);
     cam.snap();
     workshop.close();
-    hud.toast('New build on the pad. Hold Space to lift off.');
+    hud.toast('New build on the pad. Hold {up} to lift off.');
   });
   events.on('crash', ({ speed }) => input.gamepad.rumble(Math.min(1, speed / 20), Math.min(1, speed / 12), 120 + speed * 8));
   events.on('overheat', () => input.gamepad.rumble(0.2, 0.6, 250));
@@ -80,10 +82,11 @@ function start(hotData) {
   events.on('launch', () => input.gamepad.rumble(0.7, 1, 450));
   events.on('maneuver', () => input.gamepad.rumble(0, 0.35, 140));
   events.on('gamepad:connected', () => {
-    hud.toast('Controller connected. Press Create for the button map.', 'good');
+    prompts.set('gamepad');
+    hud.toast('Controller connected. Press {help} for the button map.', 'good');
     document.body.classList.add('has-gamepad');
   });
-  events.on('gamepad:disconnected', () => hud.toast('Controller disconnected'));
+  events.on('gamepad:disconnected', () => { prompts.set('keyboard'); hud.toast('Controller disconnected'); });
   events.on('impact', ({ point, speed }) => effects.burst(point, Math.min(40, Math.round(speed * 3)), Math.min(8, speed * 0.6)));
 
   // Menu navigation with a controller (start screen and workshop)

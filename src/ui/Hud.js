@@ -1,4 +1,5 @@
 import { events } from '../core/events.js';
+import { prompts } from './prompts.js';
 
 const fmt = (n, d = 1) => (Number.isFinite(n) ? n.toFixed(d) : '–');
 
@@ -48,7 +49,7 @@ export class Hud {
   toast(text, kind = '') {
     const t = document.createElement('div');
     t.className = `toast ${kind}`;
-    t.textContent = text;
+    t.textContent = prompts.format(text);
     this.toasts.prepend(t);
     while (this.toasts.children.length > 4) this.toasts.lastChild.remove();
     setTimeout(() => t.classList.add('out'), 3200);
@@ -119,8 +120,8 @@ export class Hud {
     const cg = t.cargo;
     const crates = cg.crates.map((c) => `<li class="${c.delivered ? 'done' : ''}">${c.name} <small>${c.mass} kg</small></li>`).join('');
     const cargoLine = cg.held
-      ? `Carrying <b>${cg.held.name}</b>. Press <kbd>G</kbd> to drop.`
-      : cg.inRange ? `Press <kbd>G</kbd> to pick up ${cg.inRange}` : 'Fly next to a crate and press <kbd>G</kbd>';
+      ? `Carrying <b>${cg.held.name}</b>. Press ${prompts.kbd('grab')} to drop.`
+      : cg.inRange ? `Press ${prompts.kbd('grab')} to pick up ${cg.inRange}` : `Fly next to a crate and press ${prompts.kbd('grab')}`;
     const ms = t.missiles;
     const evasionBody = ms.inZone || ms.fired > 0
       ? `<p>${ms.inZone ? '<b>In the zone.</b> Launchers are live.' : 'Outside the zone.'}</p>
@@ -153,7 +154,7 @@ export class Hud {
         <ul>${crates}</ul>
         <p>${cargoLine}</p>
       </section>
-      ${t.atWorkshop ? '<p class="note">On the workshop pad. Press <kbd>B</kbd> to swap parts.</p>' : ''}`;
+      ${t.atWorkshop ? `<p class="note">On the workshop pad. Press ${prompts.kbd('workshop')} to swap parts.</p>` : ''}`;
   }
 
   updateWarnings(t) {

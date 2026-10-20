@@ -71,6 +71,7 @@ export class Workshop {
           <div>
             <h2>Workshop</h2>
             <p>Swap parts, check the numbers, then fly it. Applying a build puts you back on the pad, repaired.</p>
+            <p class="ws-pad-hint" data-device="gamepad"><kbd>D-pad</kbd> move · <kbd>✕</kbd> pick · <kbd>○</kbd> close</p>
           </div>
           <button class="icon-btn" data-act="close" aria-label="Close workshop">✕</button>
         </header>

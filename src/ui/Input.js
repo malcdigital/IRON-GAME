@@ -1,4 +1,5 @@
 import { GamepadInput } from './GamepadInput.js';
+import { prompts } from './prompts.js';
 
 // All player input. Keyboard and controller both feed the same axes and actions,
 // and bindings for both live in config.js.
@@ -28,6 +29,7 @@ export class Input {
     target.addEventListener('keydown', (e) => {
       if (isTyping(e.target)) return;
       this.lastDevice = 'keyboard';
+      prompts.set('keyboard');
       if (gameCodes.has(e.code)) e.preventDefault();
       if (!e.repeat && this.actionByCode.has(e.code)) this.queue.push(this.actionByCode.get(e.code));
       if (!e.repeat && this.tapAxis.has(e.code)) {
@@ -41,6 +43,7 @@ export class Input {
     });
     target.addEventListener('keyup', (e) => this.held.delete(e.code));
     window.addEventListener('blur', () => this.held.clear());
+    window.addEventListener('pointerdown', (e) => { if (e.pointerType === 'mouse') prompts.set('keyboard'); });
   }
 
   // Call once per frame before reading axes or actions
@@ -50,6 +53,7 @@ export class Input {
     const g = this.gamepad.axes;
     if (this.queue.length > before || g.forward || g.strafe || g.yaw || g.up || g.down || g.boost) {
       this.lastDevice = 'gamepad';
+      prompts.set('gamepad');
     }
   }
 
