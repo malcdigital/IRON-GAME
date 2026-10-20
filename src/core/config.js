@@ -274,6 +274,12 @@ export const CONFIG = {
   suitStyle: 'model',
   // 'model': the 3D model made from the character sheet (falls back to 'hero' if it can't load)
   // Body language for the 3D suit (poses themselves are in src/render/SuitPoses.js)
+  // Ground movement from the Mixamo clips (src/render/Locomotion.js). Speeds in m/s, turn in rad/s:
+  // moving blends in from moveFrom to moveFull, walk -> run from runFrom to runFull, stepping on the
+  // spot while turning from turnFrom to turnFull. cadence: steps faster (>1) or slower than the ground.
+  locomotion: { enabled: true, url: 'assets/locomotion.json', smooth: 10, moveFrom: 0.15, moveFull: 0.9,
+    runFrom: 3.2, runFull: 5.5, turnFrom: 0.4, turnFull: 1.5, cadence: 1 },
+
   pose: {
     blendRate: 5,                   // how quickly it moves into a new pose
     leanRate: 9, leanPerMs: 1.2, leanMax: 18,     // hover: degrees of lean per m/s of movement (up to leanMax)

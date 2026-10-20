@@ -1,5 +1,6 @@
 import * as THREE from '../lib/three.js';
 import { CONFIG } from '../core/config.js';
+import { Locomotion } from './Locomotion.js';
 
 // Code-driven poses for the 3D suit's skeleton, blended from what the suit is doing.
 //
@@ -233,6 +234,8 @@ export class SuitPoser {
   // model: the placed glTF scene; suitRoot: the object that carries the suit's frame
   constructor(model, bones, suitRoot) {
     this.model = model;
+    this.loco = new Locomotion();
+    this._locoV = new THREE.Vector2();
     this.baseY = model.position.y;
     suitRoot.updateMatrixWorld(true);
     const rootInv = suitRoot.getWorldQuaternion(new THREE.Quaternion()).invert();
@@ -321,6 +324,7 @@ export class SuitPoser {
   // Which pose the suit wants right now, and the extra motion on top
   update(game, boost, dt) {
     if (dt <= 0) return;
+    if (this.preview) this.locoOn = false;   // (the Pose Studio shows the poses as written)
     if (this.preview && this.previewLaunch != null) {
       // Pose Studio launch timeline: play the sequence at time previewLaunch (s)
       const q = CONFIG.launch.seq, t = this.previewLaunch;
@@ -497,6 +501,13 @@ export class SuitPoser {
     const groundSpeed = grounded ? Math.hypot(body.vel.x, body.vel.z) : 0;
     this.walkPhase += groundSpeed * dt * P.stepsPerMeter * Math.PI;
     this.walk = Math.min(1, groundSpeed / 2) * this.w.stand;
+    // on the ground: the locomotion clips (walk, run, strafe, turn, idle) take the place of the stand pose
+    this.locoOn = false;
+    if (CONFIG.locomotion.enabled && this.w.stand > 0.01) {
+      const lv = _v.copy(body.vel).applyQuaternion(_q.copy(body.quat).invert());
+      this.locoOn = this.loco.update(dt, this._locoV.set(lv.x, -lv.z), body.angVel.y);
+      if (this.locoOn) this.walk = 0;
+    }
 
     this.apply();
   }
@@ -509,6 +520,8 @@ export class SuitPoser {
       let restW = 0;
       for (const s of STATES) {
         if (w[s] < 1e-3) continue;
+        const la = s === 'stand' && this.locoOn ? this.loco.aims[b.name] : null;
+        if (la && b.dir) { b.aim.addScaledVector(la, w[s]); b.hasAim = true; continue; }   // (the clips' aim, no stand twists)
         const p = POSES[s][b.name];
         if (p?.aim && b.dir) { b.aim.addScaledVector(_v.fromArray(p.aim).normalize(), w[s]); b.hasAim = true; }
         else if (b.dir) restW += w[s];
@@ -761,8 +774,8 @@ export class SuitPoser {
       // back into the bone's own (parent-relative) rotation
       b.bone.quaternion.copy(_q.copy(pCur).invert().multiply(b.cur));
     }
-    // Crouching (launch wind-up / hop): lower the body so the feet stay where they were
-    const cw = this.w.crouch ?? 0;
+    // Crouching (launch wind-up / hop) and walking: lower the body so the feet stay on the ground
+    const cw = Math.max(this.w.crouch ?? 0, this.locoOn ? this.w.stand : 0);
     if (cw > 0.01 && this.restFootY != null) {
       const f = this.footY();
       this.model.position.y += (this.restFootY - f) * cw;
