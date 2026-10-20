@@ -22,7 +22,7 @@ Each system lives in its own file. Systems talk through a small event bus instea
 | `src/flight/controller.js` | Turns keys into "wanted force and spin" (assist + manual modes) | Add a flight mode |
 | `src/flight/jetFlight.js` | Fast flight mode: banked turns, barrel rolls, flip-and-burn | Tune maneuvers, add new ones |
 | `src/physics/aero.js` | Air on the body: drag, lift, braking | Change how slippery or floaty flight is |
-| `src/flight/allocator.js` | Splits that work between whatever thrusters exist | Never: it handles any thruster layout |
+| `src/flight/thrustMixer.js` + `allocator.js` | Splits the work between whatever thrusters exist, including swivelling nozzles | Rarely: it handles any thruster layout |
 | `src/suit/` | Suit built from a loadout, heat, damage | Add new part effects |
 | `src/world/` | Ring course timer, cargo, drone chase | Add missions (rescue, hacking…) |
 | `src/game/Game.js` | The simulation step. No rendering, no DOM | Add new systems to the update |

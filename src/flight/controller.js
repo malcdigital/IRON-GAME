@@ -36,6 +36,9 @@ export class FlightController {
     this._qErr = new THREE.Quaternion();
     this._e = new THREE.Vector3();
     this._w = new THREE.Vector3();
+    this._aSide = new THREE.Vector3();
+    this._aLean = new THREE.Vector3();
+    this._side = new THREE.Vector3();
     this._ff = new THREE.Vector3();
   }
 
@@ -59,6 +62,9 @@ export class FlightController {
     if (this.mode === 'manual') this.throttle = Math.min(1, hoverFraction);
   }
 
+  // Hover: spin round to face the other way
+  turnAround() { this.heading += Math.PI; }
+
   toggleMode(body, hoverFraction) {
     if (this.mode === 'flight') return this.mode;
     this.mode = this.mode === 'assist' ? 'manual' : 'assist';
@@ -68,6 +74,7 @@ export class FlightController {
   }
 
   update(body, input, caps, grounded, dt) {
+    this.out.sideways = false;
     if (this.mode === 'flight') {
       const out = this.jet.update(body, input, caps, dt, this.out, this._attitude);
       this.heading = this.jet.yaw;
@@ -112,15 +119,24 @@ export class FlightController {
       return out;
     }
 
-    // Tilt the suit so its thrust points along the wanted acceleration
-    this._A.set(this._aH.x, Math.max(aY, 0.3 * g), this._aH.z);
+    // Slide upright: swivelled thrusters push sideways. Lean only for what they can't cover,
+    // and (in upright mode) only while boosting.
+    this._aSide.copy(this._aH).clampLength(0, (caps.sideMax * c.sideUse) / body.mass);
+    this._aLean.subVectors(this._aH, this._aSide);
+    if (c.upright && !input.boost) this._aLean.clampLength(0, g * Math.tan(THREE.MathUtils.degToRad(c.uprightLeanDeg)));
+
+    // Tilt the suit so its main thrust points along the rest of the wanted acceleration
+    this._A.set(this._aLean.x, Math.max(aY, 0.3 * g), this._aLean.z);
     this._up.copy(this._A).normalize();
     this._qTilt.setFromUnitVectors(Y, this._up);
     this._qDes.multiplyQuaternions(this._qTilt, this._qYaw);
 
     this._up.copy(Y).applyQuaternion(body.quat);
     this._A.y = aY;
-    out.force.set(0, Math.max(0, body.mass * this._A.dot(this._up)), 0);
+    this._qInv.copy(body.quat).invert();
+    this._side.copy(this._aSide).multiplyScalar(body.mass).applyQuaternion(this._qInv);
+    out.force.set(this._side.x, Math.max(0, body.mass * this._A.dot(this._up)) + this._side.y, this._side.z);
+    out.sideways = true;
     this.attitudeTorque(body, this._qDes, caps.assistGain, out.torque);
     out.thrust = true;
     return out;

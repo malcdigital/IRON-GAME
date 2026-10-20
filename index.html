@@ -10,7 +10,7 @@
 
   <div id="hud" class="hud" hidden>
     <div class="hud-tl">
-      <div class="brand"><span class="brand-name">Scrapjack</span><span class="brand-sub">Test range · build 0.5</span></div>
+      <div class="brand"><span class="brand-name">Scrapjack</span><span class="brand-sub">Test range · build 0.6</span></div>
       <div class="readout panel" id="readout"></div>
     </div>
 
@@ -31,14 +31,14 @@
             <div><dt><kbd>R2</kbd><kbd>L2</kbd></dt><dd>Climb / descend · Flight: throttle up / down</dd></div>
             <div><dt><kbd>R1</kbd></dt><dd>Boost / afterburner (hold)</dd></div>
             <div><dt><kbd>✕</kbd></dt><dd>Flight mode with launch burst / back to hover</dd></div>
-            <div><dt><kbd>○</kbd></dt><dd>Flip 180°</dd></div>
+            <div><dt><kbd>○</kbd></dt><dd>Flight: flip and burn back · Hover: turn around</dd></div>
             <div><dt><kbd>□</kbd></dt><dd>Grab / drop crate</dd></div>
             <div><dt><kbd>△</kbd></dt><dd>Camera</dd></div>
             <div><dt><kbd>L1</kbd></dt><dd>Hover: assist / manual · Flight: flares</dd></div>
             <div><dt><kbd>D-pad</kbd></dt><dd>Juke left / right / up / down</dd></div>
             <div><dt><kbd>Options</kbd></dt><dd>Workshop (D-pad to pick, ✕ select, ○ close)</dd></div>
             <div><dt><kbd>Create</kbd></dt><dd>This help</dd></div>
-            <div><dt><kbd>Touchpad</kbd></dt><dd>Back to workshop</dd></div>
+            <div><dt><kbd>Touchpad</kbd></dt><dd>Reset to the start</dd></div>
           </dl>
         </section>
         <section>
@@ -46,8 +46,10 @@
           <dl class="keys">
             <div><dt><kbd>Space</kbd></dt><dd>Lift off / climb</dd></div>
             <div><dt><kbd>C</kbd></dt><dd>Descend / land</dd></div>
-            <div><dt><kbd>W</kbd><kbd>S</kbd></dt><dd>Tilt forward / back</dd></div>
-            <div><dt><kbd>A</kbd><kbd>D</kbd></dt><dd>Tilt left / right</dd></div>
+            <div><dt><kbd>W</kbd><kbd>S</kbd></dt><dd>Move forward / back (stays upright)</dd></div>
+            <div><dt><kbd>A</kbd><kbd>D</kbd></dt><dd>Move left / right (stays upright)</dd></div>
+            <div><dt><kbd>Shift</kbd></dt><dd>Lean in for more speed</dd></div>
+            <div><dt><kbd>X</kbd></dt><dd>Turn around</dd></div>
             <div><dt><kbd>Q</kbd><kbd>E</kbd></dt><dd>Turn</dd></div>
             <div><dt><kbd>M</kbd></dt><dd>Assist / manual hover</dd></div>
           </dl>
@@ -63,7 +65,7 @@
             <div><dt><kbd>A</kbd><kbd>A</kbd> / <kbd>D</kbd><kbd>D</kbd></dt><dd>Juke left / right (double-tap)</dd></div>
             <div><dt><kbd>W</kbd><kbd>W</kbd> / <kbd>S</kbd><kbd>S</kbd></dt><dd>Juke down / up (double-tap)</dd></div>
             <div><dt><kbd>Z</kbd></dt><dd>Flares (pull missiles off you)</dd></div>
-            <div><dt><kbd>X</kbd></dt><dd>Flip 180° and burn back</dd></div>
+            <div><dt><kbd>X</kbd></dt><dd>Flip: brake hard and fly back the way you came</dd></div>
             <div><dt><kbd>F</kbd></dt><dd>Back to hover</dd></div>
           </dl>
         </section>
@@ -73,12 +75,13 @@
             <div><dt><kbd>Shift</kbd></dt><dd>Boost / afterburner (heats fast)</dd></div>
             <div><dt><kbd>G</kbd></dt><dd>Grab / drop crate</dd></div>
             <div><dt><kbd>V</kbd></dt><dd>Camera</dd></div>
-            <div><dt><kbd>R</kbd></dt><dd>Back to workshop</dd></div>
+            <div><dt><kbd>R</kbd></dt><dd>Reset to the start (repairs the suit)</dd></div>
             <div><dt><kbd>B</kbd></dt><dd>Workshop</dd></div>
           </dl>
         </section>
       </div>
       <div class="hud-buttons">
+        <button class="btn ghost" id="btn-reset">Reset <kbd>R</kbd></button>
         <button class="btn ghost" id="btn-help">Controls <kbd>H</kbd></button>
         <button class="btn primary" id="btn-workshop">Workshop <kbd>B</kbd></button>
       </div>
@@ -92,7 +95,7 @@
 
   <section id="start" class="start">
     <div class="start-card">
-      <p class="start-eyebrow">Test range · build 0.5</p>
+      <p class="start-eyebrow">Test range · build 0.6</p>
       <h1>Scrapjack</h1>
       <p class="start-lede">You built a flying suit from a car battery, two leaf blowers and a welding mask. It barely lifts you. Take it up, see what breaks, then make it better.</p>
       <ul class="start-points">
@@ -109,7 +112,8 @@
         <div><dt><kbd>C</kbd></dt><dd>Descend</dd></div>
         <div><dt><kbd>F</kbd></dt><dd>Launch into flight</dd></div>
         <div><dt><kbd>Shift</kbd></dt><dd>Boost</dd></div>
-        <div><dt><kbd>X</kbd></dt><dd>Flip 180°</dd></div>
+        <div><dt><kbd>X</kbd></dt><dd>Flip / turn around</dd></div>
+        <div><dt><kbd>R</kbd></dt><dd>Reset to start</dd></div>
         <div><dt><kbd>A</kbd><kbd>A</kbd></dt><dd>Juke (double-tap)</dd></div>
         <div><dt><kbd>Z</kbd></dt><dd>Flares</dd></div>
         <div><dt><kbd>B</kbd></dt><dd>Workshop</dd></div>

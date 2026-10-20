@@ -8,7 +8,7 @@ import { Suit } from '../suit/Suit.js';
 import { updateHeat } from '../suit/heat.js';
 import { applyZoneDamage, impactDamage, updateThrusterAvailability, thermalFactor } from '../suit/damage.js';
 import { FlightController, yawOf } from '../flight/controller.js';
-import { allocate } from '../flight/allocator.js';
+import { ThrustMixer } from '../flight/thrustMixer.js';
 import { World } from '../world/World.js';
 import { Course } from '../world/course.js';
 import { CargoSystem } from '../world/cargo.js';
@@ -61,7 +61,7 @@ export class Game {
   setLoadout(loadout) {
     this.suit = new Suit(loadout);
     this.u = new Float64Array(this.suit.thrusters.length);
-    this.cols = this.suit.thrusters.map(() => new Float64Array(6));
+    this.mixer = new ThrustMixer(this.suit.thrusters);
     this.cargo.release();
     this.respawn();
   }
@@ -81,6 +81,7 @@ export class Game {
     this.evadeCharge = CONFIG.evade.charges;
     this.flares = CONFIG.evade.flares;
     this.u.fill(0);
+    this.mixer?.reset();
     this.caps.aeroAccel.set(0, 0, 0);
     this.launchT = 0;
     this.launchCharge = 1;
@@ -150,7 +151,12 @@ export class Game {
         }
         break;
       case 'flip':
-        if (this.controller.flying && this.controller.jet.flip()) events.emit('maneuver', { name: 'flip' });
+        if (this.controller.flying) {
+          if (this.controller.jet.flip()) events.emit('maneuver', { name: 'flip' });
+        } else if (this.controller.mode === 'assist') {
+          this.controller.turnAround();
+          events.emit('toast', { text: 'Turning around' });
+        }
         break;
       case 'jukeLeft': case 'jukeRight': case 'jukeUp': case 'jukeDown':
         this.juke(action.slice(4).toLowerCase());
@@ -173,7 +179,9 @@ export class Game {
         break;
       case 'reset':
         this.respawn();
-        events.emit('toast', { text: 'Back at the workshop. Suit repaired.' });
+        this.cargo.reset();
+        this.course.reset();
+        events.emit('toast', { text: 'Reset to the start. Suit repaired.' });
         break;
     }
   }
@@ -203,6 +211,7 @@ export class Game {
     if (fullDraw > powerOut) maxLift *= powerOut / fullDraw;
     this.caps.maxLift = maxLift;
     this.caps.assistGain = suit.assistGain();
+    this.caps.sideMax = this.mixer.sideCapacity() * Math.min(1, powerOut / Math.max(1, fullDraw));
     this.twr = maxLift / (body.mass * CONFIG.physics.gravity);
 
     // Air on the body: lift, drag. The flight assist works with a smoothed estimate.
@@ -222,42 +231,33 @@ export class Game {
     );
     this._rem.subVectors(cmd.torque, this._gyro);
 
-    // 4. Split the work between thrusters
+    // 4. Split the work between thrusters (swivelling ones can push sideways too)
     if (cmd.thrust) {
-      for (let i = 0; i < thr.length; i++) {
-        const a = thr[i].available, d = thr[i].thruster.dir, tq = thr[i].thruster.torque, col = this.cols[i];
-        col[0] = d.x * a; col[1] = d.y * a; col[2] = d.z * a;
-        col[3] = tq.x * a; col[4] = tq.y * a; col[5] = tq.z * a;
-      }
       const t = this._target;
       t[0] = cmd.force.x; t[1] = cmd.force.y; t[2] = cmd.force.z;
       t[3] = this._rem.x; t[4] = this._rem.y; t[5] = this._rem.z;
-      allocate(this.cols, t, CONFIG.allocation.weights, this.u, CONFIG.allocation.sweeps);
+      const w = cmd.sideways ? CONFIG.allocation.hoverWeights : CONFIG.allocation.weights;
+      this.mixer.solve(t, w, CONFIG.allocation.sweeps, !!cmd.sideways);
     } else {
-      this.u.fill(0);
+      this.mixer.reset();
+      this.mixer.resolve();
     }
 
     // 5. The power core can only supply so much
-    let draw = 0;
-    for (let i = 0; i < thr.length; i++) draw += this.u[i] * thr[i].available * thr[i].thruster.powerPerN;
+    let draw = this.mixer.draw();
     const out = powerOut;
     this.powerLimited = draw > out + 1e-6;
     if (this.powerLimited) {
-      const k = out / draw;
-      for (let i = 0; i < thr.length; i++) this.u[i] *= k;
+      this.mixer.scale(out / draw);
       draw = out;
     }
     suit.powerDraw = draw;
+    thr.forEach((t, i) => { this.u[i] = t.throttle; });
 
     // 6. Push the body
     this._F.set(0, 0, 0);
     this._T.copy(this._gyro);
-    for (let i = 0; i < thr.length; i++) {
-      const f = this.u[i] * thr[i].available;
-      thr[i].throttle = this.u[i];
-      this._F.addScaledVector(thr[i].thruster.dir, f);
-      this._T.addScaledVector(thr[i].thruster.torque, f);
-    }
+    this.mixer.apply(this._F, this._T);
     body.force.add(this._F.applyQuaternion(body.quat));
     body.torque.add(this._T.applyQuaternion(body.quat));
 

@@ -92,8 +92,11 @@ export const CONFIG = {
     maxSpeed: 14, boostSpeed: 26,
     climbRate: 5, boostClimbRate: 9,
     maxTiltDeg: 28, boostTiltDeg: 45,
-    velGain: 1.5, climbGain: 2.5,
+    velGain: 1.5, climbGain: 5,
     yawRate: 1.9,
+    upright: true,    // slide around without tilting (hold boost to lean in for speed)
+    uprightLeanDeg: 6, // tiny lean allowed in upright mode for snappier moves
+    sideUse: 0.6,     // share of the swivel push the assist may use for sliding (rest keeps you up)
   },
 
   // Manual flight: keys set rotation rates, throttle stays where you leave it.
@@ -102,7 +105,7 @@ export const CONFIG = {
   attitude: { kp: 26, kd: 8.5, maxRate: 2.5 },  // scaled by the helmet's assist quality; maxRate caps spin speed (rad/s)
 
   // Thrust mixing weights: [Fx, Fy, Fz, Tx, Ty, Tz]. Higher = matters more.
-  allocation: { weights: [0.002, 1, 0.002, 25, 25, 25], sweeps: 12 },
+  allocation: { weights: [0.002, 1, 0.002, 25, 25, 25], hoverWeights: [1, 6, 1, 25, 25, 25], sweeps: 16 },
 
   stance: { uprightGain: 40, damping: 10, minUp: 0.55 },  // legs keep you upright when standing
 

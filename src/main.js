@@ -54,6 +54,7 @@ function start(hotData) {
   });
   document.getElementById('btn-workshop').addEventListener('click', () => toggleWorkshop());
   document.getElementById('btn-help').addEventListener('click', () => hud.toggleHelp());
+  document.getElementById('btn-reset').addEventListener('click', () => { document.activeElement?.blur(); handleAction('reset'); });
 
   function toggleWorkshop() {
     if (!started) return;

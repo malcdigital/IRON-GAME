@@ -21,10 +21,11 @@ const mirror = (t) => [
   { ...t, id: t.id + 'R', label: 'R ' + t.label, mount: t.mount + 'R' },
 ];
 
-const backJet = (o) => [{ id: 'back', label: 'Back jet', mount: 'back', dir: [0, 1, 0], ...o }];
-const boots = (o) => mirror({ id: 'boot', label: 'boot', mount: 'boot', dir: [0, 1, 0], ...o });
+// gimbal = how far (degrees) the nozzle can swivel to push sideways
+const backJet = (o) => [{ id: 'back', label: 'Back jet', mount: 'back', dir: [0, 1, 0], gimbal: 30, ...o }];
+const boots = (o) => mirror({ id: 'boot', label: 'boot', mount: 'boot', dir: [0, 1, 0], gimbal: 20, ...o });
 // Gauntlets angle slightly forward, which lets them twist the suit (yaw).
-const hands = (o) => mirror({ id: 'hand', label: 'gauntlet', mount: 'hand', dir: [0, 1, -0.15], ...o });
+const hands = (o) => mirror({ id: 'hand', label: 'gauntlet', mount: 'hand', dir: [0, 1, -0.15], gimbal: 45, ...o });
 
 export const PARTS = {
   // ---------- Power cores ----------

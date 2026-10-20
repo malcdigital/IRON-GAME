@@ -3,6 +3,7 @@ import * as THREE from '../lib/three.js';
 // Builds the suit's 3D model from its parts and shows heat, damage and thrust.
 // Models are simple boxes so they're cheap to draw and easy to replace later.
 
+const UP = new THREE.Vector3(0, 1, 0);
 const PILOT_COLOR = 0x2b2f33;
 const BURNT = new THREE.Color(0x231a14);
 const HOT = new THREE.Color(0xff5a20);
@@ -215,6 +216,8 @@ export class SuitView {
       const on = u > 0.02 && f.comp.available > 0;
       f.holder.visible = on;
       if (!on) continue;
+      // Nozzles swivel: point the flame along the real thrust direction
+      if (f.comp.thrustDir) f.holder.quaternion.setFromUnitVectors(UP, f.comp.thrustDir);
       const flicker = 0.85 + Math.random() * 0.3;
       const len = (0.15 + u * (boost ? 1.1 : 0.7)) * flicker;
       const w = 0.6 + u * 0.6;

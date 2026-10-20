@@ -36,6 +36,7 @@ export class Suit {
             torque: new THREE.Vector3().crossVectors(new THREE.Vector3(...CONFIG.mounts[t.mount].pos), d),
             maxThrust: t.thrust,
             powerPerN: t.powerPerN,
+            gimbal: THREE.MathUtils.degToRad(t.gimbal || 0),
           };
           comp.available = 0;
           comp.sputterTimer = 0;
