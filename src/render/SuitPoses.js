@@ -205,8 +205,9 @@ function launchCurve(seqT, jumpAt, fireAt, sinceFire) {
 // Pose Studio only: roughly how high the suit is at time t of the launch (so you can see the jump)
 function launchLift(t, q) {
   if (t < q.jumpAt) return 0;
-  const tj = Math.min(t, q.fireAt) - q.jumpAt, hj = Math.max(0, q.jumpSpeed * tj - 4.9 * tj * tj);
-  const tf = Math.max(0, t - q.fireAt), vj = q.jumpSpeed - 9.8 * (q.fireAt - q.jumpAt);
+  const v0 = q.jumpSpeed * Math.sin((q.jumpAngleDeg ?? 90) * Math.PI / 180);   // the upward part of the jump
+  const tj = Math.min(t, q.fireAt) - q.jumpAt, hj = Math.max(0, v0 * tj - 4.9 * tj * tj);
+  const tf = Math.max(0, t - q.fireAt), vj = v0 - 9.8 * (q.fireAt - q.jumpAt);
   return hj + vj * tf + 0.5 * 22 * tf * tf;
 }
 

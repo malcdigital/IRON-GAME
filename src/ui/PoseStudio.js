@@ -130,7 +130,8 @@ export class PoseStudio {
     this.tlFields = [
       seqSlider('jumpAt', 'Jump at (crouch until then)', 0, 1.5, 0.01, ' s'),
       seqSlider('fireAt', 'Thrusters fire at (the launch point)', 0.05, 2, 0.01, ' s'),
-      seqSlider('jumpSpeed', 'Jump strength', 0, 12, 0.5, ' m/s'),
+      seqSlider('jumpSpeed', 'Jump strength', 0, 14, 0.5, ' m/s'),
+      seqSlider('jumpAngleDeg', 'Jump angle (0 = flat forward, 90 = straight up)', 0, 90, 1, '°'),
       seqSlider('airFireAt', 'In the air: fire at', 0, 0.6, 0.01, ' s'),
     ];
   }
@@ -360,7 +361,7 @@ export class PoseStudio {
     this.copyEl.value = `${text}
 
 Launch sequence (config.js launch.seq):
-    seq: { jumpAt: ${q.jumpAt}, fireAt: ${q.fireAt}, jumpSpeed: ${q.jumpSpeed}, airFireAt: ${q.airFireAt} },`;
+    seq: { jumpAt: ${q.jumpAt}, fireAt: ${q.fireAt}, jumpSpeed: ${q.jumpSpeed}, jumpAngleDeg: ${q.jumpAngleDeg}, airFireAt: ${q.airFireAt} },`;
     this.copyEl.hidden = false;
     this.copyEl.select();
     try { navigator.clipboard.writeText(this.copyEl.value); } catch { /* the text is selected to copy by hand */ }

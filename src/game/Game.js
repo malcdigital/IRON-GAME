@@ -368,11 +368,12 @@ export class Game {
       s.t += dt;
       s.boosted ||= !!(input.boost || input.takeoffBoost);
       if (!s.jumped && s.t >= s.jumpAt) {
-        // jump up and forward (the way you're facing), so you leave the pad already moving
+        // jump forward and up at jumpAngleDeg (the way you're facing), so you leave the pad already moving
         s.jumped = true;
-        const h = this.controller.heading ?? 0;
-        body.vel.y += seq.jumpSpeed;
-        body.vel.x += -Math.sin(h) * seq.jumpForward; body.vel.z += -Math.cos(h) * seq.jumpForward;
+        const h = this.controller.heading ?? 0, a = seq.jumpAngleDeg * Math.PI / 180;
+        const up = seq.jumpSpeed * Math.sin(a), fwd = seq.jumpSpeed * Math.cos(a);
+        body.vel.y += up;
+        body.vel.x += -Math.sin(h) * fwd; body.vel.z += -Math.cos(h) * fwd;
       }
       if (s.t >= s.fireAt) {
         this.launchSeq = null;
