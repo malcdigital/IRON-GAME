@@ -216,7 +216,9 @@ export const CONFIG = {
   cargo: { grabRange: 2.4, holdOffset: [0, -0.35, -0.65], radius: 0.42 },
 
   // Suit look: 'hero' (the character sheet: ivory, navy, orange) or 'scrap' (each part its own junk colours)
-  suitStyle: 'hero',
+  suitStyle: 'model',
+  // 'model': the 3D model made from the character sheet (falls back to 'hero' if it can't load)
+  suitModel: { url: 'assets/suit.glb', height: 1.9, feetY: -1.03, turn: Math.PI },
 
   camera: {
     // One shot per state. Tune them live with the Camera Studio (K) and paste the copied settings here.

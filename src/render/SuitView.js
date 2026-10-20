@@ -1,6 +1,7 @@
 import * as THREE from '../lib/three.js';
 import { CONFIG } from '../core/config.js';
 import { HERO_BUILDERS, buildHeroPilot, PALETTE } from './HeroSuit.js';
+import { loadSuitModel, placeModel } from './ModelSuit.js';
 
 // Builds the suit's 3D model from its parts and shows heat, damage and thrust.
 // Models are simple boxes so they're cheap to draw and easy to replace later.
@@ -176,19 +177,67 @@ export class SuitView {
     this.root.clear();
     this.parts = [];
     this.flames = [];
-    const hero = CONFIG.suitStyle === 'hero';
-    this.root.add(hero ? buildHeroPilot() : buildPilot());
+    const useModel = CONFIG.suitStyle === 'model';
+    const hero = CONFIG.suitStyle === 'hero' || useModel;
+    this.boxes = [];
+    this.model = null;
+    const pilot = hero ? buildHeroPilot() : buildPilot();
+    this.root.add(pilot);
+    this.boxes.push(pilot);
 
     for (const comp of suit.list) {
       const slot = comp.slot;
       const side = comp.id.endsWith('L') ? -1 : comp.id.endsWith('R') ? 1 : 0;
       const built = (hero ? HERO_BUILDERS : BUILDERS)[slot](comp.part, side);
       this.root.add(built.group);
+      this.boxes.push(built.group);
       this.parts.push({ comp, mats: built.mats, base: built.mats.map((m) => m.color.clone()) });
 
       if (comp.thruster && built.flames) {
         for (const p of built.flames) this.addFlame(comp, p);
       }
+    }
+    // The 3D model replaces the box parts once it has loaded (the boxes show until then,
+    // and stay if it can't load). The boxes' flame positions are kept.
+    if (useModel) {
+      const token = (this.buildToken = (this.buildToken ?? 0) + 1);
+      loadSuitModel(CONFIG.suitModel.url).then((gltf) => {
+        if (token !== this.buildToken) return;
+        const placed = placeModel(gltf, CONFIG.suitModel);
+        this.model = placed;
+        this.modelBase = placed.mats.map((m) => m.color.clone());
+        this.modelEmissive = placed.mats.map((m) => m.emissive.clone());
+        this.root.add(placed.model);
+        for (const b of this.boxes) b.visible = false;
+        this.attachFlamesToModel(placed);
+      }).catch((err) => console.warn('Suit model failed to load, using the box suit', err));
+    }
+  }
+
+  // Move the hand and boot flames onto the model's hands and feet
+  attachFlamesToModel(placed) {
+    this.root.updateMatrixWorld(true);
+    const inv = new THREE.Matrix4().copy(this.root.matrixWorld).invert();
+    const at = (name) => {
+      const b = placed.bones[name];
+      return b ? b.getWorldPosition(new THREE.Vector3()).applyMatrix4(inv) : null;
+    };
+    for (const f of this.flames) {
+      const id = f.comp.id, slot = f.comp.slot;
+      const side = id.endsWith('L') ? 'Left' : id.endsWith('R') ? 'Right' : null;
+      let p = null;
+      if (slot === 'gauntlets' && side) {
+        p = at(`${side}Hand`);
+        if (p) p.y -= 0.06;   // palm
+      } else if (slot === 'boots' && side) {
+        const foot = at(`${side}Foot`), toe = at(`${side}ToeBase`);
+        if (foot) { p = toe ? foot.clone().lerp(toe, 0.35) : foot; p.y = CONFIG.suitModel.feetY - 0.02; }
+      } else if (slot === 'back') {
+        // Base of the back pods: upper back, just behind the body
+        const sp = at('Spine01');
+        if (sp) p = sp.add(new THREE.Vector3(Math.sign(f.basePos.x) * 0.11, 0.02, 0.17));   // (a single centre nozzle stays centred)
+      }
+      if (p) f.holder.position.copy(p);
     }
   }
 
@@ -201,12 +250,13 @@ export class SuitView {
     }));
     const holder = new THREE.Group();
     holder.position.set(...pos);
+    const basePos = new THREE.Vector3(...pos);
     holder.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), comp.thruster.dir);
     holder.add(outer, inner);
     this.root.add(holder);
     const ion = comp.part.visual.glow != null && CONFIG.suitStyle !== 'hero';
     if (ion) { outer.material.color.setHex(0x5fc9ff); inner.material.color.setHex(0xd8f6ff); }
-    this.flames.push({ comp, holder, outer, inner });
+    this.flames.push({ comp, holder, outer, inner, basePos });
   }
 
   update(game, boost, time) {
@@ -228,6 +278,16 @@ export class SuitView {
       f.inner.scale.set(w * 0.5, len * 0.55, w * 0.5);
     }
 
+    // The 3D model is one piece: overall damage darkens it, the hottest part sets the glow
+    if (this.model) {
+      let dmg = 0, heat = 0, n = 0;
+      for (const p of this.parts) { dmg += 1 - p.comp.hp / p.comp.maxHp; n++; heat = Math.max(heat, Math.min(1, p.comp.heat / 100)); }
+      dmg /= Math.max(1, n);
+      this.model.mats.forEach((m, i) => {
+        m.color.copy(this.modelBase[i]).lerp(BURNT, dmg * 0.7);
+        m.emissive.copy(this.modelEmissive[i]).lerp(HOT, heat * heat);
+      });
+    }
     // Heat glows orange, damage darkens the paint
     for (const p of this.parts) {
       const c = p.comp;
