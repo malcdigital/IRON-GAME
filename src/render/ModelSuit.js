@@ -65,5 +65,8 @@ export function placeModel(gltf, cfg) {
   });
   const bones = {};
   model.traverse((o) => { if (o.isBone) bones[o.name] = o; });
-  return { model, mats, bones };
+  // Back thruster pods (separated in Blender, pivot at their base mount)
+  const pods = ['L', 'R'].map((s) => ({ side: s, pod: model.getObjectByName(`pod_${s}`), nozzle: model.getObjectByName(`pod_${s}_nozzle`) }))
+    .filter((p) => p.pod && p.nozzle);
+  return { model, mats, bones, pods };
 }

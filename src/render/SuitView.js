@@ -172,6 +172,8 @@ export class SuitView {
     scene.add(this.root);
     this.parts = [];   // { comp, mats, base colors }
     this.flames = [];  // { comp, mesh, core }
+    this._qInv = new THREE.Quaternion(); this._podQ = new THREE.Quaternion(); this._qId = new THREE.Quaternion();
+    this._inv = new THREE.Matrix4(); this._tmpV = new THREE.Vector3(); this._tmpV2 = new THREE.Vector3();
   }
 
   build(suit) {
@@ -226,6 +228,15 @@ export class SuitView {
       const b = placed.bones[name];
       return b ? b.getWorldPosition(new THREE.Vector3()).applyMatrix4(inv) : null;
     };
+    // Back pods: remember their rest pose and how their parent sits relative to the suit
+    const rootQInv = new THREE.Quaternion();
+    this.root.getWorldQuaternion(rootQInv).invert();
+    this.pods = placed.pods.map((p) => ({
+      ...p,
+      rest: p.pod.quaternion.clone(),
+      parentQ: rootQInv.clone().multiply(p.pod.parent.getWorldQuaternion(new THREE.Quaternion())),
+      delta: new THREE.Quaternion(),
+    }));
     for (const f of this.flames) {
       const id = f.comp.id, slot = f.comp.slot;
       const side = id.endsWith('L') ? 'Left' : id.endsWith('R') ? 'Right' : null;
@@ -242,6 +253,31 @@ export class SuitView {
         if (sp) p = sp.add(new THREE.Vector3(Math.sign(f.basePos.x) * 0.11, 0.02, 0.17));   // (a single centre nozzle stays centred)
       }
       if (p) f.holder.position.copy(p);
+      // Back flames ride on the pods' nozzles (left flame: left pod; a single centre nozzle: between them)
+      if (slot === 'back' && this.pods.length) f.pods = f.basePos.x < 0 ? this.pods.filter((q) => q.side === 'L') : f.basePos.x > 0 ? this.pods.filter((q) => q.side === 'R') : this.pods;
+    }
+  }
+
+  // Swing the back pods so their exhaust points where the thrust is going. Hover: the real
+  // (gimballed) thrust direction. Flight: the push the suit needs right now (the thruster itself
+  // is fixed there, so this is for show), within podMaxDeg.
+  updatePods(game, dt) {
+    const back = this.parts.find((p) => p.comp.slot === 'back')?.comp;
+    if (!back || !this.pods?.length) return;
+    const restDir = back.thruster.dir;
+    const want = this._podWant ?? (this._podWant = new THREE.Vector3());
+    if (game.controller.flying && game.controller.jet._ySlow) {
+      want.copy(game.controller.jet._ySlow).applyQuaternion(this._qInv.copy(game.body.quat).invert());
+    } else want.copy(back.thrustDir ?? restDir);
+    const target = this._podQ.setFromUnitVectors(restDir, want.normalize());
+    const maxA = THREE.MathUtils.degToRad(CONFIG.suitModel.podMaxDeg);
+    const ang = 2 * Math.acos(Math.min(1, Math.abs(target.w)));
+    if (ang > maxA) target.slerpQuaternions(this._qId, target, maxA / ang);
+    const k = 1 - Math.exp(-CONFIG.suitModel.podRate * dt);
+    for (const p of this.pods) {
+      p.delta.slerp(target, k);
+      // delta is in the suit's frame: carry it into the pod parent's frame
+      p.pod.quaternion.copy(p.parentQ).invert().multiply(p.delta).multiply(p.parentQ).multiply(p.rest);
     }
   }
 
@@ -267,6 +303,20 @@ export class SuitView {
     const b = game.body;
     this.root.position.copy(b.pos);
     this.root.quaternion.copy(b.quat);
+    const dt = Math.min(0.1, time - (this.lastTime ?? time));
+    this.lastTime = time;
+    if (this.pods?.length) {
+      this.updatePods(game, dt);
+      // flames follow the pod nozzles
+      this.root.updateMatrixWorld(true);
+      const inv = this._inv.copy(this.root.matrixWorld).invert();
+      for (const f of this.flames) {
+        if (!f.pods) continue;
+        const pos = this._tmpV.set(0, 0, 0);
+        for (const q of f.pods) pos.add(q.nozzle.getWorldPosition(this._tmpV2).applyMatrix4(inv));
+        f.holder.position.copy(pos.divideScalar(f.pods.length));
+      }
+    }
 
     for (const f of this.flames) {
       const u = f.comp.throttle;
