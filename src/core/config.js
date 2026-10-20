@@ -247,6 +247,7 @@ export const CONFIG = {
     turnRate: 5, turnPerMs2: 0.5, turnMax: 25,    // flight turns: degrees of lean into the turn per m/s² of turning
     landSpeedFull: 10, landTime: 0.45, crouchDeg: 35,   // landing crouch: full at this fall speed, back up in landTime s
     stepsPerMeter: 0.9, walkSwing: 28,            // walking legs
+    limits: true,                   // keep every joint within real human ranges (SuitPoses.js LIMITS)
     groundRoom: 0.25,               // counts as standing when the feet are within this of the ground (m)
   },
   suitModel: { url: 'assets/suit.json', height: 1.9, feetY: -1.03, turn: Math.PI,

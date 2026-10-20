@@ -263,7 +263,6 @@ export class SuitView {
       const boneName = slot === 'gauntlets' && side ? `${side}Hand` : slot === 'boots' && side ? `${side}Foot` : slot === 'back' ? 'Spine01' : null;
       const bone = boneName && placed.bones[boneName];
       if (p && bone) { f.bone = bone; f.boneLocal = bone.worldToLocal(this.root.localToWorld(p.clone())); }
-      f.forwardHand = slot === 'gauntlets' && side === 'Right';   // the fist held out front in flight
       // Back flames ride on the pods' nozzles (left flame: left pod; a single centre nozzle: between them)
       if (slot === 'back' && this.pods.length) f.pods = f.basePos.x < 0 ? this.pods.filter((q) => q.side === 'L') : f.basePos.x > 0 ? this.pods.filter((q) => q.side === 'R') : this.pods;
     }
@@ -346,9 +345,7 @@ export class SuitView {
     const camPos = camera?.position;
     this.root.updateMatrixWorld(true);
     for (const f of this.flames) {
-      // the fist held out front in Superman flight doesn't fire back through the body
-      const hideFwd = f.forwardHand && this.poser ? this.poser.w.flight : 0;
-      const u = f.comp.throttle * (1 - hideFwd);
+      const u = f.comp.throttle;
       const on = u > 0.02 && f.comp.available > 0 && !this.hideFlames;
       f.holder.visible = on;
       if (on) {

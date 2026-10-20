@@ -24,52 +24,103 @@ export const POSES = {
   // Standing on the ground: arms relaxed
   stand: {
     hands: { Left: { curl: 12, thumb: 5 }, Right: { curl: 12, thumb: 5 } },
-    LeftArm: { aim: [-0.22, -0.97, 0.02] }, RightArm: { aim: [0.22, -0.97, 0.02] },
-    LeftForeArm: { aim: [-0.18, -0.95, -0.22] }, RightForeArm: { aim: [0.18, -0.95, -0.22] },
+    LeftArm: { aim: [-0.22, -0.97, 0.02] },
+    RightArm: { aim: [0.22, -0.97, 0.02] },
+    LeftForeArm: { aim: [-0.18, -0.95, -0.22] },
+    RightForeArm: { aim: [0.18, -0.95, -0.22] },
   },
-  // Hovering: arms a little out with the palms down (hand thrusters), knees soft, toes down
-  // (matches the hover reference sheet: arms spread out and a little forward, palms turned
-  // down to the ground with the fingers loose, one knee bent with that foot back, toes down)
+  // Hovering (set in the Pose Studio from the hover reference sheet)
   hover: {
-    hands: { Left: { curl: 14, thumb: -8 }, Right: { curl: 14, thumb: -8 } },
-    LeftArm: { aim: [-0.55, -0.8, -0.2] }, RightArm: { aim: [0.55, -0.8, -0.2] },
-    LeftForeArm: { aim: [-0.62, -0.68, -0.38] }, RightForeArm: { aim: [0.62, -0.68, -0.38] },
-    LeftHand: { aim: [-0.75, -0.55, -0.35], twist: 0 }, RightHand: { aim: [0.75, -0.55, -0.35], twist: 0 },
-    LeftUpLeg: { aim: [-0.14, -1, 0.06] }, RightUpLeg: { aim: [0.12, -1, -0.14] },
-    LeftLeg: { aim: [-0.1, -0.78, 0.62] }, RightLeg: { aim: [0.1, -1, 0.16] },
-    LeftFoot: { rot: [-35, 0, 0] }, RightFoot: { rot: [-30, 0, 0] },
+    hands: { Left: { curl: -40, thumb: -8 }, Right: { curl: -1, thumb: -8 } },
+    LeftArm: { aim: [-0.41, -0.91, 0.03] },
+    RightArm: { aim: [0.62, -0.78, 0.08] },
+    LeftForeArm: { aim: [-0.61, -0.7, -0.37] },
+    RightForeArm: { aim: [0.62, -0.68, -0.38] },
+    LeftHand: { aim: [-0.93, -0.29, -0.24], twist: 0 },
+    RightHand: { aim: [0.71, -0.34, -0.62], twist: 0 },
+    LeftUpLeg: { aim: [-0.41, -0.9, -0.11] },
+    RightUpLeg: { aim: [0.12, -1, -0.14] },
+    LeftLeg: { aim: [-0.1, -0.78, 0.62] },
+    RightLeg: { aim: [0.1, -1, 0.16] },
+    LeftFoot: { rot: [0, 0, 0], aim: [-0.59, -0.8, -0.11] },
+    RightFoot: { rot: [-30, 0, 0] },
   },
-  // Superman flight: right fist forward, left arm back along the body, one knee bent,
-  // head up to look where you're going
+  // Flight: head up to look where you're going, arms back along the body
   flight: {
-    hands: { Right: { curl: 42, thumb: 30 }, Left: { curl: 8, thumb: 0 } },          // fist out front
+    hands: { Right: { curl: -20, thumb: 30 }, Left: { curl: 8, thumb: 0 } },
     Spine01: { rot: [8, 0, 0] },
-    neck: { rot: [18, 0, 0] }, Head: { rot: [26, 0, 0] },
-    RightArm: { aim: [-0.06, 0.96, -0.26] }, RightForeArm: { aim: [-0.02, 1, -0.12] },
-    LeftArm: { aim: [-0.3, -0.93, 0.18] }, LeftForeArm: { aim: [-0.18, -0.95, 0.25] },
-    LeftUpLeg: { aim: [-0.1, -1, 0.1] }, RightUpLeg: { aim: [0.12, -1, 0.04] },
-    LeftLeg: { aim: [-0.08, -0.82, 0.55] }, RightLeg: { aim: [0.1, -1, 0.12] },
-    LeftFoot: { rot: [-35, 0, 0] }, RightFoot: { rot: [-40, 0, 0] },
+    neck: { rot: [18, 0, 0] },
+    Head: { rot: [26, 0, 0] },
+    RightArm: { aim: [0.47, -0.86, 0.18] },
+    RightForeArm: { aim: [0.38, -0.89, 0.27] },
+    LeftArm: { aim: [-0.3, -0.93, 0.18] },
+    LeftForeArm: { aim: [-0.18, -0.95, 0.25] },
+    LeftUpLeg: { aim: [-0.1, -1, 0.1] },
+    RightUpLeg: { aim: [0.12, -1, 0.04] },
+    LeftLeg: { aim: [-0.02, -0.97, 0.24] },
+    RightLeg: { aim: [0.1, -1, 0.12] },
+    LeftFoot: { rot: [-35, 0, 0] },
+    RightFoot: { rot: [-40, 0, 0] },
+    LeftHand: { aim: [0.2, -0.97, 0.12], rot: [2, 0, -78], twist: -19 },
+    RightHand: { rot: [23, 0, 83], twist: 9 },
   },
   // Boost: tucked like a missile, both arms back, legs together, toes pointed
   boost: {
     hands: { Left: { curl: 38, thumb: 25 }, Right: { curl: 38, thumb: 25 } },
     Spine01: { rot: [4, 0, 0] },
-    neck: { rot: [20, 0, 0] }, Head: { rot: [28, 0, 0] },
-    LeftArm: { aim: [-0.22, -0.95, 0.2] }, RightArm: { aim: [0.22, -0.95, 0.2] },
-    LeftForeArm: { aim: [-0.12, -0.97, 0.22] }, RightForeArm: { aim: [0.12, -0.97, 0.22] },
-    LeftUpLeg: { aim: [-0.05, -1, 0.06] }, RightUpLeg: { aim: [0.05, -1, 0.06] },
-    LeftLeg: { aim: [-0.04, -1, 0.1] }, RightLeg: { aim: [0.04, -1, 0.1] },
-    LeftFoot: { rot: [-45, 0, 0] }, RightFoot: { rot: [-45, 0, 0] },
+    neck: { rot: [20, 0, 0] },
+    Head: { rot: [28, 0, 0] },
+    LeftArm: { aim: [-0.22, -0.95, 0.2] },
+    RightArm: { aim: [0.22, -0.95, 0.2] },
+    LeftForeArm: { aim: [-0.12, -0.97, 0.22] },
+    RightForeArm: { aim: [0.12, -0.97, 0.22] },
+    LeftUpLeg: { aim: [-0.05, -1, 0.06] },
+    RightUpLeg: { aim: [0.05, -1, 0.06] },
+    LeftLeg: { aim: [-0.04, -1, 0.1] },
+    RightLeg: { aim: [0.04, -1, 0.1] },
+    LeftFoot: { rot: [-45, 0, 0] },
+    RightFoot: { rot: [-45, 0, 0] },
   },
 };
 
 export const STATES = Object.keys(POSES);
+
+// How far each joint can really move (degrees), measured from the model's rest pose and relative
+// to the body part it hangs from. flex = the main bend, side = the sideways swing, twist = roll
+// about the bone's own length. Signs are for the suit's right side (left is mirrored):
+//   arms/legs: flex + swings forward, side + swings outward;
+//   elbow + bends the forearm up toward the shoulder; knee - folds the shin back;
+//   fingers/wrist: flex + curls toward the palm (- bends back).
+// Joints not listed move freely.
+const LIMB = (flex, side, twist) => ({ flex, side, twist });
+export const LIMITS = {
+  Spine02: LIMB([-35, 25], [-25, 25], [-25, 25]), Spine01: LIMB([-30, 25], [-20, 20], [-25, 25]), Spine: LIMB([-25, 20], [-15, 15], [-20, 20]),
+  neck: LIMB([-40, 45], [-30, 30], [-50, 50]), Head: LIMB([-35, 40], [-25, 25], [-40, 40]),
+  Shoulder: LIMB([-15, 20], [-10, 25], [-10, 10]),
+  Arm: LIMB([-60, 180], [-35, 180], [-80, 80]),       // shoulder: back 60, forward/up 180; across the body 35, out/up 180
+  ForeArm: LIMB([-5, 150], [-8, 8], [-85, 85]),       // elbow: a hinge; the forearm twist (palm up / down) lives here
+  Hand: LIMB([-75, 80], [-25, 35], [-15, 15]),        // wrist: bend back 75, curl 80, tilt side to side
+  UpLeg: LIMB([-30, 120], [-25, 50], [-40, 40]),      // hip: back 30, forward 120; in 25, out 50
+  Leg: LIMB([-150, 3], [-5, 5], [-10, 10]),           // knee: a hinge that only folds back
+  Foot: LIMB([-50, 25], [-20, 20], [-15, 15]),        // ankle: toes down 50, up 25
+  Finger1: LIMB([-25, 90], [-15, 15], [-5, 5]),       // knuckle: bends back a little, curls 90, spreads
+  Finger2: LIMB([-5, 105], [-3, 3], [-3, 3]),         // middle joint: a hinge
+  Finger3: LIMB([-10, 80], [-3, 3], [-3, 3]),         // end joint
+  Thumb1: LIMB([-30, 60], [-40, 40], [-30, 30]),
+  Thumb2: LIMB([-15, 70], [-8, 8], [-5, 5]),
+  Thumb3: LIMB([-15, 80], [-5, 5], [-5, 5]),
+};
+function limitsFor(name) {
+  const m = name.match(/^(Left|Right)?(?:Hand(Thumb|Index|Middle|Ring|Pinky)(\d))?(.*)$/);
+  if (m[2]) return LIMITS[m[2] === 'Thumb' ? `Thumb${m[3]}` : `Finger${m[3]}`];
+  return LIMITS[m[4]] ?? LIMITS[name];
+}
 const FINGERS = ['Index', 'Middle', 'Ring', 'Pinky'];
 const JOINT_SHARE = [1, 1.1, 0.8];   // how a hand's curl spreads over the knuckle, middle and end joints
 const D2R = Math.PI / 180;
 const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _e = new THREE.Euler();
 const _v = new THREE.Vector3(), _v2 = new THREE.Vector3();
+const _lq1 = new THREE.Quaternion(), _lq2 = new THREE.Quaternion(), _lq3 = new THREE.Quaternion(), _lq4 = new THREE.Quaternion(), _lq5 = new THREE.Quaternion(), _lv1 = new THREE.Vector3();
 
 export class SuitPoser {
   // model: the placed glTF scene; suitRoot: the object that carries the suit's frame
@@ -111,6 +162,26 @@ export class SuitPoser {
         if (!b.name.startsWith(`${side}Hand`) || !b.dir || b.name === `${side}Hand`) continue;
         b.hinge = new THREE.Vector3().crossVectors(b.dir, palm).normalize();
       }
+    }
+    // Joint limits: the axes each joint bends about, in the rest pose
+    for (const b of this.list) {
+      const lim = limitsFor(b.name);
+      if (!lim || !b.dir) continue;
+      const mirror = b.name.startsWith('Left') ? -1 : 1;
+      let flexAxis;
+      if (b.hinge) flexAxis = b.hinge.clone();
+      else if (/Hand$/.test(b.name)) {
+        const palmSide = this.byName[b.name + 'Middle1'] && this.byName[b.name + 'Middle1'].hinge
+          ? new THREE.Vector3().crossVectors(this.byName[b.name + 'Middle1'].hinge, b.dir) : new THREE.Vector3(0, 0, -1);
+        flexAxis = new THREE.Vector3().crossVectors(b.dir, palmSide);
+      } else flexAxis = new THREE.Vector3(1, 0, 0);
+      flexAxis.addScaledVector(b.dir, -flexAxis.dot(b.dir)).normalize();
+      if (flexAxis.lengthSq() < 0.5) continue;
+      // side axis: swings the bone toward the suit's outside (mirrored on the left)
+      const sideAxis = new THREE.Vector3().crossVectors(b.dir, flexAxis).normalize();
+      const out = _v.copy(b.dir).applyAxisAngle(sideAxis, 0.2);
+      if ((out.x - b.dir.x) * mirror < 0 && !/Spine|neck|Head/.test(b.name)) sideAxis.negate();
+      b.lim = { ...lim, flexAxis, sideAxis };
     }
     this.w = Object.fromEntries(STATES.map((s) => [s, s === 'stand' ? 1 : 0]));
     this.crouch = 0;      // landing crouch, 0..1
@@ -245,8 +316,37 @@ export class SuitPoser {
         const hinge = _v.copy(b.hinge).applyQuaternion(_q.copy(b.rest).invert()).applyQuaternion(b.cur);
         b.cur.premultiply(_q2.setFromAxisAngle(hinge.normalize(), b.bend * D2R));
       }
+      if (b.lim && CONFIG.pose.limits) this.limit(b, pCur);
       // back into the bone's own (parent-relative) rotation
       b.bone.quaternion.copy(_q.copy(pCur).invert().multiply(b.cur));
     }
+  }
+
+  // Keep a bone within its joint's real range. Its turn beyond just following its parent is split
+  // into a swing (where it points) and a twist (roll about its length); each part is clamped.
+  limit(b, pCur) {
+    const L = b.lim;
+    const P = _lq1.copy(pCur).multiply(_lq2.copy(b.parentRest).invert());           // the parent's move from rest
+    const Qr = _lq3.copy(P).invert().multiply(b.cur).multiply(_lq2.copy(b.rest).invert());   // this joint's turn, in rest terms
+    // twist about the rest direction, and the swing that's left
+    const r = b.dir;
+    const d = r.x * Qr.x + r.y * Qr.y + r.z * Qr.z;
+    const tw = _lq4.set(r.x * d, r.y * d, r.z * d, Qr.w);
+    if (tw.lengthSq() < 1e-10) tw.identity(); else tw.normalize();
+    const sw = _lq5.copy(Qr).multiply(_lq2.copy(tw).invert());
+    // swing as a turn vector, clamped on the flex and side axes
+    if (sw.w < 0) { sw.x = -sw.x; sw.y = -sw.y; sw.z = -sw.z; sw.w = -sw.w; }
+    const sAng = 2 * Math.acos(Math.min(1, sw.w)), sn = Math.sqrt(Math.max(1e-12, 1 - sw.w * sw.w));
+    const rv = _lv1.set(sw.x / sn, sw.y / sn, sw.z / sn).multiplyScalar(sAng);
+    const f = THREE.MathUtils.clamp(rv.dot(L.flexAxis) / D2R, L.flex[0], L.flex[1]) * D2R;
+    const sd = THREE.MathUtils.clamp(rv.dot(L.sideAxis) / D2R, L.side[0], L.side[1]) * D2R;
+    rv.copy(L.flexAxis).multiplyScalar(f).addScaledVector(L.sideAxis, sd);
+    const ang = rv.length();
+    if (ang > 1e-6) sw.setFromAxisAngle(rv.multiplyScalar(1 / ang), ang); else sw.identity();
+    let tAng = 2 * Math.atan2(tw.x * r.x + tw.y * r.y + tw.z * r.z, tw.w);
+    if (tAng > Math.PI) tAng -= 2 * Math.PI; if (tAng < -Math.PI) tAng += 2 * Math.PI;
+    tAng = THREE.MathUtils.clamp(tAng / D2R, L.twist[0], L.twist[1]) * D2R;
+    tw.setFromAxisAngle(r, tAng);
+    b.cur.copy(P).multiply(sw.multiply(tw)).multiply(b.rest);
   }
 }
