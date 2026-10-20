@@ -194,7 +194,7 @@ export const CONFIG = {
     boostLeanDeg: 15,  // a little more lean while boosting (looks fast, still upright)
     sideUse: 0.6,     // share of the swivel push the assist may use for sliding (rest keeps you up)
     allowManual: false, // manual hover (tips with the stick, throttle stays put): off; set true to bring back the toggle
-    walkSpeed: 3, runSpeed: 6,   // on the ground the stick walks (boost = run)
+    walkSpeed: 2.25, runSpeed: 6,   // on the ground the stick walks (boost = run)
     // leaving flight: an aggressive brake to a hover. The body swings back leanDeg past upright into
     // the wind (turnGain: how hard it whips round), hands and boots fire forward, height is held
     // (holdGain); slows at up to maxG g. fx: flame flare, camera shake and fov squeeze as it hits.

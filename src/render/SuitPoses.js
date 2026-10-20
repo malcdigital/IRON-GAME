@@ -105,8 +105,8 @@ export const POSES = {
     LeftArm: { aim: [-0.38, 0.02, -0.93] }, RightArm: { aim: [0.38, 0.02, -0.93] },
     LeftForeArm: { aim: [-0.2, 0.12, -0.97] }, RightForeArm: { aim: [0.2, 0.12, -0.97] },
     LeftHand: { aim: [-0.05, 0.88, -0.47] }, RightHand: { aim: [0.05, 0.88, -0.47] },
-    LeftUpLeg: { aim: [-0.16, -0.12, -0.98] }, RightUpLeg: { aim: [0.16, -0.3, -0.94] },
-    LeftLeg: { aim: [-0.06, -0.85, -0.52] }, RightLeg: { aim: [0.06, -0.9, -0.42] },
+    LeftUpLeg: { aim: [-0.16, 0.3, -0.94] }, RightUpLeg: { aim: [0.16, 0.18, -0.97] },   // knees pulled up high
+    LeftLeg: { aim: [-0.06, -0.97, 0.22] }, RightLeg: { aim: [0.06, -0.95, 0.3] },
     LeftFoot: { rot: [-30, 0, 0] }, RightFoot: { rot: [-30, 0, 0] },
   },
   // Launch (matches art/takeoff_ref.mp4): straight and upright as the jets lift you, arms down at
@@ -546,7 +546,7 @@ export class SuitPoser {
       };
       steer('LeftArm', -0.35, 1, 0.15); steer('RightArm', 0.35, 1, 0.15);
       steer('LeftForeArm', -0.25, 1, 0); steer('RightForeArm', 0.25, 1, 0);
-      steer('LeftUpLeg', -0.12, 0.9, 0.5); steer('RightUpLeg', 0.12, 0.75, 0.65);
+      steer('LeftUpLeg', -0.12, 0.95, -0.3); steer('RightUpLeg', 0.12, 0.95, -0.18);   // (knees up toward the way you're going)
     }
     // hands: curl each finger joint
     for (const s of STATES) {
