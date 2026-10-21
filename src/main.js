@@ -32,6 +32,7 @@ function start(hotData) {
   const worldView = new WorldView(renderer.scene, game.world);
   const suitView = new SuitView(renderer.scene);
   suitView.build(game.suit);
+  suitView.fx(renderer);   // (embers, smoke, boost ring, heat haze)
   const cargoView = new CargoView(renderer.scene, game.cargo);
   const effects = new Effects(renderer.scene);
   const dust = new DustCloud(renderer.scene);

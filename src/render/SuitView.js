@@ -5,11 +5,13 @@ import { HERO_BUILDERS, buildHeroPilot, PALETTE } from './HeroSuit.js';
 import { loadSuitModel, placeModel } from './ModelSuit.js';
 import { SuitPoser } from './SuitPoses.js';
 import { ThrustTrail } from './ThrustTrails.js';
+import { flameMaterial, Embers, Smoke, ShockRing } from './ThrusterFx.js';
 
 // Builds the suit's 3D model from its parts and shows heat, damage and thrust.
 // Models are simple boxes so they're cheap to draw and easy to replace later.
 
 const UP = new THREE.Vector3(0, 1, 0);
+const _bc = new THREE.Color(), _np = new THREE.Vector3(), _np2 = new THREE.Vector3(), _nd = new THREE.Vector3(), _nv = new THREE.Vector3(), _hp = new THREE.Vector3(), _he = new THREE.Vector3();
 const PILOT_COLOR = 0x2b2f33;
 const BURNT = new THREE.Color(0x231a14);
 const HOT = new THREE.Color(0xff5a20);
@@ -298,13 +300,19 @@ export class SuitView {
     }
   }
 
+  // Effects that live in the world, not on the suit (made once)
+  fx(renderer) {
+    this.embers = new Embers(this.scene);
+    this.smoke = new Smoke(this.scene);
+    this.ring = new ShockRing(this.scene);
+    this.haze = renderer.haze;
+    this.canvas = renderer.renderer.domElement;
+    this.boostK = 0;
+  }
+
   addFlame(comp, pos) {
-    const outer = new THREE.Mesh(flameGeo, new THREE.MeshBasicMaterial({
-      color: 0xff8a2a, transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending, depthWrite: false,
-    }));
-    const inner = new THREE.Mesh(flameGeo, new THREE.MeshBasicMaterial({
-      color: 0xfff1c0, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false,
-    }));
+    const outer = new THREE.Mesh(flameGeo, flameMaterial(false));   // (hot core, shock diamonds, flicker: ThrusterFx)
+    const inner = new THREE.Mesh(flameGeo, flameMaterial(true));
     const holder = new THREE.Group();
     holder.position.set(...pos);
     const basePos = new THREE.Vector3(...pos);
@@ -313,10 +321,10 @@ export class SuitView {
     holder.add(outer, inner);
     this.root.add(holder);
     const ion = comp.part.visual.glow != null && CONFIG.suitStyle !== 'hero';
-    if (ion) { outer.material.color.setHex(0x5fc9ff); inner.material.color.setHex(0xd8f6ff); }
+    if (ion) for (const m of [outer.material, inner.material]) { m.uniforms.mid.value.setHex(0x8fd8ff); m.uniforms.cool.value.setHex(0x3f8bff); }
     const t = CONFIG.art.trail;
     const trail = new ThrustTrail(this.scene, { core: ion ? t.ionCore : t.core, edge: ion ? t.ionEdge : t.edge, max: t.max });
-    this.flames.push({ comp, holder, outer, inner, basePos, trail });
+    this.flames.push({ comp, holder, outer, inner, basePos, trail, seed: Math.random() * 100, core0: trail.mat.uniforms.core.value.clone(), edge0: trail.mat.uniforms.edge.value.clone() });
   }
 
   update(game, boost, time, camera) {
@@ -369,6 +377,27 @@ export class SuitView {
       flare = Math.max(flare, 1 + (F.flame - 1) * Math.max(0, 1 - this.brakeFxT / F.time) ** 2);
       if (this.brakeFxT > F.time) this.brakeFxT = null;
     }
+    // boost transformation: flames stretch and go blue-white; kicking it in goes off with a bang
+    const TH = CONFIG.art.thrusters;
+    const boostOn = flying && !!game.lastInput?.boost && !this.hideFlames;
+    if (boostOn && !this.boostWas && this.ring) {
+      this.bangT = 0;
+      const back = this._tmpV.set(0, -0.6, 0.35).applyQuaternion(b.quat).add(b.pos);
+      const exhaust = this._tmpV2.copy(b.vel).normalize().negate();
+      if (exhaust.lengthSq() < 0.5) exhaust.set(0, -1, 0).applyQuaternion(b.quat);
+      this.ring.fire(back, exhaust);
+      this.embers.burst(back, 45, 12, 1);
+    }
+    this.boostWas = boostOn;
+    this.boostK = (this.boostK ?? 0) + ((boostOn ? 1 : 0) - (this.boostK ?? 0)) * Math.min(1, dt * (boostOn ? 8 : 3));
+    const bk = this.boostK;
+    if (this.bangT != null) {
+      this.bangT += dt;
+      flare = Math.max(flare, 1 + 0.9 * Math.max(0, 1 - this.bangT / 0.35) ** 2);
+      if (this.bangT > 0.35) this.bangT = null;
+    }
+    const vh = this.canvas?.height ?? innerHeight;
+    let hz = 0;
     for (const f of this.flames) {
       const u = f.comp.throttle;
       // (the back thrusters only show in flight; in a hover the hands and boots carry the look)
@@ -377,11 +406,45 @@ export class SuitView {
       if (on) {
         // Nozzles swivel: point the flame along the real thrust direction
         if (f.comp.thrustDir) f.holder.quaternion.setFromUnitVectors(UP, f.comp.thrustDir);
-        const flicker = 0.85 + Math.random() * 0.3;
-        const len = (0.15 + u * (boost ? 1.1 : 0.7)) * flicker * T.flameScale * flare;
-        const w = (0.6 + u * 0.6) * (1 + (flare - 1) * 0.3);
+        // a living flicker (smooth, not random jitter)
+        const flicker = 1 + TH.flicker * (0.6 * Math.sin(time * 31 + f.seed) + 0.4 * Math.sin(time * 57 + f.seed * 2.1));
+        const len = (0.15 + u * (boost ? 1.1 : 0.7)) * flicker * T.flameScale * flare * (1 + TH.boostLength * bk);
+        const w = (0.6 + u * 0.6) * (1 + (flare - 1) * 0.3) * (1 + 0.15 * bk);
         f.outer.scale.set(w, len, w);
-        f.inner.scale.set(w * 0.5, len * 0.55, w * 0.5);
+        f.inner.scale.set(w * 0.5, len * 0.6, w * 0.5);
+        for (const m of [f.outer.material, f.inner.material]) {
+          m.uniforms.time.value = time; m.uniforms.boost.value = bk;
+          m.uniforms.intensity.value = Math.min(1.2, 0.5 + u * 0.7) * (1 + (flare - 1) * 0.3) * (1 - 0.3 * bk);
+        }
+        f.inner.material.uniforms.diamonds.value = TH.diamonds * (0.35 + 0.65 * Math.min(1, u * 1.5)) * (1 + 0.8 * bk);
+        // trails go blue-white with the flames
+        f.trail.mat.uniforms.core.value.copy(f.core0).lerp(_bc.setHex(TH.trailBoostCore), bk);
+        f.trail.mat.uniforms.edge.value.copy(f.edge0).lerp(_bc.setHex(TH.trailBoostEdge), bk);
+        // embers, smoke and heat haze from this nozzle
+        if (this.embers && dt > 0) {
+          const nozzle = f.holder.getWorldPosition(_np);
+          const ex = _nd.copy(f.comp.thrustDir ?? f.comp.thruster.dir).applyQuaternion(b.quat).negate();   // (exhaust: the way the flame points)
+          const E = TH.embers;
+          this.embers.emit(f, nozzle, ex, _nv.copy(b.vel).multiplyScalar(0.8), (flying ? E.rate : E.hoverRate) * u * (1 + E.boostRate * bk), dt, bk);
+          const S = TH.smoke, room = game.caps?.room ?? 99;
+          if (!flying && room < S.washRange && f.comp.slot !== 'back') {
+            // the jets washing over the ground: smoke rolling out along it
+            const gy = b.pos.y - CONFIG.pilot.feetHeight - room;
+            const a = Math.random() * Math.PI * 2, sp = S.washSpeed * (0.6 + Math.random() * 0.8);
+            this.smoke.emit(f, _np2.set(nozzle.x, gy + 0.15, nozzle.z), _nv.set(Math.cos(a) * sp, 0.3, Math.sin(a) * sp), S.washRate * u * (1 - room / S.washRange), dt);
+          } else if (flying && f.comp.slot === 'back') {
+            this.smoke.emit(f, nozzle, _nv.copy(ex).multiplyScalar(3).addScaledVector(b.vel, 0.85), S.flightRate * (0.5 + bk) * (1 - THREE.MathUtils.smoothstep(b.vel.length(), 12, 30)), dt, 0.7);   // (slow flight only: at speed it would just be a dotted line)
+          }
+          if (this.haze && camera && hz < 6) {
+            const H = TH.haze;
+            const a2 = _hp.copy(nozzle).project(camera), e2 = _he.copy(nozzle).addScaledVector(ex, H.length * (0.6 + u) * (1 + bk)).project(camera);
+            if (a2.z < 1 && a2.z > -1) {
+              this.haze.uniforms.src.value[hz].set(a2.x * 0.5 + 0.5, a2.y * 0.5 + 0.5, (e2.x - a2.x) * 0.5, (e2.y - a2.y) * 0.5);
+              this.haze.uniforms.amt.value[hz] = H.strength * Math.min(1, u * 1.5) * (1 + 0.5 * bk);
+              hz++;
+            }
+          }
+        }
         // drop a streak point at the nozzle, drifting out along the exhaust
         if (dt > 0) {
           const pos = f.holder.getWorldPosition(this._tmpV);
@@ -393,6 +456,15 @@ export class SuitView {
         }
       }
       if (camPos) f.trail.update(this.hideFlames ? 10 : dt, camPos);   // (cleared while posing)
+    }
+    if (this.haze) {
+      for (let i = hz; i < 6; i++) this.haze.uniforms.amt.value[i] = 0;
+      this.haze.uniforms.time.value = time;
+    }
+    if (this.embers) {
+      this.embers.update(dt, camera, vh);
+      this.smoke.update(dt, camera, vh);
+      this.ring.update(dt);
     }
 
     // The 3D model is one piece: overall damage darkens it, the hottest part sets the glow

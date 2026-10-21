@@ -5,6 +5,7 @@ import { UnrealBloomPass } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/exam
 import { ShaderPass } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/OutputPass.js';
 import { CONFIG } from '../core/config.js';
+import { HAZE } from './ThrusterFx.js';
 
 // Owns the WebGL renderer, scene, lights and camera.
 // The look (CONFIG.art): a painted sunset sky, a low warm sun, lavender haze, glow (bloom)
@@ -46,6 +47,8 @@ export class Renderer {
     // Post: bloom (glow) and the colour grade
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
+    this.haze = new ShaderPass(HAZE);   // heat shimmer behind the thrusters (SuitView sets where)
+    this.composer.addPass(this.haze);
     this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), art.bloom.strength, art.bloom.radius, art.bloom.threshold);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
@@ -124,6 +127,7 @@ export class Renderer {
     this.composer.setSize(w, h);
     this.bloom.resolution.set(w / 2, h / 2);
     this.camera.aspect = w / h;
+    this.haze.uniforms.aspect.value = w / h;
     this.camera.updateProjectionMatrix();
   }
 

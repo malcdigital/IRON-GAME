@@ -269,6 +269,19 @@ export const CONFIG = {
     rim: { color: 0xffa860, strength: 0.45, power: 3.2 },        // warm edge light on the suit
     // Thrust streaks: each nozzle leaves a glowing ribbon. life = how long a bit of it lasts (s);
     // it drifts out of the nozzle at exhaustSpeed (m/s) plus carry × the suit's own speed
+    // Thruster looks (src/render/ThrusterFx.js). Flame colours down the jet: hot (at the nozzle) ->
+    // mid -> cool (tip); boost* when boosting. diamonds: shock-diamond brightness, diamondCount: how
+    // many down the flame. flicker: length pulse (0..1), wobble: sideways wobble (flame widths).
+    // boostLength: how much longer the flames get when boosting. haze: shimmer strength, length (m).
+    thrusters: {
+      hot: 0xfffbe8, mid: 0xffc04a, cool: 0xff5a1e, boostHot: 0xdff4ff, boostMid: 0x4aa8ff, boostCool: 0x2f3cff,
+      diamonds: 0.9, diamondCount: 4, flicker: 0.12, wobble: 0.025, boostLength: 0.7, boostRate: 4,
+      trailBoostCore: 0xeaf8ff, trailBoostEdge: 0x4f8dff,
+      embers: { rate: 22, hoverRate: 8, boostRate: 3, speed: 9, spread: 2.5, life: 0.45, size: 0.05, gravity: 5, drag: 2.5, brightness: 1.4, hot: 0xffe9a0, cool: 0xff3a10, boost: 0xa8e4ff },
+      smoke: { washRate: 26, washRange: 3.5, washSpeed: 4, flightRate: 3, spread: 1.2, life: 1.6, size: 0.45, rise: 0.6, drag: 1.6, opacity: 0.32, color: 0xb7aaa6 },
+      ring: { radius: 2.6, time: 0.35, drift: -6, opacity: 0.8 },
+      haze: { strength: 1.0, length: 0.9 },
+    },
     // thrust trails: at most life / hoverLife s long, and never longer than length / hoverLength /
     // boostLength m (so they're the same size at any speed)
     trail: { life: 0.28, hoverLife: 0.22, length: 0.9, hoverLength: 0.3, boostLength: 1.25, exhaustSpeed: 9, carry: 0.15, width: 0.1, boostWidth: 0.15, max: 40,
