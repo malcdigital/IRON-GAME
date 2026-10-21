@@ -388,10 +388,11 @@ export class Game {
         this.spinToward(q, R.settleRate, R.settleGain);
       }
       this.stunT = Math.max(0, this.stunT - dt);
-      input = { ...input, cut: true, up: 0, down: 0, forward: 0, strafe: 0, yaw: 0, pitch: 0, roll: 0, boost: false, takeoffBoost: false };
+      // (cutLatch: knocked out, nothing fires the jets for him: the safety catch stays out of it too)
+      input = { ...input, cut: true, cutLatch: true, up: 0, down: 0, forward: 0, strafe: 0, yaw: 0, pitch: 0, roll: 0, boost: false, takeoffBoost: false };
       if (this.stunT === 0 && !this.grounded) {
         const c = CONFIG.crash, sideways = Math.hypot(body.vel.x, body.vel.z);
-        if (this.knockFlying && sideways > c.keepFlightSpeed && (this.caps.room ?? 0) > c.rescueAbortRoom) {
+        if (this.knockFlying && sideways > c.keepFlightSpeed && (this.caps.room ?? 0) > c.rescueMinRoom) {
           // a glancing hit that didn't kill your speed: straight back into flight along your path
           this.controller.enterFlight(body, null);
           events.emit('toast', { text: 'Back in flight' });
@@ -401,7 +402,7 @@ export class Game {
           const R = CONFIG.crash.recovery, fall = Math.max(0, -body.vel.y), room = this.caps.room ?? 0;
           const need = fall * (R.tuckTime + R.flipTime * 0.5) + (fall * fall) / (2 * c.rescueBrakeAccel) + 1;
           if (room > Math.max(c.rescueMinRoom, need)) this.rescue = { phase: 'tuck', t: 0 };
-          else if (fall > 3) this.helpless = true;
+          else this.helpless = true;   // (too low: no time to save it, he comes down)
         }
       }
     }
