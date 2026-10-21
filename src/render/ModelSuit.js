@@ -88,16 +88,17 @@ function animeFrom(m, cfg) {
 // shapes with ink lines (assets/suit_paint.jpg, baked from the model's own texture), soft two-tone
 // shading (warm where the sun hits, cool lavender in shade), a crisp painted highlight, the warm
 // sunset rim and a dark ink outline round the silhouette
-let paintMap = null;
-function paintTexture(cfg, like) {
-  if (!paintMap) {
-    paintMap = new THREE.TextureLoader().load(cfg.map);
-    paintMap.flipY = false;
-    paintMap.colorSpace = THREE.SRGBColorSpace;
-    paintMap.anisotropy = 4;
+const paintMaps = {};
+function paintTexture(url, like, srgb) {
+  if (!paintMaps[url]) {
+    const t = paintMaps[url] = new THREE.TextureLoader().load(url);
+    t.flipY = false;
+    if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 8;
   }
-  if (like) { paintMap.wrapS = like.wrapS; paintMap.wrapT = like.wrapT; paintMap.channel = like.channel; }
-  return paintMap;
+  const t = paintMaps[url];
+  if (like) { t.wrapS = like.wrapS; t.wrapT = like.wrapT; t.channel = like.channel; }
+  return t;
 }
 function paintGradient(cfg) {
   // dark to light across the terminator: shade colour, then a soft step up to the lit colour
@@ -115,9 +116,9 @@ function paintGradient(cfg) {
 function paintFrom(m, cfg) {
   const p = cfg.paint, rim = cfg.rim;
   const n = new THREE.MeshToonMaterial({
-    color: m.color, map: paintTexture(p, m.map),
+    color: m.color, map: paintTexture(p.map, m.map, true),
     emissive: m.emissive, emissiveMap: m.emissiveMap, emissiveIntensity: m.emissiveIntensity,
-    normalMap: m.normalMap, normalScale: new THREE.Vector2(p.normal, p.normal),
+    normalMap: p.normalMap ? paintTexture(p.normalMap, m.normalMap, false) : m.normalMap, normalScale: new THREE.Vector2(p.normal, p.normal),
     gradientMap: paintGradient(p), side: m.side,
   });
   n.onBeforeCompile = (sh) => {
