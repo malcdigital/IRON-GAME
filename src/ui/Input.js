@@ -87,6 +87,7 @@ export class Input {
     a.down = Math.max(d('down'), g.down);
     a.boost = this.down('boost') || g.boost;
     a.cut = this.down('cut') || this.cCut || !!g.cut;
+    a.cutLatch = this.cCut || !!g.cut;   // (double-tapped: stays cut, no safety catch)
     a.brake = this.down('brake') || !!g.brake;
     a.takeoffBoost = !!g.takeoffBoost;
     if (!this.enabled) {

@@ -512,7 +512,9 @@ export class Game {
     // Thruster cut-off (hover): free-fall while held. Safety catch: if whatever is below is
     // coming up too fast to stop in time, the thrusters fire anyway.
     const hovering = this.controller.mode === 'assist' && !this.controller.flying;
-    if (input.cut && hovering && !this.grounded && !this.launchSeq) {
+    // (double-tapped cut: the thrusters stay off all the way down; you land on your feet, superhero style)
+    if (input.cut && input.cutLatch && hovering && !this.grounded && !this.launchSeq && body.vel.y < -4) this.heroDrop = true;
+    if (input.cut && !input.cutLatch && hovering && !this.grounded && !this.launchSeq) {
       const co = CONFIG.assist.cutoff, fall = Math.max(0, -body.vel.y);
       const room = body.pos.y - CONFIG.pilot.feetHeight - this.surfaceBelow(body.pos);
       const stop = (fall * fall) / (2 * co.catchAccel);
@@ -866,6 +868,9 @@ export class Game {
         this.groundCollider = c.collider;
       }
       const dmg = impactDamage(speed);
+      // feet first onto the ground at the end of a drop: the suit takes it (superhero landing)
+      const footDrop = this.heroDrop && c.sphere.foot && c.normal.y > 0.7;
+      if (footDrop) continue;
       if (dmg > 0 && !(this.catchGrace > 0)) applyZoneDamage(this.suit, c.sphere.zone, dmg);   // (never hurt by a safety catch)
       if (speed > hardest) hardest = speed;
       if (speed > 3) events.emit('impact', { point: c.point.clone(), speed });
@@ -1035,6 +1040,8 @@ export class Game {
     const b = this.body, v = b.vel.length(), c = CONFIG.crash;
     if (v < c.braceSpeed) return Infinity;
     const d = this._c.copy(b.vel).divideScalar(v), reach = v * c.braceTime * 1.5;
+    // coming down feet first (hovering down, or dropping with the thrusters cut): that's a landing, not a crash
+    if (!this.controller.flying && d.y < -0.5 && this._up.copy(Y).applyQuaternion(b.quat).y > 0.7) return Infinity;
     let best = Infinity;
     for (const col of this.world.colliders) {
       const t = rayBox(b.pos, d, col.min, col.max, 0.6, reach);
