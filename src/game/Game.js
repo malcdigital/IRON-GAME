@@ -1229,8 +1229,9 @@ export class Game {
     // where the chest is now, as an angle round the head axis (0 = facing the sky)
     const chest = this._v2.set(0, 0, -1).applyQuaternion(b.quat);
     const th0 = Math.atan2(chest.dot(side), chest.dot(Y));
-    const turns = sp + Math.abs(b.vel.y) > R.bigAbove ? R.halfTurnsBig : R.halfTurns;
-    const th1 = Math.round((th0 + dir * turns * Math.PI) / Math.PI) * Math.PI;   // (lands exactly on his back or front)
+    // whole turns only, so he ends the way he fell: on his back stays on his back, face down stays face down
+    const turns = sp + Math.abs(b.vel.y) > R.bigAbove ? R.turnsBig : R.turns;
+    const th1 = Math.round(th0 / Math.PI) * Math.PI + dir * turns * Math.PI * 2;
     this.groundRoll = { t: 0, h: h.clone(), side, th0, th1, q0: b.quat.clone(), p0: b.pos.clone(), time: R.time * Math.abs(th1 - th0) / Math.PI };
     this.helpless = false; this.stunT = 0; this.lyingDown = false;
     b.vel.set(0, 0, 0); b.angVel.set(0, 0, 0);
@@ -1248,7 +1249,7 @@ export class Game {
     const m = this._rollM ??= new THREE.Matrix4();
     m.makeBasis(xAxis, r.h, zAxis);
     const q = this._qTmp.setFromRotationMatrix(m);
-    b.quat.copy(r.q0).slerp(q, Math.min(1, r.t / 0.08));
+    b.quat.copy(r.q0).slerp(q, THREE.MathUtils.smoothstep(r.t, 0, R.blendIn));   // (eases in from exactly how he landed)
     // rolling along the ground (a log about R.radius thick)
     b.pos.copy(r.p0).addScaledVector(r.side, R.radius * (th - r.th0));
     b.pos.y = this.surfaceBelow(b.pos) + R.radius;

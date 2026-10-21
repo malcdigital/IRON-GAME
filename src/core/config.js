@@ -234,9 +234,10 @@ export const CONFIG = {
   // slowAbove m/s). head: where the clip's head points at its start (x, z in the suit's frame), so the
   // clip lines up with how he's really lying; speed: playback speed; time: the clip's length (s).
   recover: { delay: 0.8, slowAbove: 28,
-    // hitting the ground knocked out: a log roll (halfTurns half turns, halfTurnsBig if he hits faster
-    // than bigAbove m/s; time s per half turn; radius: how thick he is lying down, m)
-    roll: { halfTurns: 2, halfTurnsBig: 3, bigAbove: 14, time: 0.32, radius: 0.22 },
+    // hitting the ground knocked out: a log roll of whole turns (turns, or turnsBig if he hits faster
+    // than bigAbove m/s), so he ends the way he fell; time s per half turn; blendIn s to ease in from
+    // how he landed; radius: how thick he is lying down, m
+    roll: { turns: 1, turnsBig: 2, bigAbove: 14, time: 0.32, blendIn: 0.18, radius: 0.22 },
     clips: {
       back: { name: 'getUpBack', head: [0.21, 0.98], speed: 2.2, time: 8.27 },
       front: [{ name: 'getUpFront', head: [-0.46, -0.89], speed: 1.1, time: 2.33 }, { name: 'getUpFront2', head: [0.81, -0.4], speed: 1.1, time: 1.67 }],
