@@ -28,8 +28,10 @@ const FRAG = `
     float halo = exp(-abs(vV) * abs(vV) * 7.0) * 0.22 * (1.0 - vT);
     // turbulence flowing back along the jet: streaky (stretched along it)
     vec2 q = vec2(vU * 7.0 - time * 14.0, vV * 2.2 + seed);
-    float turb = fbm(q);
-    float streak = fbm(vec2(vU * 2.5 - time * 9.0, vV * 6.0 + seed * 1.7));
+    // curling turbulence: the noise is pushed around by more noise
+    vec2 warp = vec2(fbm(q * 0.8 + vec2(time * 2.0, 0.0)), fbm(q * 0.8 + vec2(5.2, -time * 2.0)));
+    float turb = fbm(q + warp * 1.6);
+    float streak = fbm(vec2(vU * 2.5 - time * 9.0, vV * 6.0 + seed * 1.7) + warp * 0.8);
     // the edge wanders with the turbulence and frays toward the tail
     float width = 1.0 - 0.35 * vT * (turb - 0.2);
     float body = 1.0 - smoothstep(0.55 * width, 1.0 * width, a);
@@ -41,22 +43,19 @@ const FRAG = `
     c = mix(c, edge * vec3(0.7, 0.25, 0.12), smoothstep(0.5, 1.0, vT));
     c += core * fil * 1.4;
     c *= 0.75 + 0.5 * streak;
-    // bright flecks racing down the hot part of the jet
-    float fleck = smoothstep(0.82, 0.97, n(vec2(vU * 26.0 - time * 30.0, vV * 9.0 + seed))) * (1.0 - smoothstep(0.1, 0.6, vT)) * (1.0 - smoothstep(0.3, 0.7, a));
-    c += core * fleck * 1.2;
     float along = pow(1.0 - vT, 1.3);
     vec3 glow = edge * halo * (0.6 + 0.4 * turb);
     gl_FragColor = vec4((c * body * fray + glow) * along * vI * opacity, 1.0);
   }`;
 
-const SUB = 6;   // smooth-curve samples per stretch between two points
+const SUB = 8;   // smooth-curve samples per stretch between two points
 const GLOW = 2.2;   // the ribbon is this much wider than the jet itself (the rest is soft glow)
 
 export class ThrustTrail {
   constructor(scene, { core, edge, max = 48 }) {
     this.max = max;
     this.maxLen = Infinity;   // longest the streak may be (m): trimmed beyond it
-    this.spacing = 0.025;     // at most this far between points (m): fills the gaps when moving fast
+    this.spacing = 0.015;     // at most this far between points (m): fills the gaps when moving fast
     this.pts = [];   // { p, v, age, life, w, i, d }
     this.prevNozzle = null;
     const verts = (max - 1) * SUB + 1, n = verts * 2;
@@ -95,7 +94,7 @@ export class ThrustTrail {
   emit(pos, vel, life, width, intensity, dt = 0) {
     const prev = this.prevNozzle;
     let steps = 1;
-    if (prev && dt > 0) steps = Math.min(24, Math.max(1, Math.ceil(prev.distanceTo(pos) / this.spacing)));
+    if (prev && dt > 0) steps = Math.min(40, Math.max(1, Math.ceil(prev.distanceTo(pos) / this.spacing)));
     for (let k = steps - 1; k >= 0; k--) {
       const f = k / steps;   // (0 = now, toward 1 = back along the way it came)
       let pt;

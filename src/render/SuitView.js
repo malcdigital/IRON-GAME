@@ -386,7 +386,7 @@ export class SuitView {
       const exhaust = this._tmpV2.copy(b.vel).normalize().negate();
       if (exhaust.lengthSq() < 0.5) exhaust.set(0, -1, 0).applyQuaternion(b.quat);
       this.ring.fire(back, exhaust);
-      this.embers.burst(back, 45, 12, 1);
+      if (TH.embers.enabled) this.embers.burst(back, 45, 12, 1);
     }
     this.boostWas = boostOn;
     this.boostK = (this.boostK ?? 0) + ((boostOn ? 1 : 0) - (this.boostK ?? 0)) * Math.min(1, dt * (boostOn ? 8 : 3));
@@ -425,7 +425,7 @@ export class SuitView {
           const nozzle = f.holder.getWorldPosition(_np);
           const ex = _nd.copy(f.comp.thrustDir ?? f.comp.thruster.dir).applyQuaternion(b.quat).negate();   // (exhaust: the way the flame points)
           const E = TH.embers;
-          this.embers.emit(f, nozzle, ex, _nv.copy(b.vel).multiplyScalar(0.8), (flying ? E.rate : E.hoverRate) * u * (1 + E.boostRate * bk), dt, bk);
+          if (E.enabled) this.embers.emit(f, nozzle, ex, _nv.copy(b.vel).multiplyScalar(0.8), (flying ? E.rate : E.hoverRate) * u * (1 + E.boostRate * bk), dt, bk);
           const S = TH.smoke, room = game.caps?.room ?? 99;
           if (!flying && room < S.washRange && f.comp.slot !== 'back') {
             // the jets washing over the ground: smoke rolling out along it

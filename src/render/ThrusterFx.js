@@ -11,9 +11,10 @@ import { CONFIG } from '../core/config.js';
 
 const FLAME_VERT = `
   uniform float time; uniform float seed; uniform float wobble;
-  varying float vAlong; varying vec3 vN; varying vec3 vV;
+  varying float vAlong; varying vec3 vN; varying vec3 vV; varying float vAng;
   void main() {
     vec3 p = position;
+    vAng = atan(p.x, p.z);
     float along = clamp(-p.y, 0.0, 1.0);          // 0 at the nozzle, 1 at the tip
     // the flame wobbles, more toward the tip
     float w = wobble * along * along;
@@ -29,9 +30,18 @@ const FLAME_FRAG = `
   uniform float time; uniform float seed; uniform float intensity; uniform float boost; uniform float core;
   uniform float diamonds; uniform float diamondCount;
   uniform vec3 hot; uniform vec3 mid; uniform vec3 cool; uniform vec3 bHot; uniform vec3 bMid; uniform vec3 bCool;
-  varying float vAlong; varying vec3 vN; varying vec3 vV;
+  varying float vAlong; varying vec3 vN; varying vec3 vV; varying float vAng;
+  float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  float n(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
+    return mix(mix(h(i), h(i+vec2(1,0)), f.x), mix(h(i+vec2(0,1)), h(i+vec2(1,1)), f.x), f.y); }
+  float fbm(vec2 p){ return 0.5 * n(p) + 0.3 * n(p * 2.2 + 3.1) + 0.2 * n(p * 4.7 + 7.7); }
   void main() {
     float t = vAlong;
+    // licking tongues of fire: noise wrapped round the cone and racing down it; the flame
+    // breaks up into tongues toward the tip
+    vec2 tq = vec2(vAng * 1.2732 + seed, t * 5.0 - time * 11.0);
+    float tongue = fbm(tq + vec2(fbm(tq * 0.7 + time), 0.0));
+    float tongues = smoothstep(t * 0.95 - 0.15, t * 0.95 + 0.2, tongue + 0.25);
     // facing the camera = looking through the thick of the flame; edges are thin
     float face = pow(abs(dot(normalize(vN), normalize(vV))), 1.4);
     // colour down the flame: white-hot core -> mid -> cool tip (boost: blue-white)
@@ -44,7 +54,7 @@ const FLAME_FRAG = `
     float dia = pow(0.5 + 0.5 * cos(ph * 6.2831), 10.0) * smoothstep(0.03, 0.15, t) * (1.0 - smoothstep(0.55, 0.9, t));
     // flicker: brightness shimmering down the length
     float fl = 0.85 + 0.15 * sin(time * 47.0 + seed + t * 21.0) * sin(time * 29.0 + seed * 3.1 - t * 13.0);
-    float a = face * (1.0 - smoothstep(0.55, 1.0, t)) * intensity * fl;
+    float a = face * (1.0 - smoothstep(0.6, 1.0, t)) * intensity * fl * tongues * (0.8 + 0.4 * tongue);
     col += h * dia * diamonds * face * 1.4;
     gl_FragColor = vec4(col * a, 1.0);
   }`;

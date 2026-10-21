@@ -280,7 +280,7 @@ export const CONFIG = {
       hot: 0xfffbe8, mid: 0xffc04a, cool: 0xff5a1e, boostHot: 0xdff4ff, boostMid: 0x4aa8ff, boostCool: 0x2f3cff,
       diamonds: 0.9, diamondCount: 4, flicker: 0.12, wobble: 0.025, boostLength: 0.7, boostRate: 4,
       trailBoostCore: 0xeaf8ff, trailBoostEdge: 0x4f8dff,
-      embers: { rate: 22, hoverRate: 8, boostRate: 3, speed: 9, spread: 2.5, life: 0.45, size: 0.05, gravity: 5, drag: 2.5, brightness: 1.4, hot: 0xffe9a0, cool: 0xff3a10, boost: 0xa8e4ff },
+      embers: { enabled: false, rate: 22, hoverRate: 8, boostRate: 3, speed: 9, spread: 2.5, life: 0.45, size: 0.05, gravity: 5, drag: 2.5, brightness: 1.4, hot: 0xffe9a0, cool: 0xff3a10, boost: 0xa8e4ff },
       smoke: { washRate: 26, washRange: 3.5, washSpeed: 4, flightRate: 3, spread: 1.2, life: 1.6, size: 0.45, rise: 0.6, drag: 1.6, opacity: 0.32, color: 0xb7aaa6 },
       ring: { radius: 2.6, time: 0.35, drift: -6, opacity: 0.8 },
       haze: { strength: 0.175, length: 0.9 },
