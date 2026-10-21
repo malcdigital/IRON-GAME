@@ -9,7 +9,7 @@ import { CONFIG } from '../core/config.js';
 // turning; the result goes to the poser as bone aims (in place of the stand pose).
 // The clips' own travel is thrown away: the game moves you, and the steps keep pace with it.
 
-const _a = new THREE.Vector3(), _b = new THREE.Vector3();
+const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _q = new THREE.Quaternion();
 
 export class Locomotion {
   constructor() {
@@ -45,6 +45,20 @@ export class Locomotion {
       _a.set(D[a], D[a + 1], D[a + 2]).lerp(_b.set(D[b], D[b + 1], D[b + 2]), k);
       this.aims[this.bones[j]].addScaledVector(_a, w);
     }
+  }
+
+  // A whole-body clip (getting up) at u (0..1): bone aims into `aims`, and the hips' turn and height
+  sampleFull(name, u, aims, q) {
+    const c = this.clips[name];
+    if (!c?.hipsQ) return null;
+    const nb = this.bones.length, n = c.frames, f = THREE.MathUtils.clamp(u, 0, 1) * (n - 1);
+    const i0 = Math.floor(f), i1 = Math.min(n - 1, i0 + 1), k = f - i0, D = c.dirs, H = c.hipsQ;
+    for (let j = 0; j < nb; j++) {
+      const a = (i0 * nb + j) * 3, b = (i1 * nb + j) * 3;
+      (aims[this.bones[j]] ??= new THREE.Vector3()).set(D[a], D[a + 1], D[a + 2]).lerp(_b.set(D[b], D[b + 1], D[b + 2]), k).normalize();
+    }
+    q.set(H[i0 * 4], H[i0 * 4 + 1], H[i0 * 4 + 2], H[i0 * 4 + 3]).slerp(_q.set(H[i1 * 4], H[i1 * 4 + 1], H[i1 * 4 + 2], H[i1 * 4 + 3]), k);
+    return c.hipsY[i0] + (c.hipsY[i1] - c.hipsY[i0]) * k - c.hipsRest;   // (height change from standing, m)
   }
 
   // vel: ground velocity in the suit's frame (x right, y forward, m/s); yawRate: + turning left (rad/s)

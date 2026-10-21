@@ -86,7 +86,7 @@ export class Game {
     b.pos.y = this.surfaceBelow(b.pos) + CONFIG.pilot.feetHeight;   // standing on the pad (not hovering just above it)
     b.vel.set(0, 0, 0);
     b.angVel.set(0, 0, 0);
-    this.heroDrop = false; this.landLockT = 0; this.heroSteadyT = 0; this.flipLaunch = null; this.helpless = false;
+    this.heroDrop = false; this.landLockT = 0; this.heroSteadyT = 0; this.flipLaunch = null; this.helpless = false; this.getUp = null;
     b.quat.setFromAxisAngle(Y, this.world.spawn.heading);
     this.controller.reset(this.world.spawn.heading);
     this.suit.repair();
@@ -257,6 +257,7 @@ export class Game {
   handleAction(action) {
     switch (action) {
       case 'flight':
+        if (this.getUp) break;   // (still getting up off the ground)
         if (this.controller.flying) {
           this.controller.exitFlight(this.body, this.hoverFraction());
           // (switching back straight after a launch: the launch's push, boost and climb stop here,
@@ -565,6 +566,13 @@ export class Game {
     if (input.up > 0 || this.controller.flying) this.heroDrop = false;   // (climbing away: no landing)
     this.caps.landSpeed = this.heroDrop && !this.grounded ? CONFIG.pose.landing.dropSpeed : null;
     // superhero landing: hold it a moment before you can walk off
+    // getting up off the ground (a clip, see checkRecover): hands off until he's up
+    if (this.getUp) {
+      this.getUp.t += dt;
+      input = { ...input, forward: 0, strafe: 0, yaw: 0, up: 0, down: 0, cut: false, boost: false, takeoffBoost: false };
+      body.vel.x = 0; body.vel.z = 0;
+      if (this.getUp.t >= this.getUp.time) { this.getUp = null; events.emit('toast', { text: 'Back on your feet' }); }
+    }
     if (this.landLockT > 0) {
       this.landLockT -= dt; input = { ...input, forward: 0, strafe: 0 };
       if (this.grounded) { body.vel.x = 0; body.vel.z = 0; body.vel.y = Math.min(0, body.vel.y); }   // (planted: no sliding or bouncing)
@@ -1150,6 +1158,7 @@ export class Game {
       this.knockYaw = hv > 0.3 ? Math.atan2(-dir.x, -dir.z) : yawOf(b.quat);
     }
     const t = Math.min(c.stunMax, c.stunMin + (speed - c.knockSpeed) * c.stunPerMs);
+    this.lastKnockSpeed = speed;   // (a hard one: the slow get-up)
     if (this.stunT <= 0) events.emit('toast', { text: 'Crash! Suit rebooting…', kind: 'hot' });
     if (this.stunT <= 0) this.knockFlying = this.controller.flying;   // (a new knockout: were we flying?)
     this.stunT = Math.max(this.stunT, t);
@@ -1176,9 +1185,16 @@ export class Game {
     const b = this.body;
     this._up.copy(Y).applyQuaternion(b.quat);
     const lying = this.anyContact && this._up.y < CONFIG.stance.minUp && b.vel.length() < 2;
-    this.recoverTimer = lying ? this.recoverTimer + dt : 0;
+    this.recoverTimer = lying && !this.getUp ? this.recoverTimer + dt : 0;
     if (this.recoverTimer < CONFIG.recover.delay) return;
-    const heading = yawOf(b.quat);
+    // get up with a clip that matches how he's lying: on his back or face down. The clip is turned
+    // so its head lines up with where his head really is.
+    const RC = CONFIG.recover.clips;
+    const chest = this._c.set(0, 0, -1).applyQuaternion(b.quat), head = this._v4.copy(this._up);
+    const clip = chest.y > 0 ? RC.back : (this.lastKnockSpeed ?? 0) > CONFIG.recover.slowAbove ? RC.frontSlow : RC.front[Math.floor(Math.random() * RC.front.length)];
+    const yawOfV = (x, z) => Math.atan2(-x, -z);
+    const heading = Math.hypot(head.x, head.z) > 0.2 ? yawOfV(head.x, head.z) - yawOfV(clip.head[0], clip.head[1]) : yawOf(b.quat);
+    this.getUp = { name: clip.name, t: 0, time: clip.time / clip.speed };
     b.quat.setFromAxisAngle(Y, heading);
     const floor = Number.isFinite(this.supportHeight) ? this.supportHeight : b.pos.y - 0.3;
     b.pos.y = floor + CONFIG.pilot.feetHeight + 0.02;
@@ -1186,7 +1202,6 @@ export class Game {
     b.angVel.set(0, 0, 0);
     this.controller.reset(heading);
     this.recoverTimer = 0;
-    events.emit('toast', { text: 'Back on your feet' });
   }
 
   telemetry() {

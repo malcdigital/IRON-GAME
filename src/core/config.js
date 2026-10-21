@@ -229,7 +229,16 @@ export const CONFIG = {
     sputterBelow: 0.3,      // below 30% condition thrusters cut out at random
   },
 
-  recover: { delay: 1.6 },
+  // Lying on the ground (after a crash): after delay s he gets up with a matching clip (art/locomotion):
+  // on his back, or face down (a quick one at random, or the slow one after a knockout harder than
+  // slowAbove m/s). head: where the clip's head points at its start (x, z in the suit's frame), so the
+  // clip lines up with how he's really lying; speed: playback speed; time: the clip's length (s).
+  recover: { delay: 0.8, slowAbove: 28,
+    clips: {
+      back: { name: 'getUpBack', head: [0.21, 0.98], speed: 2.2, time: 8.27 },
+      front: [{ name: 'getUpFront', head: [-0.46, -0.89], speed: 1.1, time: 2.33 }, { name: 'getUpFront2', head: [0.81, -0.4], speed: 1.1, time: 1.67 }],
+      frontSlow: { name: 'getUpFrontSlow', head: [0.09, -1.0], speed: 2.5, time: 11.4 },
+    } },
 
   // Evasive moves. Jukes and flares use charges that refill over time.
   evade: {

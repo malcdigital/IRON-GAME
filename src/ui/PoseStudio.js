@@ -65,7 +65,7 @@ export class PoseStudio {
     r.innerHTML = `
       <header class="studio-head"><h2>Pose studio</h2><button class="icon-btn" data-act="close" aria-label="Close pose studio">✕</button></header>
       <div class="studio-tabs pose-tabs" role="group" aria-label="Pose to edit">
-        ${STATES.map((s) => `<button class="studio-tab" data-state="${s}">${LABELS[s] ?? s}</button>`).join('')}
+        ${STATES.filter((s) => s !== 'getup').map((s) => `<button class="studio-tab" data-state="${s}">${LABELS[s] ?? s}</button>`).join('')}
       </div>
       <label class="studio-check"><input type="checkbox" data-act="flat" checked> Lie flat for flight poses</label>
       <p class="studio-hint">Drag a dot to move that limb · drag empty space to orbit · scroll to zoom · right-drag to slide the view</p>

@@ -149,6 +149,9 @@ export const POSES = {
     LeftFoot: { aim: [-0.1, 0.62, -0.78] }, RightFoot: { aim: [0.1, 0.66, -0.74] },
   },
 
+  // Getting up off the ground: the bones come from a clip (art/locomotion, see Locomotion.sampleFull)
+  getup: {},
+
   // Superhero landing (a hard landing, or the end of a drop with the thrusters cut): right fist and
   // right knee on the ground, left foot planted out front, left arm swept back, head down
   land: {
@@ -324,6 +327,8 @@ export class SuitPoser {
     }
     this.suitRoot = suitRoot;
     this.restFootY = this.footY();
+    // our hips stand this much higher than the Mixamo rig's (1.03 m): scales the get-up clips' hip height
+    this.hipsScale = this.byName.Hips && this.restFootY != null ? (this.byName.Hips.bone.getWorldPosition(new THREE.Vector3()).applyMatrix4(new THREE.Matrix4().copy(suitRoot.matrixWorld).invert()).y - this.restFootY + 0.08) / 1.03 : 1.1;
     this.w = Object.fromEntries(STATES.map((s) => [s, s === 'stand' ? 1 : 0]));
     this.crouch = 0;      // landing crouch, 0..1
     this.walkPhase = 0;
@@ -391,7 +396,7 @@ export class SuitPoser {
     const limpWant = stunned ? (airKO ? CONFIG.crash.recovery.limp : 1) : 0;
     this.knocked = (this.knocked ?? 0) + ((airKO ? 1 : 0) - (this.knocked ?? 0)) * (1 - Math.exp(-(airKO ? 10 : game.rescue ? 25 : 4) * dt));
     // (the recovery flip snaps the limbs back under control at once; otherwise they firm up slowly)
-    this.limp += (limpWant - this.limp) * (1 - Math.exp(-(limpWant ? 20 : game.rescue ? 30 : 2.5) * dt));
+    this.limp += (limpWant - this.limp) * (1 - Math.exp(-(limpWant ? 20 : game.rescue || game.getUp ? 30 : 2.5) * dt));
     // moments: braking into a hover, launching, coming round after a knockout
     const M = P.moments, mo = this.mom;
     // braking out of flight (the game's air brake runs for exitBrake.time)
@@ -435,6 +440,19 @@ export class SuitPoser {
     mo.hopClock += dt;
     mo.hop = mo.hopClock < M.hopTime ? Math.sin(Math.PI * mo.hopClock / M.hopTime) : 0;
     // knocked out → coming round
+    // getting up off the ground: the clip, eased in fast and out over the last bit (it ends standing)
+    const gu = game.getUp;
+    mo.getup = 0; this.getupLift = 0;
+    if (gu && this.loco?.ready) {
+      const u = gu.t / gu.time;
+      this.getupAims ??= {}; this.getupQ ??= new THREE.Quaternion();
+      const lift = this.loco.sampleFull(gu.name, u, this.getupAims, this.getupQ);
+      if (lift != null) {
+        mo.getup = Math.min(1, gu.t / 0.08) * (1 - THREE.MathUtils.smoothstep(u, 0.88, 1));
+        this.getupLift = lift * (this.hipsScale ?? 1.1);
+        this.crouch = 0;
+      }
+    }
     const ko = game.stunT > 0 || !!game.helpless;   // (helpless: still out of it until he lands)
     if (this.wasStunned && !ko) mo.recoverClock = 0;
     this.wasStunned = ko;
@@ -471,7 +489,7 @@ export class SuitPoser {
     const hc = mo.heroClock;
     mo.land = hc < 0.06 ? hc / 0.06 : hc < 0.06 + LD.heroHold ? 1 : Math.max(0, 1 - (hc - 0.06 - LD.heroHold) / LD.heroRise);
     if (flying || game.launchSeq) mo.land = 0;
-    const special = { brace: this.brace, flare: mo.flare, launch: mo.launch * (1 - mo.crouch), recover: mo.recover, crouch: Math.max(mo.crouch, mo.hop * 0.7, mo.charge), aircharge: mo.airCharge, land: mo.land, knocked: this.knocked };
+    const special = { brace: this.brace, flare: mo.flare, launch: mo.launch * (1 - mo.crouch), recover: mo.recover, crouch: Math.max(mo.crouch, mo.hop * 0.7, mo.charge), aircharge: mo.airCharge, land: mo.land, knocked: this.knocked, getup: mo.getup };
     let sp = 0;
     for (const v of Object.values(special)) sp = Math.max(sp, v);
     for (const s of STATES) if (!(s in special)) want[s] *= 1 - sp;
@@ -574,7 +592,7 @@ export class SuitPoser {
       let restW = 0;
       for (const s of STATES) {
         if (w[s] < 1e-3) continue;
-        const la = s === 'stand' && this.locoOn ? this.loco.aims[b.name] : null;
+        const la = s === 'stand' && this.locoOn ? this.loco.aims[b.name] : s === 'getup' ? this.getupAims?.[b.name] : null;
         if (la && b.dir) { b.aim.addScaledVector(la, w[s]); b.hasAim = true; continue; }   // (the clips' aim, no stand twists)
         const p = POSES[s][b.name];
         if (p?.aim && b.dir) { b.aim.addScaledVector(_v.fromArray(p.aim).normalize(), w[s]); b.hasAim = true; }
@@ -829,7 +847,8 @@ export class SuitPoser {
       add('Spine02', -cr * 0.5, 0, 0);
     }
     const th = R.LeftUpLeg?.len ?? 0.45, sh = R.LeftLeg?.len ?? 0.45;
-    this.model.position.y = this.baseY - (th + sh) * (1 - Math.cos(cr * D2R)) * 0.9 + (this.previewLift ?? 0);   // landing crouch
+    this.model.position.y = this.baseY - (th + sh) * (1 - Math.cos(cr * D2R)) * 0.9 + (this.previewLift ?? 0)   // landing crouch
+      + (this.getupLift ?? 0) * (w.getup ?? 0);   // getting up: the hips' height in the clip
 
     // 3. set each bone: carry the parent's motion, aim, then the extra turn
     for (const b of this.list) {
@@ -841,6 +860,7 @@ export class SuitPoser {
         b.cur.premultiply(_q2.setFromUnitVectors(now.normalize(), _v2.copy(b.aim).normalize()));
       }
       if (b.rot.lengthSq() > 1e-4) b.cur.premultiply(_q2.setFromEuler(_e.set(b.rot.x * D2R, b.rot.y * D2R, b.rot.z * D2R)));
+      if (b.name === 'Hips' && (w.getup ?? 0) > 0.001 && this.getupQ) b.cur.premultiply(_q2.identity().slerp(this.getupQ, w.getup));   // (getting up: the whole body's turn)
       if (Math.abs(b.twist) > 0.01 && b.dir) {
         const along = _v.copy(b.dir).applyQuaternion(_q.copy(b.rest).invert()).applyQuaternion(b.cur);
         b.cur.premultiply(_q2.setFromAxisAngle(along.normalize(), b.twist * D2R));
@@ -855,7 +875,7 @@ export class SuitPoser {
       b.bone.quaternion.copy(_q.copy(pCur).invert().multiply(b.cur));
     }
     // Crouching (launch wind-up / hop) and walking: lower the body so the feet stay on the ground
-    const cw = Math.max(this.w.crouch ?? 0, this.w.land ?? 0, this.locoOn ? this.w.stand : 0);
+    const cw = Math.max(this.w.crouch ?? 0, this.w.land ?? 0, this.locoOn ? this.w.stand : 0) * (1 - (this.w.getup ?? 0));
     if (cw > 0.01 && this.restFootY != null) {
       const f = this.footY();
       this.model.position.y += (this.restFootY - f) * cw;
