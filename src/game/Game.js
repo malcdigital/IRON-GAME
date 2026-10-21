@@ -382,6 +382,14 @@ export class Game {
     // Knocked out by a crash: thrusters off and no control; the suit tumbles and falls on its
     // own physics (the safety catch still fires the thrusters before the ground)
     if (this.stunT > 0) {
+      // knocked out in the air: he turns onto his back (knees up, arms reaching up: the 'knocked'
+      // pose), with a slow lazy wobble, instead of tumbling
+      if (!this.grounded && this.knockYaw != null) {
+        const R = CONFIG.crash.recovery, w = 0.12 * Math.sin(this.time * 2.3);
+        const q = this._qTmp3b ??= new THREE.Quaternion();
+        q.setFromAxisAngle(Y, this.knockYaw).multiply(this._qTmp2.setFromAxisAngle(this._xAxis.set(1, 0, 0), Math.PI / 2 + w));
+        this.spinToward(q, R.settleRate, R.settleGain);
+      }
       this.stunT = Math.max(0, this.stunT - dt);
       input = { ...input, cut: true, up: 0, down: 0, forward: 0, strafe: 0, yaw: 0, pitch: 0, roll: 0, boost: false, takeoffBoost: false };
       if (this.stunT === 0 && !this.grounded) {
@@ -392,7 +400,7 @@ export class Game {
           events.emit('toast', { text: 'Back in flight' });
         } else if ((this.caps.room ?? 0) > c.rescueMinRoom) {
           // coming round in the air: twist to face the ground, burn to stop the fall, then upright
-          this.rescue = { phase: 'orient', t: 0 };
+          this.rescue = { phase: 'tuck', t: 0 };
         }
       }
     }
@@ -723,7 +731,7 @@ export class Game {
       }
     }
     // Rescue burn: the hand and boot thrusters fire at the ground (shown on the flames)
-    if (this.rescue?.phase === 'brake' && this.rescue.level > 0.02) {
+    if (this.rescue && this.rescue.level > 0.02) {
       const upBody = this._c.set(0, 1, 0).applyQuaternion(this._qTmp.copy(body.quat).invert());
       for (const t of thr) {
         const slot = t.comp?.slot ?? t.slot;
@@ -818,6 +826,8 @@ export class Game {
 
     // Backflip launch: the body turns on a set path (ignoring the attitude jets), then fires into flight
     const fl = this.flipLaunch;
+    const rflip = this.rescue?.phase === 'flip';
+    if (rflip) body.torque.set(0, 0, 0);
     if (fl) {
       body.torque.set(0, 0, 0);
       // the jets carry his weight through the flip (and soak up any climb or drop); the skid bleeds off
@@ -835,6 +845,7 @@ export class Game {
       this.collide();
     }
     if (fl) this.stepFlip(dt);
+    if (rflip && this.rescue?.phase === 'flip') this.applyRescueFlip();
     this.checkRecover(dt);
 
     // Touching down slowly in flight mode drops back to hover
@@ -940,36 +951,43 @@ export class Game {
   // After a knockout in the air: (1) gyros twist the suit to face the ground, spread like a
   // skydiver; (2) the hand and boot jets burn to stop the fall; (3) back to the normal upright hover.
   stepRescue(dt, input) {
-    const r = this.rescue, c = CONFIG.crash, b = this.body, g = CONFIG.physics.gravity;
+    const r = this.rescue, c = CONFIG.crash, R = c.recovery, b = this.body, g = CONFIG.physics.gravity;
     r.t += dt;
     // too close to the ground: hand over to the safety catch and the normal hover
     if ((this.caps.room ?? 0) < c.rescueAbortRoom) { this.rescue = null; return input; }
-    const heading = this.controller.heading ?? yawOf(b.quat);
-    const target = (this._rescueQ ??= new THREE.Quaternion()).setFromAxisAngle(Y, heading)
-      .multiply(this._qTmp2.setFromAxisAngle(this._xAxis.set(1, 0, 0), -Math.PI / 2));   // head forward, chest to the ground
-    this.caps.attTarget = target;
-    this.caps.attGain = c.rescueTurnGain;
-    r.level = 0;
-    // the hand and boot jets twist the suit (much stronger than the gyros): spin toward the
-    // target at up to rescueSpin rad/s, settling as it arrives
-    const qe = this._qTmp.copy(target).multiply(this._qTmp2.copy(b.quat).invert());
-    if (qe.w < 0) qe.set(-qe.x, -qe.y, -qe.z, -qe.w);
-    const ang = 2 * Math.acos(Math.min(1, qe.w)), sn = Math.sqrt(Math.max(1e-9, 1 - qe.w * qe.w));
-    const wDes = this._c.set(qe.x / sn, qe.y / sn, qe.z / sn).multiplyScalar(Math.min(c.rescueSpin, ang * 5));
-    const alpha = wDes.sub(b.angVel).multiplyScalar(10);
-    b.torque.add(b.inertiaWorld(alpha, alpha));
-    r.err = ang;
-    if (r.phase === 'orient') {
-      if (r.err < c.rescueFacedDeg * Math.PI / 180 || r.t > c.rescueOrientMax) { r.phase = 'brake'; r.t = 0; }
-    } else if (r.phase === 'brake') {
-      // burn: bring the fall down to a gentle sink, and kill the drift
-      const want = -c.rescueSinkSpeed, a = THREE.MathUtils.clamp((want - b.vel.y) * 3, 0, c.rescueBrakeAccel);
-      b.force.y += b.mass * (g + a);
-      b.force.x -= b.vel.x * b.mass * 1.5; b.force.z -= b.vel.z * b.mass * 1.5;
-      r.level = Math.min(1, (g + a) / (g + c.rescueBrakeAccel) * 1.3);
-      if (b.vel.y > -c.rescueSinkSpeed - 1 && r.t > 0.35) { this.rescue = null; events.emit('toast', { text: 'Systems back online' }); }
+    // the jets burn through it: the fall slows to a gentle sink, the drift dies away
+    const want = -c.rescueSinkSpeed, a = THREE.MathUtils.clamp((want - b.vel.y) * 3, 0, c.rescueBrakeAccel);
+    const burn = r.phase === 'tuck' ? 0.6 : 1;
+    b.force.y += b.mass * (g + a) * burn;
+    b.force.x -= b.vel.x * b.mass * 1.2; b.force.z -= b.vel.z * b.mass * 1.2;
+    r.level = Math.min(1, (g + a) / (g + c.rescueBrakeAccel) * 1.3) * burn;
+    if (r.phase === 'tuck') {
+      // knees in tight (the pose), still on his back
+      if (r.t >= R.tuckTime) {
+        // backflip from on his back (90° back) round to upright (360°), twisting to face the way he's going
+        const hv = Math.hypot(b.vel.x, b.vel.z);
+        const yaw1 = hv > 2 ? Math.atan2(-b.vel.x, -b.vel.z) : (this.controller.heading ?? this.knockYaw ?? 0);
+        const yaw0 = this.knockYaw ?? yaw1;
+        Object.assign(r, { phase: 'flip', t: 0, q0: b.quat.clone(), yaw0, dyaw: Math.atan2(Math.sin(yaw1 - yaw0), Math.cos(yaw1 - yaw0)), yaw1 });
+      }
+    } else if (r.phase === 'flip' && r.t >= R.flipTime) {
+      this.rescue = null;
+      this.controller.heading = r.yaw1;
+      b.angVel.set(0, 0, 0);
+      events.emit('toast', { text: 'Systems back online' });
     }
     return { ...input, cut: true, up: 0, down: 0, forward: 0, strafe: 0, yaw: 0, pitch: 0, roll: 0, boost: false, takeoffBoost: false };
+  }
+
+  // The recovery backflip, set after the physics step so it follows its path exactly
+  applyRescueFlip() {
+    const r = this.rescue, R = CONFIG.crash.recovery, b = this.body;
+    const u = Math.min(1, r.t / R.flipTime), e = 0.5 - 0.5 * Math.cos(Math.PI * u);
+    const th = Math.PI / 2 + Math.PI * 1.5 * e, yaw = r.yaw0 + r.dyaw * e;
+    const q = this._qTmp.setFromAxisAngle(Y, yaw).multiply(this._qTmp2.setFromAxisAngle(this._xAxis.set(1, 0, 0), th));
+    b.quat.copy(r.q0).slerp(q, Math.min(1, r.t / 0.12));   // (eases in from wherever he was)
+    const rate = Math.PI * 1.5 * Math.PI * 0.5 * Math.sin(Math.PI * u) / R.flipTime;
+    b.angVel.set(1, 0, 0).applyAxisAngle(Y, yaw).multiplyScalar(rate);
   }
 
   // Boosted takeoff along the burst curve (CONFIG.launch.burst): starts at the jump point, in the
@@ -1087,6 +1105,9 @@ export class Game {
       if (axis.lengthSq() < 0.05) axis.set(Math.random() - 0.5, 0, Math.random() - 0.5);
       axis.normalize().applyAxisAngle(dir, (Math.random() - 0.5) * 0.8);
       b.angVel.addScaledVector(axis, -speed * c.tumble);
+      // the way he was going: he ends up on his back facing it (see the stun in step)
+      const hv = Math.hypot(dir.x, dir.z);
+      this.knockYaw = hv > 0.3 ? Math.atan2(-dir.x, -dir.z) : yawOf(b.quat);
     }
     const t = Math.min(c.stunMax, c.stunMin + (speed - c.knockSpeed) * c.stunPerMs);
     if (this.stunT <= 0) events.emit('toast', { text: 'Crash! Suit rebooting…', kind: 'hot' });

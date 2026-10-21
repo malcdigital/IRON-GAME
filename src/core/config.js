@@ -408,12 +408,17 @@ export const CONFIG = {
   // braces when it will hit something within braceTime seconds.
   crash: { knockSpeed: 14, stunMin: 1.0, stunPerMs: 0.04, stunMax: 3, braceSpeed: 12, braceTime: 0.45,
     tumble: 0.09,     // spin from an off-centre hit: rad/s per m/s of impact speed
-    // Coming round in the air (more than rescueMinRoom m up): twist to face the ground (gyros at
-    // rescueTurnGain × normal, until within rescueFacedDeg or rescueOrientMax s), then burn to slow
-    // the fall to rescueSinkSpeed (up to rescueBrakeAccel m/s² extra), then upright hover.
+    // Coming round in the air (more than rescueMinRoom m up): the recovery flip (below) while the jets
+    // burn to slow the fall to rescueSinkSpeed (up to rescueBrakeAccel m/s² extra); below
+    // rescueAbortRoom the normal hover takes over.
     rescueMinRoom: 5, rescueAbortRoom: 2.5, rescueTurnGain: 2.5, rescueFacedDeg: 20, rescueOrientMax: 1.2, rescueSpin: 7,
     rescueSinkSpeed: 1.5, rescueBrakeAccel: 22,
-    keepFlightSpeed: 18 },   // knocked out in flight but still moving faster than this (m/s, sideways)? come round straight back into flight
+    keepFlightSpeed: 18,   // knocked out in flight but still moving faster than this (m/s, sideways)? come round straight back into flight
+    // knocked out in the air: he turns onto his back (pose 'knocked': knees up, arms reaching up)
+    // at up to settleRate rad/s, limbs a little loose (limp 0..1). Coming round: tuck (tuckTime s),
+    // then a backflip (and twist to face the way you're going) back upright over flipTime s
+    recovery: { settleRate: 5, settleGain: 7, limp: 0.3, tuckTime: 0.22, flipTime: 0.75 },
+  },
 
   // Key bindings. Values are KeyboardEvent.code names.
   keys: {

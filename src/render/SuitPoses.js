@@ -135,6 +135,20 @@ export const POSES = {
   },
   // Launch wind-up (and the small hop off the ground): a deep crouch, tipped forward, arms swept
   // back behind the hips, head up looking ahead (from art/takeoff_ref.mp4). Feet stay under the hips.
+  // Knocked out in the air (art/knocked_ref.webp): on his back, knees pulled up with the shins
+  // pointing at the sky, both arms reaching up with the palms open and fingers spread, chin tucked
+  knocked: {
+    hands: { Left: { curl: -12, thumb: -25 }, Right: { curl: -12, thumb: -25 } },
+    Spine02: { aim: [0, 0.95, -0.3] }, Spine01: { aim: [0, 0.92, -0.38] }, Spine: { aim: [0, 0.9, -0.43] },
+    neck: { aim: [0, 0.85, -0.52] }, Head: { aim: [0, 0.8, -0.6] },
+    LeftArm: { aim: [-0.3, -0.15, -0.94] }, RightArm: { aim: [0.3, -0.15, -0.94] },
+    LeftForeArm: { aim: [-0.15, 0.1, -0.98] }, RightForeArm: { aim: [0.15, 0.1, -0.98] },
+    LeftHand: { aim: [-0.08, 0.25, -0.96] }, RightHand: { aim: [0.08, 0.25, -0.96] },
+    LeftUpLeg: { aim: [-0.17, -0.36, -0.92] }, RightUpLeg: { aim: [0.12, -0.28, -0.95] },
+    LeftLeg: { aim: [-0.08, 0.32, -0.94] }, RightLeg: { aim: [0.06, 0.42, -0.9] },
+    LeftFoot: { aim: [-0.1, 0.62, -0.78] }, RightFoot: { aim: [0.1, 0.66, -0.74] },
+  },
+
   // Superhero landing (a hard landing, or the end of a drop with the thrusters cut): right fist and
   // right knee on the ground, left foot planted out front, left arm swept back, head down
   land: {
@@ -372,7 +386,10 @@ export class SuitPoser {
     const C = CONFIG.crash;
     const braceWant = !game.stunT && game.impactIn < C.braceTime ? 1 : 0;
     this.brace += (braceWant - this.brace) * (1 - Math.exp(-(braceWant ? 18 : 4) * dt));
-    const limpWant = game.stunT > 0 ? 1 : 0;
+    // knocked out: in the air, the 'knocked' pose with the limbs a little loose; on the ground, limp
+    const stunned = game.stunT > 0, airKO = stunned && !grounded;
+    const limpWant = stunned ? (airKO ? CONFIG.crash.recovery.limp : 1) : 0;
+    this.knocked = (this.knocked ?? 0) + ((airKO ? 1 : 0) - (this.knocked ?? 0)) * (1 - Math.exp(-(airKO ? 10 : 4) * dt));
     this.limp += (limpWant - this.limp) * (1 - Math.exp(-(limpWant ? 20 : 2.5) * dt));
     // moments: braking into a hover, launching, coming round after a knockout
     const M = P.moments, mo = this.mom;
@@ -423,13 +440,20 @@ export class SuitPoser {
     const rc = mo.recoverClock;
     // held while the suit rights itself in the air (game.rescue), then a short fade
     if (game.rescue) mo.recoverHold = 0; else mo.recoverHold = (mo.recoverHold ?? 9) + dt;
-    const hold = game.rescue ? 1 : Math.max(0, 1 - mo.recoverHold / 0.6);
+    const hold = game.rescue ? 0 : Math.max(0, 1 - mo.recoverHold / 0.6);   // (during the recovery flip, the tuck takes over)
     mo.recover = Math.max(hold * Math.min(1, rc / 0.15), rc < M.recoverTime ? Math.min(1, rc / 0.2) * Math.min(1, (M.recoverTime - rc) / 0.5) : 0);
     // charging up (L1 + R1 on the ground): sink into the crouch and hold it
     const chG = game.charging && !game.chargeAir, chA = !!game.chargeAir;
     mo.charge = (mo.charge ?? 0) + ((chG ? 1 : 0) - (mo.charge ?? 0)) * (1 - Math.exp(-(chG ? 12 : 8) * dt));
     mo.airCharge = (mo.airCharge ?? 0) + ((chA ? 1 : 0) - (mo.airCharge ?? 0)) * (1 - Math.exp(-(chA ? 10 : 14) * dt));
     if (game.launchSeq && !game.launchSeq.ground && !game.launchSeq.charged) mo.airCharge = 0;
+    // recovery flip after a knockout: tuck, then open out as he comes upright
+    if (game.rescue) {
+      const R = CONFIG.crash.recovery, r = game.rescue;
+      const env = r.phase === 'tuck' ? Math.min(1, r.t / 0.12) : 1 - THREE.MathUtils.smoothstep(r.t / R.flipTime, 0.55, 1);
+      mo.airCharge = Math.max(mo.airCharge, env);
+      mo.recover = 0;
+    }
     // backflip launch: knees tucked tight through the flip, opening out as he comes round
     if (game.flipLaunch) mo.airCharge = Math.max(mo.airCharge, Math.min(1, Math.sin(Math.PI * Math.min(1, game.flipLaunch.t / CONFIG.launch.air.flip.time)) * 1.6));
     if (game.launchSeq) mo.charge = 0;   // (launching from the crouch: the launch timeline takes it from here)
@@ -441,7 +465,7 @@ export class SuitPoser {
     const hc = mo.heroClock;
     mo.land = hc < 0.06 ? hc / 0.06 : hc < 0.06 + LD.heroHold ? 1 : Math.max(0, 1 - (hc - 0.06 - LD.heroHold) / LD.heroRise);
     if (flying || game.launchSeq) mo.land = 0;
-    const special = { brace: this.brace, flare: mo.flare, launch: mo.launch * (1 - mo.crouch), recover: mo.recover, crouch: Math.max(mo.crouch, mo.hop * 0.7, mo.charge), aircharge: mo.airCharge, land: mo.land };
+    const special = { brace: this.brace, flare: mo.flare, launch: mo.launch * (1 - mo.crouch), recover: mo.recover, crouch: Math.max(mo.crouch, mo.hop * 0.7, mo.charge), aircharge: mo.airCharge, land: mo.land, knocked: this.knocked };
     let sp = 0;
     for (const v of Object.values(special)) sp = Math.max(sp, v);
     for (const s of STATES) if (!(s in special)) want[s] *= 1 - sp;
