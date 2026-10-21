@@ -5,7 +5,7 @@ import { HERO_BUILDERS, buildHeroPilot, PALETTE } from './HeroSuit.js';
 import { loadSuitModel, placeModel } from './ModelSuit.js';
 import { SuitPoser } from './SuitPoses.js';
 import { ThrustTrail } from './ThrustTrails.js';
-import { flameMaterial, Embers, Smoke, ShockRing } from './ThrusterFx.js';
+import { flameMaterial, baseMaterial, nozzleGlow, Embers, Smoke, ShockRing } from './ThrusterFx.js';
 
 // Builds the suit's 3D model from its parts and shows heat, damage and thrust.
 // Models are simple boxes so they're cheap to draw and easy to replace later.
@@ -313,18 +313,21 @@ export class SuitView {
   addFlame(comp, pos) {
     const outer = new THREE.Mesh(flameGeo, flameMaterial(false));   // (hot core, shock diamonds, flicker: ThrusterFx)
     const inner = new THREE.Mesh(flameGeo, flameMaterial(true));
+    const base = new THREE.Mesh(flameGeo, baseMaterial());   // (the hot base right at the nozzle)
+    const glow = nozzleGlow();
     const holder = new THREE.Group();
     holder.position.set(...pos);
     const basePos = new THREE.Vector3(...pos);
     holder.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), comp.thruster.dir);
     outer.material.userData.outlineParameters = inner.material.userData.outlineParameters = { visible: false };   // flames glow, no ink lines
-    holder.add(outer, inner);
+    base.material.userData.outlineParameters = glow.material.userData.outlineParameters = { visible: false };
+    holder.add(outer, inner, base, glow);
     this.root.add(holder);
     const ion = comp.part.visual.glow != null && CONFIG.suitStyle !== 'hero';
     if (ion) for (const m of [outer.material, inner.material]) { m.uniforms.mid.value.setHex(0x8fd8ff); m.uniforms.cool.value.setHex(0x3f8bff); }
     const t = CONFIG.art.trail;
     const trail = new ThrustTrail(this.scene, { core: ion ? t.ionCore : t.core, edge: ion ? t.ionEdge : t.edge, max: t.max });
-    this.flames.push({ comp, holder, outer, inner, basePos, trail, seed: Math.random() * 100, core0: trail.mat.uniforms.core.value.clone(), edge0: trail.mat.uniforms.edge.value.clone() });
+    this.flames.push({ comp, holder, outer, inner, base, glow, basePos, trail, seed: Math.random() * 100, core0: trail.mat.uniforms.core.value.clone(), edge0: trail.mat.uniforms.edge.value.clone() });
   }
 
   update(game, boost, time, camera) {
@@ -412,6 +415,13 @@ export class SuitView {
         const w = (0.6 + u * 0.6) * (1 + (flare - 1) * 0.3) * (1 + 0.15 * bk);
         f.outer.scale.set(w, len, w);
         f.inner.scale.set(w * 0.5, len * 0.6, w * 0.5);
+        f.base.scale.set(w * TH.baseWidth, Math.max(0.06, len * TH.baseLength), w * TH.baseWidth);
+        const bu = f.base.material.uniforms;
+        bu.time.value = time; bu.boost.value = bk; bu.intensity.value = Math.min(1.3, 0.6 + u * 0.8) * (1 + (flare - 1) * 0.3);
+        const gu = f.glow.material.uniforms;
+        gu.size.value = TH.glowSize * (0.6 + 0.6 * u) * (1 + 0.3 * bk) * flicker;
+        gu.intensity.value = TH.glow * Math.min(1, 0.3 + u) * flicker;
+        gu.color.value.setHex(TH.hot).lerp(_bc.setHex(TH.boostHot), bk);
         for (const m of [f.outer.material, f.inner.material]) {
           m.uniforms.time.value = time; m.uniforms.boost.value = bk;
           m.uniforms.intensity.value = Math.min(1.2, 0.5 + u * 0.7) * (1 + (flare - 1) * 0.3) * (1 - 0.3 * bk);

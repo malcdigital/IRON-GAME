@@ -277,7 +277,8 @@ export const CONFIG = {
     // many down the flame. flicker: length pulse (0..1), wobble: sideways wobble (flame widths).
     // boostLength: how much longer the flames get when boosting. haze: shimmer strength, length (m).
     thrusters: {
-      hot: 0xfffbe8, mid: 0xffc04a, cool: 0xff5a1e, boostHot: 0xdff4ff, boostMid: 0x4aa8ff, boostCool: 0x2f3cff,
+      hot: 0xfffbe8, mid: 0xffc04a, cool: 0xff5a1e, root: 0x8f7bff,   // (root: the blue-violet right at the nozzle)
+      baseLength: 0.32, baseWidth: 0.55, glowSize: 0.22, glow: 0.9,   // the hot base cone (share of the flame) and the nozzle glow boostHot: 0xdff4ff, boostMid: 0x4aa8ff, boostCool: 0x2f3cff,
       diamonds: 0.9, diamondCount: 4, flicker: 0.12, wobble: 0.025, boostLength: 0.7, boostRate: 4,
       trailBoostCore: 0xeaf8ff, trailBoostEdge: 0x4f8dff,
       embers: { enabled: false, rate: 22, hoverRate: 8, boostRate: 3, speed: 9, spread: 2.5, life: 0.45, size: 0.05, gravity: 5, drag: 2.5, brightness: 1.4, hot: 0xffe9a0, cool: 0xff3a10, boost: 0xa8e4ff },

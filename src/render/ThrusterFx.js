@@ -279,3 +279,86 @@ export const HAZE = {
       gl_FragColor = texture2D(tDiffuse, vUv + off * 0.012);
     }`,
 };
+
+// The hot base of a flame: a short bright cone right at the nozzle, pinched into a bell (it flares
+// out of the nozzle, narrows, then a bright disc where the jet shocks). Blue-violet right at the
+// exit, white-hot, then pale gold; a fine fast shimmer runs over it.
+const BASE_VERT = `
+  uniform float time; uniform float seed;
+  varying float vAlong; varying vec3 vN; varying vec3 vV; varying float vAng;
+  void main() {
+    vec3 p = position;
+    float along = clamp(-p.y, 0.0, 1.0);
+    vAng = atan(p.x, p.z);
+    // the cone is narrow at its tip; turn it into a bell: out of the nozzle, a waist, a bulge, a point
+    float r = (0.85 + 0.35 * sin(along * 3.1416 * 1.6)) / max(0.05, 1.0 - along) * (1.0 - smoothstep(0.75, 1.0, along) * 0.6);
+    p.xz *= r;
+    vAlong = along;
+    vec4 mv = modelViewMatrix * vec4(p, 1.0);
+    vN = normalize(normalMatrix * normal);
+    vV = normalize(-mv.xyz);
+    gl_Position = projectionMatrix * mv;
+  }`;
+const BASE_FRAG = `
+  uniform float time; uniform float seed; uniform float intensity; uniform float boost;
+  uniform vec3 hot; uniform vec3 mid; uniform vec3 root; uniform vec3 bHot; uniform vec3 bMid;
+  varying float vAlong; varying vec3 vN; varying vec3 vV; varying float vAng;
+  float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  float n(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
+    return mix(mix(h(i), h(i+vec2(1,0)), f.x), mix(h(i+vec2(0,1)), h(i+vec2(1,1)), f.x), f.y); }
+  void main() {
+    float t = vAlong;
+    float face = pow(abs(dot(normalize(vN), normalize(vV))), 1.2);
+    vec3 H = mix(hot, bHot, boost), M = mix(mid, bMid, boost);
+    vec3 col = mix(root, H, smoothstep(0.0, 0.18, t));
+    col = mix(col, M, smoothstep(0.55, 1.0, t));
+    // fine fast shimmer over the surface
+    float sh = n(vec2(vAng * 3.8 + seed, t * 18.0 - time * 38.0)) * n(vec2(vAng * 7.6 - seed, t * 31.0 - time * 55.0));
+    // the bright shock disc where the jet pinches, pulsing
+    float disc = exp(-pow((t - 0.62) * 9.0, 2.0)) * (0.8 + 0.2 * sin(time * 40.0 + seed));
+    float a = face * (1.0 - smoothstep(0.7, 1.0, t)) * intensity * (0.75 + 0.6 * sh) + disc * intensity * 0.9;
+    gl_FragColor = vec4(col * a, 1.0);
+  }`;
+
+export function baseMaterial() {
+  const T = CONFIG.art.thrusters;
+  return new THREE.ShaderMaterial({
+    vertexShader: BASE_VERT, fragmentShader: BASE_FRAG,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+    uniforms: {
+      time: { value: 0 }, seed: { value: Math.random() * 100 }, intensity: { value: 1 }, boost: { value: 0 },
+      hot: { value: new THREE.Color(T.hot) }, mid: { value: new THREE.Color(T.mid) }, root: { value: new THREE.Color(T.root) },
+      bHot: { value: new THREE.Color(T.boostHot) }, bMid: { value: new THREE.Color(T.boostMid) },
+    },
+  });
+}
+
+// A soft glow at the mouth of the nozzle, always facing the camera
+const GLOW_VERT = `
+  uniform float size;
+  varying vec2 vUv;
+  void main() {
+    vUv = uv;
+    vec4 c = modelViewMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+    c.xy += position.xy * size;
+    gl_Position = projectionMatrix * c;
+  }`;
+const GLOW_FRAG = `
+  uniform vec3 color; uniform float intensity;
+  varying vec2 vUv;
+  void main() {
+    float r = length(vUv - 0.5) * 2.0;
+    if (r > 1.0) discard;
+    float g = exp(-r * r * 9.0) + 0.35 * exp(-r * r * 2.5);
+    gl_FragColor = vec4(color * g * intensity, 1.0);
+  }`;
+
+export function nozzleGlow() {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.ShaderMaterial({
+    vertexShader: GLOW_VERT, fragmentShader: GLOW_FRAG,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    uniforms: { color: { value: new THREE.Color(CONFIG.art.thrusters.hot) }, intensity: { value: 1 }, size: { value: 0.2 } },
+  }));
+  m.frustumCulled = false;
+  return m;
+}
