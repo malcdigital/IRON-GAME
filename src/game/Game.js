@@ -86,7 +86,7 @@ export class Game {
     b.pos.y = this.surfaceBelow(b.pos) + CONFIG.pilot.feetHeight;   // standing on the pad (not hovering just above it)
     b.vel.set(0, 0, 0);
     b.angVel.set(0, 0, 0);
-    this.heroDrop = false; this.landLockT = 0;
+    this.heroDrop = false; this.landLockT = 0; this.heroSteadyT = 0;
     b.quat.setFromAxisAngle(Y, this.world.spawn.heading);
     this.controller.reset(this.world.spawn.heading);
     this.suit.repair();
@@ -533,6 +533,10 @@ export class Game {
     this.caps.landSpeed = this.heroDrop && !this.grounded ? CONFIG.pose.landing.dropSpeed : null;
     // superhero landing: hold it a moment before you can walk off
     if (this.landLockT > 0) { this.landLockT -= dt; input = { ...input, forward: 0, strafe: 0 }; }
+    if (this.heroSteadyT > 0 && this.grounded) {
+      this.heroSteadyT -= dt;
+      this.spinToward(this._qTmp2.setFromAxisAngle(Y, this.controller.heading), 6, 16);
+    }
     this.catchGrace = Math.max(0, (this.catchGrace ?? 0) - dt);
     this.caps.room = body.pos.y - CONFIG.pilot.feetHeight - this.surfaceBelow(body.pos);   // height above whatever's below
     this.caps.stunned = this.stunT > 0;
@@ -881,6 +885,8 @@ export class Game {
       if (fall > L.heroFrom || (this.heroDrop && fall > 2)) {
         this.heroLandCount = (this.heroLandCount ?? 0) + 1;
         this.landLockT = L.heroHold;
+        this.heroSteadyT = L.heroHold + L.heroRise;   // (held steady and upright through it: no tipping over)
+        b.angVel.set(0, 0, 0);
       }
       this.heroDrop = false;
     }

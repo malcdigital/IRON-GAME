@@ -139,13 +139,14 @@ export const POSES = {
   // right knee on the ground, left foot planted out front, left arm swept back, head down
   land: {
     hands: { Left: { curl: 25, thumb: 10 }, Right: { curl: 95, thumb: 60 } },
-    Spine02: { aim: [0, 0.62, -0.78] }, Spine01: { aim: [0, 0.55, -0.83] },
-    Spine: { aim: [0.05, 0.5, -0.86] }, neck: { aim: [0, 0.55, -0.83] },
+    Spine02: { aim: [0, 0.1, -0.99] }, Spine01: { aim: [0.1, 0.05, -0.99] },
+    Spine: { aim: [0.25, 0.1, -0.96] }, neck: { aim: [0, 0.55, -0.83] },
     Head: { aim: [0, 0.4, -0.92] },
-    RightArm: { aim: [0.18, -0.85, -0.5] }, RightForeArm: { aim: [0.05, -0.97, -0.25] }, RightHand: { aim: [0.02, -1, -0.05] },
+    RightShoulder: { aim: [0.8, -0.5, -0.2] },
+    RightArm: { aim: [-0.05, -1, 0] }, RightForeArm: { aim: [0.02, -0.99, -0.1] }, RightHand: { aim: [0.02, -1, -0.05] },   // (fist on the ground)
     LeftArm: { aim: [-0.6, -0.4, 0.69] }, LeftForeArm: { aim: [-0.55, -0.25, 0.8] }, LeftHand: { aim: [-0.5, -0.3, 0.81] },
-    LeftUpLeg: { aim: [-0.22, -0.3, -0.93] }, LeftLeg: { aim: [-0.08, -0.99, 0.08] }, LeftFoot: { aim: [-0.1, -0.25, -0.96] },
-    RightUpLeg: { aim: [0.15, -0.97, 0.18] }, RightLeg: { aim: [0.06, -0.12, 0.99] }, RightFoot: { aim: [0.05, -0.75, 0.66] },
+    LeftUpLeg: { aim: [-0.22, 0.2, -0.95] }, LeftLeg: { aim: [-0.08, -0.99, 0.08] }, LeftFoot: { aim: [-0.1, -0.3, -0.95] },
+    RightUpLeg: { aim: [0.15, -0.95, 0.25] }, RightLeg: { aim: [0.05, 0.08, 1] }, RightFoot: { aim: [0.05, -0.25, 0.97] },   // (knee on the ground)
   },
 
   // Charging up in mid-air (L1 + R1 held while hovering): curled up tight and tensed, knees to
