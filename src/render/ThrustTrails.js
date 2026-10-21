@@ -26,6 +26,7 @@ const FRAG = `
 export class ThrustTrail {
   constructor(scene, { core, edge, max = 48 }) {
     this.max = max;
+    this.maxLen = Infinity;   // longest the streak may be (m): trimmed beyond it
     this.pts = [];   // { p, v, age, life, w, i }
     const n = max * 2;
     this.pos = new Float32Array(n * 3);
@@ -67,6 +68,20 @@ export class ThrustTrail {
   update(dt, camPos) {
     for (const pt of this.pts) { pt.age += dt; pt.p.addScaledVector(pt.v, dt); }
     while (this.pts.length && this.pts[this.pts.length - 1].age >= this.pts[this.pts.length - 1].life) this.pts.pop();
+    // trim to maxLen metres along the streak (the last point is pulled in to land exactly on it)
+    let run = 0;
+    for (let i = 1; i < this.pts.length; i++) {
+      const seg = this.pts[i].p.distanceTo(this.pts[i - 1].p);
+      if (run + seg > this.maxLen) {
+        this.pts[i].p.lerpVectors(this.pts[i - 1].p, this.pts[i].p, Math.max(0, (this.maxLen - run) / Math.max(1e-6, seg)));
+        this.pts[i].d = this.maxLen;
+        this.pts.length = i + 1;
+        break;
+      }
+      run += seg;
+      this.pts[i].d = run;
+    }
+    if (this.pts[0]) this.pts[0].d = 0;
     const n = this.pts.length;
     this.mesh.visible = n >= 2;
     if (n < 2) return;
@@ -81,7 +96,8 @@ export class ThrustTrail {
       this._s.crossVectors(this._t, this._c);
       const l = this._s.length();
       if (l < 1e-6) this._s.set(1, 0, 0); else this._s.multiplyScalar(1 / l);
-      const t = Math.min(1, pt.age / pt.life);
+      // fades toward the tail: by age, or by distance along the streak, whichever is further
+      const t = Math.min(1, Math.max(pt.age / pt.life, Number.isFinite(this.maxLen) ? (pt.d ?? 0) / this.maxLen : 0));
       const w = pt.w * (1 - t * 0.6) * (i >= n ? 0 : 1);    // thins toward the tail; unused slots collapse
       const k = i * 6;
       pos[k] = pt.p.x - this._s.x * w; pos[k + 1] = pt.p.y - this._s.y * w; pos[k + 2] = pt.p.z - this._s.z * w;

@@ -385,6 +385,9 @@ export class SuitView {
         if (dt > 0) {
           const pos = f.holder.getWorldPosition(this._tmpV);
           const vel = this._tmpV2.copy(f.comp.thrustDir ?? f.comp.thruster.dir).applyQuaternion(b.quat).multiplyScalar(-T.exhaustSpeed).addScaledVector(b.vel, T.carry);
+          // (the streak is trimmed to at most maxLen m behind the nozzle, see ThrustTrail)
+          const want = !flying ? T.hoverLength : boost ? T.boostLength : T.length;
+          f.trail.maxLen = Number.isFinite(f.trail.maxLen) ? f.trail.maxLen + (want - f.trail.maxLen) * Math.min(1, dt * 6) : want;
           f.trail.emit(pos, vel, flying ? T.life : T.hoverLife, (boost ? T.boostWidth : T.width) * (0.7 + 0.5 * u), Math.min(1, 0.35 + u));
         }
       }
