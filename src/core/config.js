@@ -271,7 +271,7 @@ export const CONFIG = {
     // it drifts out of the nozzle at exhaustSpeed (m/s) plus carry × the suit's own speed
     // thrust trails: at most life / hoverLife s long, and never longer than length / hoverLength /
     // boostLength m (so they're the same size at any speed)
-    trail: { life: 0.28, hoverLife: 0.22, length: 3.5, hoverLength: 1.2, boostLength: 5, exhaustSpeed: 9, carry: 0.15, width: 0.1, boostWidth: 0.15, max: 40,
+    trail: { life: 0.28, hoverLife: 0.22, length: 0.9, hoverLength: 0.3, boostLength: 1.25, exhaustSpeed: 9, carry: 0.15, width: 0.1, boostWidth: 0.15, max: 40,
       core: 0xfff3d2, edge: 0xff7a2e, ionCore: 0xe2f8ff, ionEdge: 0x3fb0ff, flameScale: 0.38 },
   },
   suitStyle: 'model',
