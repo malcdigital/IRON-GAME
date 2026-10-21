@@ -566,10 +566,12 @@ export class Game {
     if (input.up > 0 || this.controller.flying) this.heroDrop = false;   // (climbing away: no landing)
     this.caps.landSpeed = this.heroDrop && !this.grounded ? CONFIG.pose.landing.dropSpeed : null;
     // superhero landing: hold it a moment before you can walk off
+    // lying on the ground about to get up: limp, jets off (no trying to hover upright off the floor)
+    if (this.lyingDown) input = { ...input, forward: 0, strafe: 0, yaw: 0, up: 0, down: 0, cut: true, cutLatch: true, boost: false, takeoffBoost: false };
     // getting up off the ground (a clip, see checkRecover): hands off until he's up
     if (this.getUp) {
       this.getUp.t += dt;
-      input = { ...input, forward: 0, strafe: 0, yaw: 0, up: 0, down: 0, cut: false, boost: false, takeoffBoost: false };
+      input = { ...input, forward: 0, strafe: 0, yaw: 0, up: 0, down: 0, cut: true, cutLatch: true, boost: false, takeoffBoost: false };   // (jets quiet)
       body.vel.x = 0; body.vel.z = 0;
       if (this.getUp.t >= this.getUp.time) { this.getUp = null; events.emit('toast', { text: 'Back on your feet' }); }
     }
@@ -1186,6 +1188,7 @@ export class Game {
     this._up.copy(Y).applyQuaternion(b.quat);
     const lying = this.anyContact && this._up.y < CONFIG.stance.minUp && b.vel.length() < 2;
     this.recoverTimer = lying && !this.getUp ? this.recoverTimer + dt : 0;
+    this.lyingDown = lying && !this.getUp && !(this.stunT > 0);   // (lying still, about to get up)
     if (this.recoverTimer < CONFIG.recover.delay) return;
     // get up with a clip that matches how he's lying: on his back or face down. The clip is turned
     // so its head lines up with where his head really is.
@@ -1195,6 +1198,7 @@ export class Game {
     const yawOfV = (x, z) => Math.atan2(-x, -z);
     const heading = Math.hypot(head.x, head.z) > 0.2 ? yawOfV(head.x, head.z) - yawOfV(clip.head[0], clip.head[1]) : yawOf(b.quat);
     this.getUp = { name: clip.name, t: 0, time: clip.time / clip.speed };
+    this.lyingDown = false;
     b.quat.setFromAxisAngle(Y, heading);
     const floor = Number.isFinite(this.supportHeight) ? this.supportHeight : b.pos.y - 0.3;
     b.pos.y = floor + CONFIG.pilot.feetHeight + 0.02;

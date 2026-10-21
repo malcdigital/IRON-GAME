@@ -393,7 +393,7 @@ export class SuitPoser {
     this.brace += (braceWant - this.brace) * (1 - Math.exp(-(braceWant ? 18 : 4) * dt));
     // knocked out: in the air, the 'knocked' pose with the limbs a little loose; on the ground, limp
     const stunned = game.stunT > 0 || !!game.helpless, airKO = stunned && !grounded;   // (helpless: came round too low to save himself)
-    const limpWant = stunned ? (airKO ? CONFIG.crash.recovery.limp : 1) : 0;
+    const limpWant = stunned ? (airKO ? CONFIG.crash.recovery.limp : 1) : game.lyingDown ? 1 : 0;
     this.knocked = (this.knocked ?? 0) + ((airKO ? 1 : 0) - (this.knocked ?? 0)) * (1 - Math.exp(-(airKO ? 10 : game.rescue ? 25 : 4) * dt));
     // (the recovery flip snaps the limbs back under control at once; otherwise they firm up slowly)
     this.limp += (limpWant - this.limp) * (1 - Math.exp(-(limpWant ? 20 : game.rescue || game.getUp ? 30 : 2.5) * dt));
@@ -448,7 +448,9 @@ export class SuitPoser {
       this.getupAims ??= {}; this.getupQ ??= new THREE.Quaternion();
       const lift = this.loco.sampleFull(gu.name, u, this.getupAims, this.getupQ);
       if (lift != null) {
-        mo.getup = Math.min(1, gu.t / 0.08) * (1 - THREE.MathUtils.smoothstep(u, 0.88, 1));
+        // (no fade-in: the body has just been stood up, so anything else would flash standing for a moment)
+        mo.getup = 1 - THREE.MathUtils.smoothstep(u, 0.88, 1);
+        this.limp = 0;
         this.getupLift = lift * (this.hipsScale ?? 1.1);
         this.crouch = 0;
       }
