@@ -26,7 +26,7 @@ export class Renderer {
     this.scene.fog = new THREE.Fog(art.haze, art.hazeNear, art.hazeFar);
     this.scene.background = new THREE.Color(art.haze);
 
-    this.camera = new THREE.PerspectiveCamera(65, 1, 0.1, 2000);
+    this.camera = new THREE.PerspectiveCamera(65, 1, 0.1, 9000);   // (far: the mountains on the horizon)
 
     // Sun direction (shared by the light, the sky's sun disc and its glow)
     const el = THREE.MathUtils.degToRad(art.sunElevation), az = THREE.MathUtils.degToRad(art.sunAzimuth);

@@ -282,7 +282,7 @@ export const CONFIG = {
     sunElevation: 14, sunAzimuth: 35,   // low sun (degrees above the horizon; direction round from -Z)
     sunColor: 0xffc994, sunIntensity: 3.2,
     skyLight: 0xc6b8ec, groundLight: 0x6fa8a4, ambient: 1.4,   // lavender above, teal bounce below
-    haze: 0xe6c4c4, hazeNear: 90, hazeFar: 820,                 // distance haze (warm lavender-pink)
+    haze: 0xe6c4c4, hazeNear: 160, hazeFar: 2600,                 // distance haze (warm lavender-pink)
     sky: { top: 0x3c4a8c, mid: 0x8f80c0, horizon: 0xffbe7a, below: 0x7d9ab0, sun: 0xffd9a0,
            cloudLit: 0xffd2a8, cloudShade: 0x6b5f8f },
     bloom: { strength: 0.35, radius: 0.5, threshold: 0.93 },    // glow on bright things
@@ -310,6 +310,20 @@ export const CONFIG = {
     trail: { life: 0.28, hoverLife: 0.22, length: 0.9, hoverLength: 0.3, boostLength: 1.25, exhaustSpeed: 9, carry: 0.15, width: 0.1, boostWidth: 0.15, max: 140,
       core: 0xfff3d2, edge: 0xff7a2e, ionCore: 0xe2f8ff, ionEdge: 0x3fb0ff, flameScale: 0.38 },
   },
+  // The coastal city (src/render/CityScenery.js, WorldView.js): colours and how much of everything
+  world: {
+    seaDeep: 0x1f6f9a, seaShallow: 0x46d3d0, foam: 0xf4fbfa, seaSky: 0x9fc6e0,
+    shoreRect: [-1700, -2500, 3600, 3400],   // the area the shallows / foam are worked out over (x, z, width, depth)
+    sand: 0xf1dfc0, paving: 0xe9dccb, grass: 0x7fae6a, hill: 0x6e9d5c, seawall: 0xdcccb6, beachWidth: 16,
+    pastels: [0xf6e7d4, 0xf3c6ba, 0xcde9dc, 0xf7d7b2, 0xe8e0f2, 0xfbf4e6, 0xc6dfec, 0xf4d3d9],
+    palmLeaf: 0x3e8c4a, shorePalmEvery: 26, streetPalmEvery: 24, roofPalms: 0.45,
+    mountains: 70, mountainNear: 0x9aa6c8, mountainFar: 0xb9b7d3,
+    cloudPuffs: 150, cloudLit: 0xfff1e2, cloudShade: 0xc9b6cf,
+    trainCars: 5, trainSpeed: 28, trainStripe: 0xf28a3c,
+    boats: 22, boatColors: [0xf28a3c, 0x3c7bd1, 0xe85a5a],
+    litWindows: 0.18,   // share of windows lit warm at sunset
+  },
+
   suitStyle: 'model',
   // 'model': the 3D model made from the character sheet (falls back to 'hero' if it can't load)
   // Body language for the 3D suit (poses themselves are in src/render/SuitPoses.js)

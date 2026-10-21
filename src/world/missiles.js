@@ -135,7 +135,7 @@ export class MissileSystem {
         if (closing > 1) this.lockTime = Math.min(this.lockTime, dPlayer / closing);
       }
       // Hit the world, or run out of fuel
-      const hitWorld = m.pos.y < 0.3 || this.world.colliders.some((col) => insideBox(m.pos, col));
+      const hitWorld = m.pos.y < this.world.groundAt(m.pos.x, m.pos.z) + 0.3 || this.world.colliders.some((col) => insideBox(m.pos, col));
       if (hitWorld || m.age > c.fuel) {
         this.missReasons[hitWorld ? 'terrain' : 'fuel']++;
         this.detonate(m, null, null, Infinity);

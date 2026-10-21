@@ -29,10 +29,32 @@ export class World {
       heading: range.spawn.heading,
     };
     this.workshopPad = { pos: new THREE.Vector3(...range.workshopPad.pos), radius: range.workshopPad.radius };
+    // The coast: the city stands on land at height 0; everywhere else is sea (lower)
+    this.coast = range.coast;
+    this.seaLevel = range.seaLevel;
+    this.islands = range.islands ?? [];
+    this.groundAt = (x, z) => (this.onLand(x, z) ? 0 : this.seaLevel);
+  }
+
+  // Is (x, z) on land? (the city, or one of the islands)
+  onLand(x, z) {
+    if (inPoly(this.coast, x, z)) return true;
+    for (const i of this.islands) if (inPoly(i.outline, x, z)) return true;
+    return false;
   }
 
   isAtWorkshop(pos) {
     const dx = pos.x - this.workshopPad.pos.x, dz = pos.z - this.workshopPad.pos.z;
     return Math.hypot(dx, dz) < this.workshopPad.radius + 2 && pos.y < 3;
   }
+}
+
+// Is (x, z) inside the outline P ([x, z] points)?
+function inPoly(P, x, z) {
+  let inside = false;
+  for (let i = 0, j = P.length - 1; i < P.length; j = i++) {
+    const [xi, zi] = P[i], [xj, zj] = P[j];
+    if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) inside = !inside;
+  }
+  return inside;
 }

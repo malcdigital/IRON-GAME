@@ -11,12 +11,14 @@ const _imp = new THREE.Vector3();
 
 // Find contacts between a sphere and the world (ground plane + axis-aligned boxes).
 // Pushes { point, normal, depth, collider } objects into `out`.
-export function sphereContacts(center, r, colliders, out) {
-  if (center.y - r < 0) {
+// groundAt(x, z): the height of the ground there (the city is at 0, the sea lower); none = flat at 0
+export function sphereContacts(center, r, colliders, out, groundAt = null) {
+  const gy = groundAt ? groundAt(center.x, center.z) : 0;
+  if (center.y - r < gy) {
     out.push({
-      point: new THREE.Vector3(center.x, 0, center.z),
+      point: new THREE.Vector3(center.x, gy, center.z),
       normal: new THREE.Vector3(0, 1, 0),
-      depth: r - center.y,
+      depth: r - (center.y - gy),
       collider: GROUND,
     });
   }

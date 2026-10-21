@@ -239,7 +239,7 @@ export class Game {
 
   // Height of the ground or rooftop directly below a point
   surfaceBelow(p) {
-    let top = 0;
+    let top = this.world.groundAt(p.x, p.z);   // (land, or the sea)
     for (const c of this.world.colliders) {
       if (p.x > c.min.x && p.x < c.max.x && p.z > c.min.z && p.z < c.max.z && c.max.y <= p.y + 0.5 && c.max.y > top) top = c.max.y;
     }
@@ -929,7 +929,7 @@ export class Game {
     const contacts = [];
     for (const s of SPHERES) {
       b.pointToWorld(s.local, this._c);
-      const found = sphereContacts(this._c, s.r, this.world.colliders, []);
+      const found = sphereContacts(this._c, s.r, this.world.colliders, [], this.world.groundAt);
       for (const c of found) { c.sphere = s; if (s.foot && this.walkVel) c.surfaceVel = this.walkVel; contacts.push(c); }
     }
     if (!contacts.length) return;

@@ -29,7 +29,7 @@ function start(hotData) {
   const game = new Game(loadout);
 
   const renderer = new Renderer(document.getElementById('viewport'));
-  const worldView = new WorldView(renderer.scene, game.world);
+  const worldView = new WorldView(renderer.scene, game.world, renderer);
   const suitView = new SuitView(renderer.scene);
   suitView.build(game.suit);
   suitView.fx(renderer);   // (embers, smoke, boost ring, heat haze)
@@ -184,7 +184,7 @@ function start(hotData) {
 
     suitView.update(game, (axes.boost || game.launchT > 0) && !paused, clockTime, renderer.camera);
     cargoView.update(clockTime);
-    worldView.update(game.course, clockTime);
+    worldView.update(game.course, clockTime, dt);
     effects.update(dt);
     cracks.update(dt);
     dust.update(dt, renderer.camera, renderer.renderer?.domElement?.height ?? innerHeight);
