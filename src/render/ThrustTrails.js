@@ -15,14 +15,17 @@ const VERT = `
   varying float vT; varying float vV; varying float vI; varying float vU;
   void main() { vT = aT; vV = aV; vI = aI; vU = aU; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
 const FRAG = `
+  #define GLOW 2.2
   uniform vec3 core; uniform vec3 edge; uniform float opacity; uniform float time; uniform float seed;
   varying float vT; varying float vV; varying float vI; varying float vU;
   float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
   float n(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
     return mix(mix(h(i), h(i+vec2(1,0)), f.x), mix(h(i+vec2(0,1)), h(i+vec2(1,1)), f.x), f.y); }
-  float fbm(vec2 p){ return 0.55 * n(p) + 0.3 * n(p * 2.3 + 7.1) + 0.15 * n(p * 5.1 + 3.7); }
+  float fbm(vec2 p){ return 0.5 * n(p) + 0.27 * n(p * 2.3 + 7.1) + 0.15 * n(p * 5.1 + 3.7) + 0.08 * n(p * 11.3 + 1.9); }
   void main() {
-    float a = abs(vV);
+    // the ribbon is drawn GLOW times wider than the jet: the outside is a soft glow around it
+    float a = abs(vV) * GLOW;
+    float halo = exp(-abs(vV) * abs(vV) * 7.0) * 0.22 * (1.0 - vT);
     // turbulence flowing back along the jet: streaky (stretched along it)
     vec2 q = vec2(vU * 7.0 - time * 14.0, vV * 2.2 + seed);
     float turb = fbm(q);
@@ -38,17 +41,22 @@ const FRAG = `
     c = mix(c, edge * vec3(0.7, 0.25, 0.12), smoothstep(0.5, 1.0, vT));
     c += core * fil * 1.4;
     c *= 0.75 + 0.5 * streak;
+    // bright flecks racing down the hot part of the jet
+    float fleck = smoothstep(0.82, 0.97, n(vec2(vU * 26.0 - time * 30.0, vV * 9.0 + seed))) * (1.0 - smoothstep(0.1, 0.6, vT)) * (1.0 - smoothstep(0.3, 0.7, a));
+    c += core * fleck * 1.2;
     float along = pow(1.0 - vT, 1.3);
-    gl_FragColor = vec4(c * body * fray * along * vI * opacity, 1.0);
+    vec3 glow = edge * halo * (0.6 + 0.4 * turb);
+    gl_FragColor = vec4((c * body * fray + glow) * along * vI * opacity, 1.0);
   }`;
 
-const SUB = 4;   // smooth-curve samples per stretch between two points
+const SUB = 6;   // smooth-curve samples per stretch between two points
+const GLOW = 2.2;   // the ribbon is this much wider than the jet itself (the rest is soft glow)
 
 export class ThrustTrail {
   constructor(scene, { core, edge, max = 48 }) {
     this.max = max;
     this.maxLen = Infinity;   // longest the streak may be (m): trimmed beyond it
-    this.spacing = 0.06;      // at most this far between points (m): fills the gaps when moving fast
+    this.spacing = 0.025;     // at most this far between points (m): fills the gaps when moving fast
     this.pts = [];   // { p, v, age, life, w, i, d }
     this.prevNozzle = null;
     const verts = (max - 1) * SUB + 1, n = verts * 2;
@@ -87,7 +95,7 @@ export class ThrustTrail {
   emit(pos, vel, life, width, intensity, dt = 0) {
     const prev = this.prevNozzle;
     let steps = 1;
-    if (prev && dt > 0) steps = Math.min(8, Math.max(1, Math.ceil(prev.distanceTo(pos) / this.spacing)));
+    if (prev && dt > 0) steps = Math.min(24, Math.max(1, Math.ceil(prev.distanceTo(pos) / this.spacing)));
     for (let k = steps - 1; k >= 0; k--) {
       const f = k / steps;   // (0 = now, toward 1 = back along the way it came)
       let pt;
@@ -158,7 +166,7 @@ export class ThrustTrail {
       if (l < 1e-6) this._s.set(1, 0, 0); else this._s.multiplyScalar(1 / l);
       // swells just behind the nozzle, then thins to a point
       const shape = Math.min(1, 0.55 + o.t * 3) * (1 - o.t * 0.75);
-      const w = used ? o.w * shape : 0;
+      const w = used ? o.w * shape * GLOW : 0;
       const k = i * 6;
       pos[k] = o.p.x - this._s.x * w; pos[k + 1] = o.p.y - this._s.y * w; pos[k + 2] = o.p.z - this._s.z * w;
       pos[k + 3] = o.p.x + this._s.x * w; pos[k + 4] = o.p.y + this._s.y * w; pos[k + 5] = o.p.z + this._s.z * w;

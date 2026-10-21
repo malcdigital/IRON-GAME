@@ -17,7 +17,7 @@ const BURNT = new THREE.Color(0x231a14);
 const HOT = new THREE.Color(0xff5a20);
 
 const flameGeo = (() => {
-  const g = new THREE.ConeGeometry(0.075, 1, 10, 1, true);
+  const g = new THREE.ConeGeometry(0.075, 1, 28, 14, true);   // (plenty of segments so the wobble bends smoothly)
   g.rotateX(Math.PI);      // point the tip down
   g.translate(0, -0.5, 0); // base at the nozzle, tip 1 unit below
   return g;
