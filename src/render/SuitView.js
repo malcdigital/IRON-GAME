@@ -452,10 +452,11 @@ export class SuitView {
           // (the streak is trimmed to at most maxLen m behind the nozzle, see ThrustTrail)
           const want = !flying ? T.hoverLength : boost ? T.boostLength : T.length;
           f.trail.maxLen = Number.isFinite(f.trail.maxLen) ? f.trail.maxLen + (want - f.trail.maxLen) * Math.min(1, dt * 6) : want;
-          f.trail.emit(pos, vel, flying ? T.life : T.hoverLife, (boost ? T.boostWidth : T.width) * (0.7 + 0.5 * u), Math.min(1, 0.35 + u));
+          f.trail.emit(pos, vel, flying ? T.life : T.hoverLife, (boost ? T.boostWidth : T.width) * (0.7 + 0.5 * u), Math.min(1, 0.35 + u), dt);
         }
       }
-      if (camPos) f.trail.update(this.hideFlames ? 10 : dt, camPos);   // (cleared while posing)
+      if (!on) f.trail.rest();
+      if (camPos) f.trail.update(this.hideFlames ? 10 : dt, camPos, time);   // (cleared while posing)
     }
     if (this.haze) {
       for (let i = hz; i < 6; i++) this.haze.uniforms.amt.value[i] = 0;

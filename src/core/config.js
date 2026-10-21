@@ -283,11 +283,11 @@ export const CONFIG = {
       embers: { rate: 22, hoverRate: 8, boostRate: 3, speed: 9, spread: 2.5, life: 0.45, size: 0.05, gravity: 5, drag: 2.5, brightness: 1.4, hot: 0xffe9a0, cool: 0xff3a10, boost: 0xa8e4ff },
       smoke: { washRate: 26, washRange: 3.5, washSpeed: 4, flightRate: 3, spread: 1.2, life: 1.6, size: 0.45, rise: 0.6, drag: 1.6, opacity: 0.32, color: 0xb7aaa6 },
       ring: { radius: 2.6, time: 0.35, drift: -6, opacity: 0.8 },
-      haze: { strength: 1.0, length: 0.9 },
+      haze: { strength: 0.35, length: 0.9 },
     },
     // thrust trails: at most life / hoverLife s long, and never longer than length / hoverLength /
     // boostLength m (so they're the same size at any speed)
-    trail: { life: 0.28, hoverLife: 0.22, length: 0.9, hoverLength: 0.3, boostLength: 1.25, exhaustSpeed: 9, carry: 0.15, width: 0.1, boostWidth: 0.15, max: 40,
+    trail: { life: 0.28, hoverLife: 0.22, length: 0.9, hoverLength: 0.3, boostLength: 1.25, exhaustSpeed: 9, carry: 0.15, width: 0.1, boostWidth: 0.15, max: 64,
       core: 0xfff3d2, edge: 0xff7a2e, ionCore: 0xe2f8ff, ionEdge: 0x3fb0ff, flameScale: 0.38 },
   },
   suitStyle: 'model',
