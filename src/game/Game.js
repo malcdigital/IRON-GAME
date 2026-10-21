@@ -1216,51 +1216,54 @@ export class Game {
     this.recoverTimer = 0;
   }
 
-  // Hitting the ground knocked out: a log roll along the ground that ends exactly on his back or
-  // face down, then straight into getting up (CONFIG.recover.roll)
+  // Hitting the ground knocked out: he carries his momentum along the ground, rolling (moving
+  // sideways to his body) or tumbling head over heels (moving along it), slowing like friction, and
+  // turning only whole turns so he ends the way he landed (on his back or face down). Then he gets up.
   startGroundRoll() {
     const b = this.body, R = CONFIG.recover.roll;
+    const v = this._v3.copy(this._preHitVel ?? b.vel).setY(0);   // (his speed along the ground as he hit)
+    const sp = v.length();
     const h = this._v1.copy(Y).applyQuaternion(b.quat).setY(0);   // (head, along the ground)
-    if (h.lengthSq() < 0.04) h.set(b.vel.x, 0, b.vel.z);
+    if (h.lengthSq() < 0.04) h.copy(v);
     if (h.lengthSq() < 1e-4) h.set(0, 0, -1);
     h.normalize();
-    const side = new THREE.Vector3().crossVectors(h, Y);   // (rolling the chest from up toward this moves him this way)
-    const sp = Math.hypot(b.vel.x, b.vel.z);
-    const dir = b.vel.dot(side) >= 0 ? 1 : -1;
-    // where the chest is now, as an angle round the head axis (0 = facing the sky)
-    const chest = this._v2.set(0, 0, -1).applyQuaternion(b.quat);
-    const th0 = Math.atan2(chest.dot(side), chest.dot(Y));
-    // whole turns only, so he ends the way he fell: on his back stays on his back, face down stays face down
-    const turns = sp + Math.abs(b.vel.y) > R.bigAbove ? R.turnsBig : R.turns;
-    const th1 = Math.round(th0 / Math.PI) * Math.PI + dir * turns * Math.PI * 2;
-    this.groundRoll = { t: 0, h: h.clone(), side, th0, th1, q0: b.quat.clone(), p0: b.pos.clone(), time: R.time * Math.abs(th1 - th0) / Math.PI };
+    const chestUp = this._v2.set(0, 0, -1).applyQuaternion(b.quat).y >= 0;
+    // lying flat along h, chest up (on his back) or down
+    const z = new THREE.Vector3(0, chestUp ? -1 : 1, 0), x = new THREE.Vector3().crossVectors(h, z);
+    const qLie = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, h, z));
+    const m = sp > 0.5 ? v.clone().divideScalar(sp) : h.clone();
+    // moving along his body: tumble head over heels; across it: log roll
+    const tumble = Math.abs(m.dot(h)) > 0.7;
+    let axis = new THREE.Vector3().crossVectors(Y, m);   // (rolling without slipping turns about up × travel)
+    const along = tumble ? x.clone().normalize() : h.clone();
+    axis = along.multiplyScalar(Math.sign(axis.dot(along)) || 1);
+    const dist = sp > R.minSpeed ? (sp * sp) / (2 * R.decel) : 0.2;
+    const r = tumble ? R.tumbleRadius : R.rollRadius;   // (how far per turn: rolling, he slides a bit too)
+    const turns = sp > R.minSpeed ? Math.max(1, Math.round(dist / (Math.PI * 2 * r))) : 0;
+    this.groundRoll = { t: 0, time: Math.max(R.minTime, sp / R.decel), dist, turns, axis, m: m.clone(), h: h.clone(), chestUp, tumble, qLie, q0: b.quat.clone(), p0: b.pos.clone() };
     this.helpless = false; this.stunT = 0; this.lyingDown = false;
     b.vel.set(0, 0, 0); b.angVel.set(0, 0, 0);
   }
 
-  // The roll, set after the physics step so it follows its path exactly
+  // The roll / tumble, set after the physics step so it follows its path exactly
   applyGroundRoll(dt) {
     const r = this.groundRoll, b = this.body, R = CONFIG.recover.roll;
     r.t += dt;
     const u = Math.min(1, r.t / r.time), e = 1 - (1 - u) * (1 - u);   // (fast off the hit, slowing to a stop)
-    const th = r.th0 + (r.th1 - r.th0) * e;
-    // lying along the head axis with the chest at angle th round it
-    const chest = this._v2.copy(Y).multiplyScalar(Math.cos(th)).addScaledVector(r.side, Math.sin(th));
-    const zAxis = this._v3.copy(chest).negate(), xAxis = this._v4.crossVectors(r.h, zAxis);
-    const m = this._rollM ??= new THREE.Matrix4();
-    m.makeBasis(xAxis, r.h, zAxis);
-    const q = this._qTmp.setFromRotationMatrix(m);
+    const ang = r.turns * Math.PI * 2 * e;
+    const q = this._qTmp.setFromAxisAngle(r.axis, ang).multiply(r.qLie);
     b.quat.copy(r.q0).slerp(q, THREE.MathUtils.smoothstep(r.t, 0, R.blendIn));   // (eases in from exactly how he landed)
-    // rolling along the ground (a log about R.radius thick)
-    b.pos.copy(r.p0).addScaledVector(r.side, R.radius * (th - r.th0));
-    b.pos.y = this.surfaceBelow(b.pos) + R.radius;
+    b.pos.copy(r.p0).addScaledVector(r.m, r.dist * e);
+    // tumbling, the body swings up through standing on end as it goes over
+    const lift = r.tumble ? (R.halfLength - R.radius) * Math.abs(Math.sin(ang)) : 0;
+    b.pos.y = this.surfaceBelow(b.pos) + R.radius + lift;
     b.vel.set(0, 0, 0); b.angVel.set(0, 0, 0);
     if (u >= 1) {
       this.groundRoll = null;
-      const onBack = Math.cos(r.th1) > 0;
-      this.startGetUp(onBack, this._v1.copy(r.h));
+      this.startGetUp(r.chestUp, this._v1.copy(r.h));
     }
   }
+
 
 
   telemetry() {

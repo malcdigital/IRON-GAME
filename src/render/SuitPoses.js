@@ -662,18 +662,18 @@ export class SuitPoser {
     }
     // 2. motion on top
     const add = (n, x, y, z) => { const b = R[n]; if (b) { b.rot.x += x; b.rot.y += y; b.rot.z += z; } };
-    // tightrope wobble after the recovery flip: arms out wide, the upper body leaning against
+    // tightrope wobble after the recovery flip: arms down by his sides, the upper body leaning against
     // each sway, the arms see-sawing to catch it, knees soft
     if ((this.mom.balance ?? 0) > 0.01) {
       const k = this.mom.balance, sw = (this.mom.balanceRoll ?? 0) * 180 / Math.PI;
-      for (const [n, a] of [['LeftArm', [-0.97, 0.05, -0.2]], ['RightArm', [0.97, 0.05, -0.2]], ['LeftForeArm', [-0.95, 0.15, -0.25]], ['RightForeArm', [0.95, 0.15, -0.25]], ['LeftHand', [-0.9, 0.1, -0.3]], ['RightHand', [0.9, 0.1, -0.3]]]) {
+      for (const [n, a] of [['LeftArm', [-0.3, -0.95, -0.05]], ['RightArm', [0.3, -0.95, -0.05]], ['LeftForeArm', [-0.38, -0.92, -0.08]], ['RightForeArm', [0.38, -0.92, -0.08]], ['LeftHand', [-0.45, -0.88, -0.1]], ['RightHand', [0.45, -0.88, -0.1]]]) {
         const b = R[n];
         if (!b?.dir) continue;
         if (!b.hasAim) { b.aim.copy(b.dir); b.hasAim = true; }
         b.aim.normalize().lerp(_v.fromArray(a).normalize(), k).normalize();
       }
       add('Spine02', 0, 0, -sw * 0.5 * k); add('Spine01', 0, 0, -sw * 0.4 * k); add('Head', 0, 0, -sw * 0.3 * k);
-      add('LeftArm', 0, 0, sw * 1.2 * k); add('RightArm', 0, 0, sw * 1.2 * k);
+      add('LeftArm', 0, 0, sw * 0.8 * k); add('RightArm', 0, 0, sw * 0.8 * k);   // (arms down by his sides, see-sawing a little against the sway)
       for (const sd of ['Left', 'Right']) { add(`${sd}UpLeg`, 10 * k, 0, 0); add(`${sd}Leg`, -18 * k, 0, 0); }
       this.handCurl('Left', -20 * k); this.handCurl('Right', -20 * k);
     }
