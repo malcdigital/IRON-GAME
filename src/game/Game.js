@@ -720,6 +720,12 @@ export class Game {
     this._T.copy(this._gyro);
     this.mixer.apply(this._F, this._T);
     body.force.add(this._F.applyQuaternion(body.quat));
+    // Flight overspeed (after a launch or a dive): spread out into the wind and shed it, while the
+    // jets keep burning at idle (see jetFlight)
+    if (this.controller.flying && !this.burst && !this.launchKick && this.controller.jet.vTarget) {
+      const sp = body.vel.length(), over = sp - this.controller.jet.vTarget, F = CONFIG.flight, g = CONFIG.physics.gravity;
+      if (over > 1 && sp > 1) body.force.addScaledVector(body.vel, -body.mass * Math.min(F.overspeedBrakeG * g, over * 0.8 + F.idleThrust * g) / sp);
+    }
     // boosted takeoff: anything the thrusters couldn't give (sideways pull round the curve, or past
     // their power) is topped up so the suit stays on the path
     if (this.burst) body.force.add(this._c.copy(this.burst.need).sub(this._F));

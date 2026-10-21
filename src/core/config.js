@@ -60,6 +60,8 @@ export const CONFIG = {
   flight: {
     brake: { keep: 0.2, accelG: 2.5 },   // hold L1 / Ctrl: slow to 20% of your speed (never below minSpeed)
     minSpeed: 24, cruiseSpeed: 58, boostSpeed: 133,  // m/s targets (thrust and drag decide what you really get)
+    idleThrust: 0.35,          // the jets always burn at least this (× your weight) in flight
+    overspeedBrakeG: 1.5,      // faster than the target speed (after a launch): shed it at up to this many g
     throttleRamp: 0.6,
     speedGain: 0.8,
     turnRate: 2.2, pitchRate: 1.4,  // rad/s
@@ -278,6 +280,7 @@ export const CONFIG = {
     // boostLength: how much longer the flames get when boosting. haze: shimmer strength, length (m).
     thrusters: {
       hot: 0xfffbe8, mid: 0xffc04a, cool: 0xff5a1e, root: 0x8f7bff,   // (root: the blue-violet right at the nozzle)
+      idleFlame: 0.3,   // in flight the back and hand flames never look smaller than this throttle
       baseLength: 0.32, baseWidth: 0.55, glowSize: 0.22, glow: 0.9,   // the hot base cone (share of the flame) and the nozzle glow boostHot: 0xdff4ff, boostMid: 0x4aa8ff, boostCool: 0x2f3cff,
       diamonds: 0.9, diamondCount: 4, flicker: 0.12, wobble: 0.025, boostLength: 0.7, boostRate: 4,
       trailBoostCore: 0xeaf8ff, trailBoostEdge: 0x4f8dff,

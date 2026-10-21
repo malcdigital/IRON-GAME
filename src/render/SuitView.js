@@ -404,7 +404,8 @@ export class SuitView {
     const vh = this.canvas?.height ?? innerHeight;
     let hz = 0;
     for (const f of this.flames) {
-      const u = f.comp.throttle;
+      // (in flight the back and hand jets always show at least an idle burn, even when coasting)
+      const u = flying && f.comp.slot !== 'boots' ? Math.max(f.comp.throttle, TH.idleFlame) : f.comp.throttle;
       // (the back thrusters only show in flight; in a hover the hands and boots carry the look)
       // (charging up in a hover: fists clenched, the hand jets go quiet; boots and back hold him up)
       const on = u > 0.02 && f.comp.available > 0 && !this.hideFlames && (flying || f.comp.slot !== 'back') && !(game.chargeAir && f.comp.slot === 'gauntlets');

@@ -477,6 +477,10 @@ export class JetFlight {
     this._up.copy(Y).applyQuaternion(body.quat);
     this._A.sub(caps.aeroAccel);
     out.force.set(0, Math.max(0, body.mass * this._A.dot(this._up)), 0);
+    // the jets never go dark in flight: an idle burn even when there's speed to spare (the extra
+    // speed is shed by the air brake in Game instead)
+    if (!this.braking) out.force.y = Math.max(out.force.y, body.mass * g * c.idleThrust);
+    this.vTarget = vTarget;
     // How fast the target attitude is turning (feed-forward), smoothed
     if (this._hasPrev) {
       const dq = this._dq.multiplyQuaternions(qDes, this._qPrev.invert());
