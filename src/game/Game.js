@@ -120,12 +120,8 @@ export class Game {
   // boosted: boost held as you launch (R1 + ✕ / Shift + F): a stronger launch for the same time
   launch(boosted = false, rampTime = null, kickMult = 1, sharp = false) {
     const l = CONFIG.launch;
-    // (the mid-air burst into flight always fires; only the stored-charge launch recharges)
-    if (this.launchCharge < 1 && !sharp) {
-      events.emit('toast', { text: `Flight mode. Burst recharging (${Math.round(this.launchCharge * 100)}%)` });
-      return;
-    }
-    if (!sharp) this.launchCharge = 0;
+    // (every launch fires its burst: there's no recharge to wait for)
+    this.launchCharge = 1;   // (always ready: shown on the HUD as Ready)
     this.launchT = l.time;
     this.launchCount = (this.launchCount ?? 0) + 1;   // (the camera punches in on each launch)
     this.launchPower = boosted ? l.boosted : 1;

@@ -406,7 +406,8 @@ export class SuitView {
     for (const f of this.flames) {
       const u = f.comp.throttle;
       // (the back thrusters only show in flight; in a hover the hands and boots carry the look)
-      const on = u > 0.02 && f.comp.available > 0 && !this.hideFlames && (flying || f.comp.slot !== 'back');
+      // (charging up in a hover: fists clenched, the hand jets go quiet; boots and back hold him up)
+      const on = u > 0.02 && f.comp.available > 0 && !this.hideFlames && (flying || f.comp.slot !== 'back') && !(game.chargeAir && f.comp.slot === 'gauntlets');
       f.holder.visible = on;
       if (on) {
         // Nozzles swivel: point the flame along the real thrust direction
