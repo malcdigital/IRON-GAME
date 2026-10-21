@@ -847,7 +847,7 @@ export class Game {
 
     // Backflip launch: the body turns on a set path (ignoring the attitude jets), then fires into flight
     const fl = this.flipLaunch;
-    const rflip = this.rescue?.phase === 'flip';
+    const rflip = this.rescue?.phase === 'flip' || this.rescue?.phase === 'steady';
     if (rflip) body.torque.set(0, 0, 0);
     if (fl) {
       body.torque.set(0, 0, 0);
@@ -867,6 +867,7 @@ export class Game {
     }
     if (fl) this.stepFlip(dt);
     if (rflip && this.rescue?.phase === 'flip') this.applyRescueFlip();
+    if (rflip && this.rescue?.phase === 'steady') this.applyRescueSteady();
     this.checkRecover(dt);
 
     // Touching down slowly in flight mode drops back to hover
@@ -977,11 +978,12 @@ export class Game {
     // (no bail-out near the ground: if the burn can't stop him in time, he hits it)
     if (this.grounded) { this.rescue = null; return input; }
     // the jets burn through it: the fall slows to a gentle sink, the drift dies away
-    const want = -c.rescueSinkSpeed, a = THREE.MathUtils.clamp((want - b.vel.y) * 3, 0, c.rescueBrakeAccel);
+    // (it can ease off too, so the pop up into the flip settles instead of carrying him away)
+    const want = -c.rescueSinkSpeed, a = THREE.MathUtils.clamp((want - b.vel.y) * 3, -0.8 * g, c.rescueBrakeAccel);
     const burn = r.phase === 'tuck' ? 0.6 : 1;
     b.force.y += b.mass * (g + a) * burn;
     b.force.x -= b.vel.x * b.mass * 1.2; b.force.z -= b.vel.z * b.mass * 1.2;
-    r.level = Math.min(1, (g + a) / (g + c.rescueBrakeAccel) * 1.3) * burn;
+    r.level = Math.max(0.15, Math.min(1, (g + a) / (g + c.rescueBrakeAccel) * 1.3) * burn);
     if (r.phase === 'tuck') {
       // knees in tight (the pose), still on his back
       if (r.t >= R.tuckTime) {
@@ -990,14 +992,31 @@ export class Game {
         const yaw1 = hv > 2 ? Math.atan2(-b.vel.x, -b.vel.z) : (this.controller.heading ?? this.knockYaw ?? 0);
         const yaw0 = this.knockYaw ?? yaw1;
         Object.assign(r, { phase: 'flip', t: 0, q0: b.quat.clone(), yaw0, dyaw: Math.atan2(Math.sin(yaw1 - yaw0), Math.cos(yaw1 - yaw0)), yaw1 });
+        b.vel.y = Math.max(b.vel.y, 0) + R.pop;   // (the jets pop him up into it)
       }
     } else if (r.phase === 'flip' && r.t >= R.flipTime) {
+      // out of the flip: wobble to steady himself, like on a tightrope
+      Object.assign(r, { phase: 'steady', t: 0, side: Math.random() < 0.5 ? -1 : 1 });
+    } else if (r.phase === 'steady' && r.t >= R.steadyTime) {
       this.rescue = null;
       this.controller.heading = r.yaw1;
       b.angVel.set(0, 0, 0);
       events.emit('toast', { text: 'Systems back online' });
     }
     return { ...input, cut: true, cutLatch: true, up: 0, down: 0, forward: 0, strafe: 0, yaw: 0, pitch: 0, roll: 0, boost: false, takeoffBoost: false };   // (cutLatch: the safety catch stays out of it)
+  }
+
+  // The tightrope wobble after the recovery flip: swaying side to side and rocking a little,
+  // each swing smaller, until he's steady (set after the physics step, like the flip)
+  applyRescueSteady() {
+    const r = this.rescue, R = CONFIG.crash.recovery, b = this.body;
+    const u = Math.min(1, r.t / R.steadyTime), decay = Math.pow(1 - u, 1.5);
+    const w = Math.PI * 2 * R.freq, D = Math.PI / 180;
+    r.roll = R.rollDeg * D * decay * Math.sin(w * r.t) * r.side;
+    r.rock = R.pitchDeg * D * decay * Math.sin(w * 1.3 * r.t + 1.2);
+    b.quat.setFromAxisAngle(Y, r.yaw1).multiply(this._qTmp2.setFromAxisAngle(this._xAxis.set(0, 0, 1), r.roll))
+      .multiply(this._qTmp3.setFromAxisAngle(this._xAxis.set(1, 0, 0), r.rock));
+    b.angVel.set(0, 0, 0);
   }
 
   // The recovery backflip, set after the physics step so it follows its path exactly

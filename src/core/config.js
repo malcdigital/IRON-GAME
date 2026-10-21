@@ -422,7 +422,11 @@ export const CONFIG = {
     // knocked out in the air: he turns onto his back (pose 'knocked': knees up, arms reaching up)
     // at up to settleRate rad/s, limbs a little loose (limp 0..1). Coming round: tuck (tuckTime s),
     // then a backflip (and twist to face the way you're going) back upright over flipTime s
-    recovery: { settleRate: 5, settleGain: 7, limp: 0.3, tuckTime: 0.12, flipTime: 0.45 },   // (the arms throw out and the jets drive the flip round)
+    recovery: { settleRate: 5, settleGain: 7, limp: 0.3, tuckTime: 0.12, flipTime: 0.5,   // (the arms throw out and the jets drive the flip round)
+      pop: 3.5,   // upward kick (m/s) as the flip starts
+      // after the flip: a tightrope wobble to steady himself (sway side to side rollDeg, rock
+      // pitchDeg, at freq per second, dying away over steadyTime s), arms out wide for balance
+      steadyTime: 1.3, rollDeg: 20, pitchDeg: 7, freq: 1.5 },
   },
 
   // Key bindings. Values are KeyboardEvent.code names.

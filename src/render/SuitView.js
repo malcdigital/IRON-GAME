@@ -401,6 +401,8 @@ export class SuitView {
       flare = Math.max(flare, 1 + 0.9 * Math.max(0, 1 - this.bangT / 0.35) ** 2);
       if (this.bangT > 0.35) this.bangT = null;
     }
+    // recovery flip after a crash: the jets flare as they drive him round
+    if (game.rescue?.phase === 'flip') flare = Math.max(flare, 1.6);
     const vh = this.canvas?.height ?? innerHeight;
     let hz = 0;
     for (const f of this.flames) {

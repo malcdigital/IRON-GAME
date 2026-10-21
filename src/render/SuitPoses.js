@@ -450,13 +450,16 @@ export class SuitPoser {
     // recovery flip after a knockout: tuck, then open out as he comes upright
     if (game.rescue) {
       const R = CONFIG.crash.recovery, r = game.rescue;
-      const env = r.phase === 'tuck' ? Math.min(1, r.t / 0.12) : 1 - THREE.MathUtils.smoothstep(r.t / R.flipTime, 0.55, 1);
+      const env = r.phase === 'tuck' ? Math.min(1, r.t / 0.12) : r.phase === 'flip' ? 1 - THREE.MathUtils.smoothstep(r.t / R.flipTime, 0.55, 1) : 0;
       mo.airCharge = Math.max(mo.airCharge, env);
       mo.recover = 0;
       mo.recoverClock = 9;   // (the flip is the recovery: no arms-up shake-off afterwards)
       // the arms throw out in front through the flip (the hand jets push him round)
       mo.rescueArms = r.phase === 'flip' ? Math.sin(Math.PI * Math.min(1, r.t / R.flipTime)) : 0;
-    } else mo.rescueArms = 0;
+      // tightrope wobble: arms out wide, leaning against each sway
+      mo.balance = r.phase === 'steady' ? Math.min(1, r.t / 0.12) * (1 - THREE.MathUtils.smoothstep(r.t / R.steadyTime, 0.65, 1)) : r.phase === 'flip' ? THREE.MathUtils.smoothstep(r.t / R.flipTime, 0.75, 1) : 0;
+      mo.balanceRoll = r.roll ?? 0;
+    } else { mo.rescueArms = 0; mo.balance = 0; }
     // backflip launch: knees tucked tight through the flip, opening out as he comes round
     if (game.flipLaunch) mo.airCharge = Math.max(mo.airCharge, Math.min(1, Math.sin(Math.PI * Math.min(1, game.flipLaunch.t / CONFIG.launch.air.flip.time)) * 1.6));
     if (game.launchSeq) mo.charge = 0;   // (launching from the crouch: the launch timeline takes it from here)
@@ -623,6 +626,21 @@ export class SuitPoser {
     }
     // 2. motion on top
     const add = (n, x, y, z) => { const b = R[n]; if (b) { b.rot.x += x; b.rot.y += y; b.rot.z += z; } };
+    // tightrope wobble after the recovery flip: arms out wide, the upper body leaning against
+    // each sway, the arms see-sawing to catch it, knees soft
+    if ((this.mom.balance ?? 0) > 0.01) {
+      const k = this.mom.balance, sw = (this.mom.balanceRoll ?? 0) * 180 / Math.PI;
+      for (const [n, a] of [['LeftArm', [-0.97, 0.05, -0.2]], ['RightArm', [0.97, 0.05, -0.2]], ['LeftForeArm', [-0.95, 0.15, -0.25]], ['RightForeArm', [0.95, 0.15, -0.25]], ['LeftHand', [-0.9, 0.1, -0.3]], ['RightHand', [0.9, 0.1, -0.3]]]) {
+        const b = R[n];
+        if (!b?.dir) continue;
+        if (!b.hasAim) { b.aim.copy(b.dir); b.hasAim = true; }
+        b.aim.normalize().lerp(_v.fromArray(a).normalize(), k).normalize();
+      }
+      add('Spine02', 0, 0, -sw * 0.5 * k); add('Spine01', 0, 0, -sw * 0.4 * k); add('Head', 0, 0, -sw * 0.3 * k);
+      add('LeftArm', 0, 0, sw * 1.2 * k); add('RightArm', 0, 0, sw * 1.2 * k);
+      for (const sd of ['Left', 'Right']) { add(`${sd}UpLeg`, 10 * k, 0, 0); add(`${sd}Leg`, -18 * k, 0, 0); }
+      this.handCurl('Left', -20 * k); this.handCurl('Right', -20 * k);
+    }
     // hover: body language from the physics, a little exaggerated (CONFIG.pose.hover)
     const H = P.hover, hv = (w.hover + w.stand * 0.3) * H.amount;
     const clampD = (v, m) => THREE.MathUtils.clamp(v, -m, m);
