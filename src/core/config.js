@@ -286,7 +286,13 @@ export const CONFIG = {
     turnRate: 5, turnPerMs2: 0.5, turnMax: 25,    // flight turns: degrees of lean into the turn per m/s² of turning
     // landing hard (falling faster than heroFrom m/s, or any drop with the thrusters cut): the
     // superhero landing (pose 'land'), held heroHold s (no walking off), standing up over heroRise s
-    landing: { heroFrom: 7, heroHold: 0.55, heroRise: 0.6, shake: 0.08, shakeTime: 0.45, dropSpeed: 6 },
+    landing: { heroFrom: 7, heroHold: 0.55, heroRise: 0.6, dropSpeed: 6,
+      // the hit: camera shake (m) and dip, fov squeeze (deg), all fading over shakeTime s; a
+      // hitStop s freeze-frame (full at fullSpeed m/s); rumble on the controller
+      shake: 0.2, dip: 0.35, fov: 6, shakeTime: 0.6, hitStop: 0.07, fullSpeed: 20,
+      // dust cloud: puffs (count), speed out along the ground (m/s), rise (m/s), drag, size (m) and
+      // how much it grows, life (s), opacity, colour; the shockwave ring's radius (m) and time (s)
+      dust: { puffs: 70, speed: 11, rise: 1.6, drag: 2.6, size: 0.7, grow: 2.2, life: 1.8, opacity: 0.55, color: 0xd9bfa3, ringRadius: 7, ringTime: 0.45 } },
     landSpeedFull: 10, landTime: 0.45, crouchDeg: 35,   // landing crouch: full at this fall speed, back up in landTime s
     stepsPerMeter: 0.9, walkSwing: 28,            // walking legs
     limits: true,                   // keep every joint within real human ranges (SuitPoses.js LIMITS)

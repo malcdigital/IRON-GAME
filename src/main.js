@@ -9,6 +9,7 @@ import { WorldView } from './render/WorldView.js';
 import { SuitView } from './render/SuitView.js';
 import { CargoView } from './render/CargoView.js';
 import { Effects } from './render/Effects.js';
+import { DustCloud } from './render/DustCloud.js';
 import { CameraRig } from './render/CameraRig.js';
 import { SpeedLines } from './render/SpeedLines.js';
 import { VaporTrails } from './render/VaporTrails.js';
@@ -32,6 +33,7 @@ function start(hotData) {
   suitView.build(game.suit);
   const cargoView = new CargoView(renderer.scene, game.cargo);
   const effects = new Effects(renderer.scene);
+  const dust = new DustCloud(renderer.scene);
   loadSavedShots();
   const cam = new CameraRig(renderer.camera);
   const speedLines = new SpeedLines(renderer.scene);
@@ -99,6 +101,14 @@ function start(hotData) {
     document.body.classList.add('has-gamepad');
   });
   events.on('gamepad:disconnected', () => { prompts.set('keyboard'); hud.toast('Controller disconnected'); });
+  // superhero landing: dust cloud, gravel, a rumble and a split-second freeze-frame
+  events.on('heroLand', ({ point, speed }) => {
+    const L = CONFIG.pose.landing, p = Math.min(1.3, speed / L.fullSpeed);
+    dust.burst(point, Math.min(1, p));
+    effects.burst(point, Math.round(25 * p), 6 * p);
+    input.gamepad.rumble(Math.min(1, p), Math.min(1, p), 180 + 200 * p);
+    hitStop = L.hitStop * Math.min(1, p);
+  });
   events.on('impact', ({ point, speed }) => effects.burst(point, Math.min(40, Math.round(speed * 3)), Math.min(8, speed * 0.6)));
 
   // Menu navigation with a controller (start screen and workshop)
@@ -144,7 +154,7 @@ function start(hotData) {
   window.claude?.hot?.snapshot?.(() => ({ loadout: game.suit.loadout }));
 
   const fixed = CONFIG.physics.dt;
-  let last = performance.now(), acc = 0, clockTime = 0;
+  let last = performance.now(), acc = 0, clockTime = 0, hitStop = 0;
 
   function frame(now) {
     const dt = Math.min(0.1, (now - last) / 1000);
@@ -155,7 +165,8 @@ function start(hotData) {
     for (const a of input.consumeActions()) handleAction(a);
     const axes = input.axes();
 
-    if (!paused && !frozen) {
+    if (hitStop > 0) hitStop -= dt;   // (freeze-frame on a hard landing)
+    else if (!paused && !frozen) {
       acc += dt;
       let steps = 0;
       while (acc >= fixed && steps < CONFIG.physics.maxStepsPerFrame) {
@@ -171,6 +182,7 @@ function start(hotData) {
     cargoView.update(clockTime);
     worldView.update(game.course, clockTime);
     effects.update(dt);
+    dust.update(dt, renderer.camera, renderer.renderer?.domElement?.height ?? innerHeight);
     speedLines.update(game.body, dt);
     vapor.update(game, dt);
     missileView.update(dt, clockTime);

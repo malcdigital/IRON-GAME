@@ -239,14 +239,18 @@ export class CameraRig {
       this.camera.position.y += amp * (Math.sin(t * 43.1) + 0.5 * Math.sin(t * 57.9));
     }
     // superhero landing: a thud
-    if ((game.heroLandCount ?? 0) !== (this.lastHero ?? 0)) { this.lastHero = game.heroLandCount ?? 0; if (!this.snapNext) this.thudT = 0; }
+    if ((game.heroLandCount ?? 0) !== (this.lastHero ?? 0)) {
+      this.lastHero = game.heroLandCount ?? 0;
+      if (!this.snapNext) { this.thudT = 0; this.thudPower = THREE.MathUtils.clamp((game.lastHeroSpeed ?? 10) / CONFIG.pose.landing.fullSpeed, 0.4, 1.3); }
+    }
     if (this.thudT != null) {
       const LD = CONFIG.pose.landing;
       this.thudT += dt;
-      const k = Math.max(0, 1 - this.thudT / LD.shakeTime) ** 2, amp = LD.shake * k, t = this.thudT;
-      this.camera.position.y += amp * (Math.sin(t * 71.0) + 0.5 * Math.sin(t * 113.0)) - amp * 0.8;
-      this.camera.position.x += amp * 0.5 * Math.sin(t * 89.0);
-      if (this.thudT > LD.shakeTime) this.thudT = null;
+      const k = Math.max(0, 1 - this.thudT / LD.shakeTime) ** 2, amp = LD.shake * k * (this.thudPower ?? 1), t = this.thudT;
+      this.camera.position.y += amp * (Math.sin(t * 71.0) + 0.5 * Math.sin(t * 113.0)) - LD.dip * k * (this.thudPower ?? 1);
+      this.camera.position.x += amp * 0.6 * Math.sin(t * 89.0);
+      this.thudFov = LD.fov * k * (this.thudPower ?? 1);
+      if (this.thudT > LD.shakeTime) { this.thudT = null; this.thudFov = 0; }
     }
     if (slam > 0.01) {
       const t = this.slamT, amp = SL.shake * slam;
@@ -272,7 +276,7 @@ export class CameraRig {
     this.camera.lookAt(this.look);
 
     // Field of view: the shot's, a little wider at speed
-    const wantFov = s.fov * fovMult * (1 + cc.burst.fovMult * bw) - cc.moments.punch.fov * punch + CONFIG.launch.air.blast.fov * blast - SL.fov * slam + Math.min(cc.speedFovMax, Math.max(0, speed - cc.speedFovFrom) * cc.speedFovPer);
+    const wantFov = s.fov * fovMult * (1 + cc.burst.fovMult * bw) - cc.moments.punch.fov * punch + CONFIG.launch.air.blast.fov * blast - SL.fov * slam - (this.thudFov ?? 0) + Math.min(cc.speedFovMax, Math.max(0, speed - cc.speedFovFrom) * cc.speedFovPer);
     this.camera.fov += (wantFov - this.camera.fov) * (this.snapNext ? 1 : Math.min(1, 3 * dt));
     if (bw > 0.01) this.camera.up.copy(Y), this.up.copy(Y);   // (boosted takeoff: horizon held level)
     this.camera.updateProjectionMatrix();

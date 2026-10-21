@@ -532,7 +532,10 @@ export class Game {
     if (input.up > 0 || this.controller.flying) this.heroDrop = false;   // (climbing away: no landing)
     this.caps.landSpeed = this.heroDrop && !this.grounded ? CONFIG.pose.landing.dropSpeed : null;
     // superhero landing: hold it a moment before you can walk off
-    if (this.landLockT > 0) { this.landLockT -= dt; input = { ...input, forward: 0, strafe: 0 }; }
+    if (this.landLockT > 0) {
+      this.landLockT -= dt; input = { ...input, forward: 0, strafe: 0 };
+      if (this.grounded) { body.vel.x = 0; body.vel.z = 0; }   // (planted: no sliding)
+    }
     if (this.heroSteadyT > 0 && this.grounded) {
       this.heroSteadyT -= dt;
       this.spinToward(this._qTmp2.setFromAxisAngle(Y, this.controller.heading), 6, 16);
@@ -887,6 +890,9 @@ export class Game {
         this.landLockT = L.heroHold;
         this.heroSteadyT = L.heroHold + L.heroRise;   // (held steady and upright through it: no tipping over)
         b.angVel.set(0, 0, 0);
+        b.vel.x = 0; b.vel.z = 0;   // (stops dead: no sliding)
+        this.lastHeroSpeed = fall;
+        events.emit('heroLand', { point: new THREE.Vector3(b.pos.x, this.supportHeight ?? b.pos.y - CONFIG.pilot.feetHeight, b.pos.z), speed: fall });
       }
       this.heroDrop = false;
     }
