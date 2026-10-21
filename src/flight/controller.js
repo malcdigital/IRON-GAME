@@ -116,6 +116,8 @@ export class FlightController {
     let vyDes = input.up * climb - input.down * (input.boost ? c.boostClimbRate : c.descendRate);
     // Fast descents ease off near the ground or a roof, so you touch down gently
     if (caps.room != null) vyDes = Math.max(vyDes, -Math.sqrt(2 * c.landingBrake * Math.max(0, caps.room - 0.5)) - 1);
+    // hovering just off the ground with nothing pressed (e.g. after bouncing on a landing): settle onto your feet
+    if (caps.room != null && caps.room < c.settleRoom && input.up <= 0 && !caps.landSpeed) vyDes = Math.min(vyDes, -c.settleSpeed);
     // after a drop with the thrusters cut: keep coming down and land hard (landSpeed m/s) for the superhero landing
     if (caps.landSpeed && caps.room != null && input.up <= 0) vyDes = -Math.sqrt(caps.landSpeed ** 2 + 2 * c.landingBrake * Math.max(0, caps.room - 0.3));
     const aY = (vyDes - body.vel.y) * c.climbGain + g;

@@ -178,6 +178,7 @@ export const CONFIG = {
   assist: {
     maxSpeed: 22, boostSpeed: 30,
     climbRate: 18, boostClimbRate: 25, descendRate: 24,
+    settleRoom: 0.35, settleSpeed: 1.2,   // floating within settleRoom m of the ground, nothing pressed: sink onto your feet at settleSpeed m/s
     landingBrake: 12,  // fast descents ease off near the ground/roofs so you never hit hard (m/s² planned stop)
     // Vertical steering jets: help reach and hold the climb/descent speed quickly (m/s²)
     vertical: { gain: 5, accel: 16 },
