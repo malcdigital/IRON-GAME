@@ -175,6 +175,29 @@ function inkOutline(o, cfg, scale) {
   o.parent.add(hull);
 }
 
+// Colour lock: the suit's parts share one colour texture, and some of it bleeds the wrong colour
+// onto a part (dark specks on the ivory, pale flakes on the navy). Each part keeps its own colour
+// (key = the texture's colour for that part) and only takes the texture's light and dark, within lo..hi.
+function colorLock(m, key, cfg) {
+  const k = new THREE.Color(key);   // (sRGB hex -> linear, like the texture after decoding)
+  const prev = m.onBeforeCompile;
+  m.onBeforeCompile = (sh, r) => {
+    prev?.call(m, sh, r);
+    sh.uniforms.lockKey = { value: k };
+    sh.uniforms.lockRange = { value: new THREE.Vector2(cfg.lo, cfg.hi) };
+    sh.fragmentShader = 'uniform vec3 lockKey; uniform vec2 lockRange;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+      #ifdef USE_MAP
+      {
+        float kl = dot(lockKey, vec3(0.2126, 0.7152, 0.0722));
+        float sl = dot(sampledDiffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+        diffuseColor.rgb = diffuse * lockKey * clamp(sl / max(kl, 1e-4), lockRange.x, lockRange.y);
+      }
+      #endif`);
+  };
+  m.customProgramCacheKey = () => 'lock' + key;
+  m.needsUpdate = true;
+}
+
 // Fit the model to the suit's body: feet at the soles, facing -Z (the game's forward)
 export function placeModel(gltf, cfg) {
   const model = gltf.scene;
@@ -208,6 +231,8 @@ export function placeModel(gltf, cfg) {
       // per-material colour boost (multiplies the texture: e.g. lift the near-black navy undersuit)
       const t = m && cfg.tint?.[m.name];
       if (t && !m.userData.tinted) { m.color.multiply(new THREE.Color(...t)); m.userData.tinted = true; }
+      const lock = m && cfg.colorLock?.mats?.[m.name];
+      if (lock !== undefined && !m.userData.locked) { colorLock(m, lock, cfg.colorLock); m.userData.locked = true; }
       if (m && !mats.includes(m)) mats.push(m);
     }
   });

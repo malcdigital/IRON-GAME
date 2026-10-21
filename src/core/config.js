@@ -400,7 +400,10 @@ export const CONFIG = {
     backVent: [0.025, 0.1, 0.185],   // the back thruster: the black vent between the shoulder blades (x either side, up, back; m from the upper chest bone)
     url: 'assets/suit2.json', height: 1.9,   // split, textured suit (test copy; the original is assets/suit.json)
     feetY: -1.03, turn: Math.PI,
-    tint: { Undersuit_Navy: [3, 2.9, 4] },   // colour boost per material (r, g, b; 1 = as painted): the undersuit reads navy, not black
+    tint: { Undersuit_Navy: [3, 2.9, 4] },
+    // each part keeps its own colour (stray specks of other colours in the shared texture are ignored);
+    // lo..hi = how much of the texture's light and dark shading still shows
+    colorLock: { lo: 0.82, hi: 1.08, mats: { Armor_Ivory: 0xf3e7dc, Undersuit_Navy: 0x121c2a, Accent_Orange: 0xf36b2d } },   // colour boost per material (r, g, b; 1 = as painted): the undersuit reads navy, not black
     pods: false,                    // the winged back pods (sheet A has none: a vent between the shoulders instead)
     podMaxDeg: 35, podRate: 8,      // back pods swing toward the thrust direction (up to podMaxDeg; podRate = how quickly)
     toonSteps: [140, 205, 255], toonNormal: 0.6 },   // cel shading (art.style 'toon'): light bands (0-255), panel-line depth
