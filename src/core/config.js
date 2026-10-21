@@ -354,7 +354,9 @@ export const CONFIG = {
       vertSpring: 7,                // how quickly the climb / drop / idle poses ease into each other (higher = snappier)
     },               // counts as standing when the feet are within this of the ground (m)
   },
-  suitModel: { url: 'assets/suit.json', height: 1.9, feetY: -1.03, turn: Math.PI,
+  suitModel: {
+    backVent: [0.025, 0.1, 0.185],   // the back thruster: the black vent between the shoulder blades (x either side, up, back; m from the upper chest bone)
+    url: 'assets/suit.json', height: 1.9, feetY: -1.03, turn: Math.PI,
     pods: false,                    // the winged back pods (sheet A has none: a vent between the shoulders instead)
     podMaxDeg: 35, podRate: 8,      // back pods swing toward the thrust direction (up to podMaxDeg; podRate = how quickly)
     toonSteps: [140, 205, 255], toonNormal: 0.6 },   // cel shading (art.style 'toon'): light bands (0-255), panel-line depth

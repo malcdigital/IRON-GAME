@@ -263,13 +263,15 @@ export class SuitView {
         if (foot) { p = toe ? foot.clone().lerp(toe, 0.35) : foot; p.y = CONFIG.suitModel.feetY - 0.02; }
       } else if (slot === 'back') {
         // Base of the back pods: upper back, just behind the body
-        const sp = at('Spine01');
-        // with pods: the base of each pod; without (sheet A): the vent between the shoulder blades
-        if (sp) p = sp.add(new THREE.Vector3(placed.pods.length ? Math.sign(f.basePos.x) * 0.11 : Math.sign(f.basePos.x) * 0.04, 0.02, placed.pods.length ? 0.17 : 0.13));   // (a single centre nozzle stays centred)
+        // with pods: the base of each pod (from the mid back); without (sheet A): the black vent
+        // between the shoulder blades (CONFIG.suitModel.backVent, from the upper chest bone)
+        const V = CONFIG.suitModel.backVent;
+        const sp = at(placed.pods.length ? 'Spine01' : 'Spine');
+        if (sp) p = sp.add(placed.pods.length ? new THREE.Vector3(Math.sign(f.basePos.x) * 0.11, 0.02, 0.17) : new THREE.Vector3(Math.sign(f.basePos.x) * V[0], V[1], V[2]));   // (a single centre nozzle stays centred)
       }
       if (p) f.holder.position.copy(p);
       // ride on a bone so the flame follows the poses
-      const boneName = slot === 'gauntlets' && side ? `${side}Hand` : slot === 'boots' && side ? `${side}Foot` : slot === 'back' ? 'Spine01' : null;
+      const boneName = slot === 'gauntlets' && side ? `${side}Hand` : slot === 'boots' && side ? `${side}Foot` : slot === 'back' ? (placed.pods.length ? 'Spine01' : 'Spine') : null;
       const bone = boneName && placed.bones[boneName];
       if (p && bone) { f.bone = bone; f.boneLocal = bone.worldToLocal(this.root.localToWorld(p.clone())); }
       // Back flames ride on the pods' nozzles (left flame: left pod; a single centre nozzle: between them)
