@@ -86,7 +86,7 @@ export class Game {
     b.pos.y = this.surfaceBelow(b.pos) + CONFIG.pilot.feetHeight;   // standing on the pad (not hovering just above it)
     b.vel.set(0, 0, 0);
     b.angVel.set(0, 0, 0);
-    this.heroDrop = false; this.landLockT = 0; this.heroSteadyT = 0;
+    this.heroDrop = false; this.landLockT = 0; this.heroSteadyT = 0; this.flipLaunch = null;
     b.quat.setFromAxisAngle(Y, this.world.spawn.heading);
     this.controller.reset(this.world.spawn.heading);
     this.suit.repair();
@@ -273,7 +273,14 @@ export class Game {
           this.brakeDir.normalize();
           this.brakeCount = (this.brakeCount ?? 0) + 1;   // (the camera and flames slam as it hits)
           events.emit('toast', { text: 'Hover mode' });
-        } else if (!this.launchSeq) {
+        } else if (!this.launchSeq && !this.flipLaunch && this.hoverBrakeT > 0 && this.brakeDir && !this.grounded) {
+          // Still braking (leaning back into the wind): tuck and backflip into flight position, then burst
+          const d = this.brakeDir.clone(), b = this.body;
+          const head = this._c.set(0, 1, 0).applyQuaternion(b.quat);
+          const th0 = Math.atan2(-head.dot(d), head.y);   // how far back he's leaning already (rad)
+          this.flipLaunch = { t: 0, d, th0, heading: Math.atan2(-d.x, -d.z), axis: new THREE.Vector3().crossVectors(Y, d).normalize().negate() };
+          this.hoverBrakeT = 0;
+        } else if (!this.launchSeq && !this.flipLaunch) {
           // Launch sequence (CONFIG.launch.seq): wind up, jump, then the thrusters fire.
           // From the ground it's a crouch and a real jump; in the air, a quick tuck and fire.
           const seq = CONFIG.launch.seq, onGround = this.grounded || (this.caps.room ?? 9) < 0.6;
@@ -391,6 +398,11 @@ export class Game {
     }
     this.caps.attTarget = null;
     if (this.rescue) input = this.stepRescue(dt, input);
+    // Backflip launch in progress: hands off, hold your height (the jets carry you round)
+    if (this.flipLaunch) {
+      input = { ...input, forward: 0, strafe: 0, yaw: 0, up: 0, down: 0, cut: false, boost: false };
+      this.hoverBrakeT = 0;
+    }
     // Launch sequence: wind up, jump (a real push off the ground), then fire into flight
     if (this.launchSeq) {
       const s = this.launchSeq, seq = CONFIG.launch.seq;
@@ -804,6 +816,14 @@ export class Game {
     updateHeat(suit, dt, input.boost);
     this.applyStance();
 
+    // Backflip launch: the body turns on a set path (ignoring the attitude jets), then fires into flight
+    const fl = this.flipLaunch;
+    if (fl) {
+      body.torque.set(0, 0, 0);
+      // the jets carry his weight through the flip (and soak up any climb or drop); the skid bleeds off
+      const g = CONFIG.physics.gravity;
+      body.force.set(-body.vel.x * body.mass * 0.6, body.mass * (g - body.vel.y * 4), -body.vel.z * body.mass * 0.6);
+    }
     // Fast flight: split the move into small steps so we can't skip through walls
     const n = Math.max(1, Math.min(12, Math.ceil((body.vel.length() * dt) / 0.2)));
     this._Fsave.copy(body.force);
@@ -814,6 +834,7 @@ export class Game {
       body.integrate(dt / n, CONFIG.physics);
       this.collide();
     }
+    if (fl) this.stepFlip(dt);
     this.checkRecover(dt);
 
     // Touching down slowly in flight mode drops back to hover
@@ -1028,6 +1049,30 @@ export class Game {
     const alpha = wDes.sub(b.angVel).multiplyScalar(gain * 2);
     b.torque.add(b.inertiaWorld(alpha, alpha));
     return ang;
+  }
+
+  // Backflip into flight (see handleAction 'flight'): from leaning back, round past head-down to
+  // head-first along the way you were going, then the mid-air burst fires
+  stepFlip(dt) {
+    const fl = this.flipLaunch, b = this.body, F = CONFIG.launch.air.flip;
+    fl.t += dt;
+    const u = Math.min(1, fl.t / F.time);
+    const ease = 0.5 - 0.5 * Math.cos(Math.PI * u);
+    const end = Math.PI * 1.5;   // (270° back from upright = head first, belly down)
+    const th = fl.th0 + (end - fl.th0) * ease;
+    const rate = (end - fl.th0) * Math.PI * 0.5 * Math.sin(Math.PI * u) / F.time;
+    b.quat.setFromAxisAngle(fl.axis, th).multiply(this._qTmp2.setFromAxisAngle(Y, fl.heading));
+    b.angVel.copy(fl.axis).multiplyScalar(u < 1 ? rate : 0);
+    if (u < 1) return;
+    // in flight position: burst
+    this.flipLaunch = null;
+    this.controller.heading = fl.heading;
+    this.controller.enterFlight(b, 0);
+    this.lastLaunchGround = false;
+    this.blastScale = 1;
+    this.airLaunchCount = (this.airLaunchCount ?? 0) + 1;
+    const A = CONFIG.launch.air;
+    this.launch(false, A.rampTime, A.kickMult, true);
   }
 
   // A hard hit knocks the pilot out for a moment (longer for harder hits)

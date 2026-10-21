@@ -380,7 +380,7 @@ export class SuitPoser {
     const brakeT = game.hoverBrakeT ?? 0, brakeAll = CONFIG.assist.exitBrake.time;
     const flareWant = brakeT > 0 && !flying ? THREE.MathUtils.smoothstep(Math.hypot(game.body.vel.x, game.body.vel.z), 1.5, 8) : 0;   // (held while you're still moving)
     // (relaunching into flight from the brake: the braking pose clears quickly for the tuck)
-    const relaunch = game.launchSeq && !game.launchSeq.ground;
+    const relaunch = (game.launchSeq && !game.launchSeq.ground) || !!game.flipLaunch;
     mo.flare += (flareWant - mo.flare) * (1 - Math.exp(-(flareWant > mo.flare && !relaunch ? 22 : relaunch ? 25 : 5) * dt));
     // launch: a quick crouch, then the rocket pose for the burst, easing into flight
     if (mo.launchCount === null) mo.launchCount = game.launchCount ?? 0;
@@ -430,6 +430,8 @@ export class SuitPoser {
     mo.charge = (mo.charge ?? 0) + ((chG ? 1 : 0) - (mo.charge ?? 0)) * (1 - Math.exp(-(chG ? 12 : 8) * dt));
     mo.airCharge = (mo.airCharge ?? 0) + ((chA ? 1 : 0) - (mo.airCharge ?? 0)) * (1 - Math.exp(-(chA ? 10 : 14) * dt));
     if (game.launchSeq && !game.launchSeq.ground && !game.launchSeq.charged) mo.airCharge = 0;
+    // backflip launch: knees tucked tight through the flip, opening out as he comes round
+    if (game.flipLaunch) mo.airCharge = Math.max(mo.airCharge, Math.min(1, Math.sin(Math.PI * Math.min(1, game.flipLaunch.t / CONFIG.launch.air.flip.time)) * 1.6));
     if (game.launchSeq) mo.charge = 0;   // (launching from the crouch: the launch timeline takes it from here)
     // superhero landing: slam into it, hold, then stand up
     const LD = P.landing;
