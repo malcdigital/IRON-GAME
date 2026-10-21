@@ -26,6 +26,104 @@ export class CityScenery {
     this.buildClouds();
     this.buildTrain();
     this.buildBoats();
+    this.buildWaterfalls();
+  }
+
+  // Waterfalls spilling off the terraced cliffs: a stream across the top, then a sheet of water
+  // down each step, foam where it lands and mist rising off the sea at the bottom
+  buildWaterfalls() {
+    const C = this.range.cliffs, sea = this.range.seaLevel;
+    if (!C) return;
+    this.fallMat = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, side: THREE.DoubleSide,
+      uniforms: { time: { value: 0 }, flow: { value: 1 } },
+      vertexShader: 'varying vec2 vUv; varying vec3 vW; void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
+      fragmentShader: `
+        uniform float time;
+        varying vec2 vUv; varying vec3 vW;
+        float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        float n(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
+          return mix(mix(h(i), h(i+vec2(1,0)), f.x), mix(h(i+vec2(0,1)), h(i+vec2(1,1)), f.x), f.y); }
+        void main(){
+          // streaks pouring down (v runs along the flow), fraying at the edges
+          float s = n(vec2(vUv.x * 14.0, vUv.y * 2.0 + time * 3.2)) * 0.6 + n(vec2(vUv.x * 33.0, vUv.y * 5.0 + time * 5.5)) * 0.4;
+          float edge = smoothstep(0.0, 0.18, vUv.x) * smoothstep(1.0, 0.82, vUv.x);
+          vec3 col = mix(vec3(0.55, 0.85, 0.9), vec3(1.0), smoothstep(0.35, 0.8, s));
+          float a = edge * (0.55 + 0.45 * s);
+          gl_FragColor = vec4(col, a * 0.9);
+        }`,
+    });
+    const foamMat = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false,
+      uniforms: { time: this.fallMat.uniforms.time },
+      vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: `
+        uniform float time; varying vec2 vUv;
+        float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        float n(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
+          return mix(mix(h(i), h(i+vec2(1,0)), f.x), mix(h(i+vec2(0,1)), h(i+vec2(1,1)), f.x), f.y); }
+        void main(){
+          vec2 p = (vUv - 0.5) * 2.0; float r = length(p);
+          float churn = n(p * 6.0 + vec2(time * 1.3, -time)) * 0.6 + n(p * 13.0 - time * 2.0) * 0.4;
+          float a = (1.0 - smoothstep(0.3, 1.0, r)) * (0.5 + 0.5 * churn);
+          gl_FragColor = vec4(vec3(1.0), a * 0.85);
+        }`,
+    });
+    const mistMat = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false,
+      uniforms: { time: this.fallMat.uniforms.time },
+      vertexShader: `
+        uniform float time; attribute float aPh; varying vec2 vUv; varying float vA;
+        void main(){
+          vUv = uv;
+          float t = fract(time * 0.12 + aPh);
+          vec4 c = modelViewMatrix * vec4(0.0, t * 14.0, 0.0, 1.0);
+          float s = 8.0 + t * 16.0;
+          c.xy += position.xy * s;
+          vA = sin(t * 3.1416);
+          gl_Position = projectionMatrix * c;
+        }`,
+      fragmentShader: 'varying vec2 vUv; varying float vA; void main(){ float r = length(vUv - 0.5) * 2.0; if (r > 1.0) discard; gl_FragColor = vec4(vec3(1.0), pow(1.0 - r, 2.0) * vA * 0.35); }',
+    });
+    const quad = (pts) => {   // four corners, uv x across / y down the flow
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(pts.flat(), 3));
+      g.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1], 2));
+      g.setIndex([0, 1, 2, 0, 2, 3]);
+      return g;
+    };
+    for (const f of C.falls) {
+      const seg = C.edges.find((e) => f.z <= e.z0 && f.z > e.z1);
+      if (!seg) continue;
+      const row = seg.row, w = f.width / 2, z = f.z, top = row.length - 1;
+      // the stream across the top terrace to its edge
+      this.group.add(new THREE.Mesh(quad([[C.inner - 6, row[top][1] + 0.6, z - w], [C.inner - 6, row[top][1] + 0.6, z + w], [row[top][0], row[top][1] + 0.6, z + w], [row[top][0], row[top][1] + 0.6, z - w]]), this.fallMat));
+      for (let k = top; k >= 0; k--) {
+        const [ex, h] = row[k], below = k > 0 ? row[k - 1][1] + 0.6 : sea;
+        const x = ex - 0.6;
+        // the sheet pouring down this step's face
+        this.group.add(new THREE.Mesh(quad([[x, h + 0.6, z - w], [x, h + 0.6, z + w], [x - 1.5, below, z + w * 1.15], [x - 1.5, below, z - w * 1.15]]), this.fallMat));
+        // where it lands: foam, then (above the sea) running across the next step down
+        const foam = new THREE.Mesh(new THREE.PlaneGeometry(f.width * 2.2, f.width * 2.2), foamMat);
+        foam.rotation.x = -Math.PI / 2; foam.position.set(x - 3, below + 0.05, z);
+        this.group.add(foam);
+        if (k > 0) {
+          const nx = row[k - 1][0];
+          this.group.add(new THREE.Mesh(quad([[x - 1.5, below, z - w], [x - 1.5, below, z + w], [nx, below, z + w], [nx, below, z - w]]), this.fallMat));
+        } else {
+          // mist rising off the sea at the bottom
+          const n = 10;
+          for (let i = 0; i < n; i++) {
+            const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mistMat.clone());
+            m.material.uniforms = { time: this.fallMat.uniforms.time };
+            m.geometry.setAttribute('aPh', new THREE.Float32BufferAttribute([i / n, i / n, i / n, i / n], 1));
+            m.position.set(x - 4 - Math.random() * 8, sea, z + (Math.random() - 0.5) * f.width * 1.5);
+            m.frustumCulled = false;
+            this.group.add(m);
+          }
+        }
+      }
+    }
   }
 
   // ---------------------------------------------------------------- sea
@@ -137,7 +235,7 @@ export class CityScenery {
       acc += Math.hypot(x1 - x0, z1 - z0);
       if (acc > W.shorePalmEvery) { acc = 0; this.palmSpots.push([x0, 0, z0, 0.8 + rand() * 0.5]); }
     }
-    if (isl && !isl.skyline) this.buildIsland(isl);
+    if (isl && !isl.skyline && !isl.headland) this.buildIsland(isl);
   }
 
   // An island out in the bay: a green hill with a little pastel village and palms
@@ -314,6 +412,7 @@ export class CityScenery {
 
   update(dt, time) {
     this.seaMat.uniforms.time.value = time;
+    if (this.fallMat) this.fallMat.uniforms.time.value = time;
     // the train: up the track and back, slowing into each end
     const M = this.range.monorail, W = CONFIG.world;
     if (this.train) {

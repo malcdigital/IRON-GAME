@@ -22,7 +22,7 @@ export class WorldView {
     this.scenery = new CityScenery(scene, world, renderer);
     this.roofPalms = [];
     this.buildPad();
-    this.merge = { facade: [[], [], [], []], cap: [], garden: [], room: [] };
+    this.merge = { facade: [[], [], [], []], cap: [], garden: [], room: [], cliff: [], cliffTop: [] };
     this.buildBoxes();
     this.buildMerged();
     this.buildStreets();
@@ -60,6 +60,14 @@ export class WorldView {
         bIndex++;
         this.roof(c, size);
         if (c.kind === 'skyline' && c.spire) this.spire(c, size);
+        continue;
+      }
+      if (c.kind === 'cliff') {
+        // sandstone terraces (merged): warm rock faces, green on top
+        const k = c.tier, warm = new THREE.Color(0xf0c79a).lerp(new THREE.Color(0xf6dcb8), k / 4).multiplyScalar(1.05 + rand() * 0.15);
+        this.merge.cliff.push(worldBox(size, c.center, warm.getHex(), 10, 7));
+        this.merge.cliffTop.push(worldBox(new THREE.Vector3(size.x + 0.4, 0.6, size.z + 0.02), new THREE.Vector3(c.center.x, c.max.y + 0.2, c.center.z), 0x6fa25a));
+        for (let n = 0; n < 2; n++) if (rand() < 0.55) this.roofPalms.push([c.min.x + 3 + rand() * 6, c.max.y + 0.5, c.min.z + rand() * size.z, 0.8 + rand() * 0.5]);
         continue;
       }
       if (c.kind === 'tower') {
@@ -120,7 +128,12 @@ export class WorldView {
       mesh.castShadow = mesh.receiveShadow = true;
       this.group.add(mesh);
     });
-    for (const [k, rough] of [['cap', 0.8], ['garden', 1], ['room', 0.8]]) {
+    if (this.merge.cliff.length) {
+      const mesh = new THREE.Mesh(mergeGeometries(this.merge.cliff), new THREE.MeshStandardMaterial({ map: rockTexture(), vertexColors: true, roughness: 0.95, emissive: 0x3a2414, emissiveIntensity: 0.35 }));
+      mesh.castShadow = mesh.receiveShadow = true;
+      this.group.add(mesh);
+    }
+    for (const [k, rough] of [['cap', 0.8], ['garden', 1], ['room', 0.8], ['cliffTop', 1]]) {
       if (!this.merge[k].length) continue;
       const mesh = new THREE.Mesh(mergeGeometries(this.merge[k]), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: rough }));
       mesh.castShadow = mesh.receiveShadow = true;
@@ -291,4 +304,27 @@ function worldBox(size, center, color, uw = 6, uh = 4) {
   for (let i = 0; i < uv.count; i++) { cols[i * 3] = c.r; cols[i * 3 + 1] = c.g; cols[i * 3 + 2] = c.b; }
   g.setAttribute('color', new THREE.BufferAttribute(cols, 3));
   return g;
+}
+
+// Sandstone: horizontal strata with streaks and pockets (tinted by the cliff's colour)
+function rockTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d');
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, 128, 128);
+  for (let y = 0; y < 128; y += 4 + Math.random() * 10) {
+    g.fillStyle = `rgba(150, 95, 60, ${0.04 + Math.random() * 0.08})`;
+    g.fillRect(0, y, 128, 2 + Math.random() * 4);
+  }
+  for (let i = 0; i < 60; i++) {
+    g.fillStyle = `rgba(90, 60, 40, ${0.05 + Math.random() * 0.1})`;
+    g.fillRect(Math.random() * 128, Math.random() * 128, 1 + Math.random() * 2, 6 + Math.random() * 20);
+  }
+  for (let i = 0; i < 25; i++) {
+    g.fillStyle = `rgba(80, 120, 60, ${0.15 + Math.random() * 0.2})`;   // (plants growing in the cracks)
+    g.beginPath(); g.arc(Math.random() * 128, Math.random() * 128, 1 + Math.random() * 3, 0, Math.PI * 2); g.fill();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
 }

@@ -180,6 +180,41 @@ function cityBlocks(land, seed = 31) {
 }
 const CITYGEN = cityBlocks(MAINLAND);
 
+// Terraced cliffs on the west coast (the key art): steps of sandstone rising out of the sea, green
+// on top, with houses and palms, and waterfalls spilling down them into the bay.
+// tiers: [how far out the step's edge reaches (x), its top (m)], from the sea up
+const CLIFFS = {
+  inner: -285, z0: 50, z1: -560, seg: 40,
+  tiers: [[-525, 9], [-492, 20], [-458, 33], [-420, 47], [-382, 61]],
+  falls: [{ z: -110, width: 12 }, { z: -330, width: 16 }, { z: -470, width: 9 }],
+};
+function cliffs(C, seed = 77) {
+  let s = seed;
+  const rand = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+  const boxes = [], edges = [];   // edges[segment][tier] = x of that step's edge
+  for (let z = C.z0, si = 0; z > C.z1; z -= C.seg, si++) {
+    const row = [];
+    C.tiers.forEach(([x, top], k) => {
+      const fall = C.falls.some((f) => Math.abs(f.z - (z - C.seg / 2)) < C.seg / 2);
+      const ex = Math.round(x + (fall ? 0 : (rand() - 0.5) * 22)), h = top + Math.round((rand() - 0.5) * 3);
+      row.push([ex, h]);
+      boxes.push({ id: `cliff-${si}-${k}`, kind: 'cliff', tier: k, pos: [(ex + C.inner) / 2, (h + SEA) / 2, z - C.seg / 2], size: [C.inner - ex, h - SEA, C.seg] });
+      // a few houses along each step (stepped back from the edge)
+      if (k < C.tiers.length - 1 && !fall && rand() < 0.75) {
+        const next = C.tiers[k + 1][0], room = next - ex - 6;
+        if (room > 12) {
+          const hh = 6 + Math.round(rand() * 8), w = Math.min(room - 4, 10 + Math.round(rand() * 8));
+          boxes.push({ id: `terrace-house-${si}-${k}`, kind: 'building', pos: [ex + 4 + w / 2, h + hh / 2, z - C.seg / 2 + (rand() - 0.5) * 10], size: [w, hh, 12 + Math.round(rand() * 10)] });
+        }
+      }
+    });
+    edges.push({ z0: z, z1: z - C.seg, row });
+  }
+  return { boxes, edges };
+}
+const CLIFFGEN = cliffs(CLIFFS);
+const HEADLAND = outline([[-300, 90], [-470, 80], [-545, 30], [-560, -200], [-550, -450], [-520, -580], [-300, -590]], 5);
+
 export const RANGE = {
   groundSize: 3000,
   spawn: { pos: [0, 1.05, 0], heading: 0 },
@@ -212,7 +247,9 @@ export const RANGE = {
     ...bridge(BRIDGE, SEA),
     ...skyline(SKYLINE),
     ...CITYGEN.boxes,
+    ...CLIFFGEN.boxes,
   ],
+  cliffs: { ...CLIFFS, edges: CLIFFGEN.edges },
   cityCells: CITYGEN.cells,   // street-grid blocks (for drawing streets and sidewalks)
   cityGrid: CITY,
   park: PARK,
@@ -220,7 +257,7 @@ export const RANGE = {
   // The coastal city: land outlines ([x, z] points; the first is the city itself), sea level, and
   // the scenery that goes with them (see CityScenery)
   coast: MAINLAND,
-  islands: [{ outline: islandOutline(SKYLINE.center, SKYLINE.radius, 13), skyline: true }, ...ISLANDS.map((i) => ({ ...i, outline: islandOutline(i.center, i.radius, i.seed) }))],
+  islands: [{ outline: HEADLAND, headland: true }, { outline: islandOutline(SKYLINE.center, SKYLINE.radius, 13), skyline: true }, ...ISLANDS.map((i) => ({ ...i, outline: islandOutline(i.center, i.radius, i.seed) }))],
   seaLevel: SEA,
   monorail: MONORAIL,
   bridge: BRIDGE,
