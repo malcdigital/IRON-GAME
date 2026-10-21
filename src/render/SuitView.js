@@ -371,7 +371,8 @@ export class SuitView {
     }
     for (const f of this.flames) {
       const u = f.comp.throttle;
-      const on = u > 0.02 && f.comp.available > 0 && !this.hideFlames;
+      // (the back thrusters only show in flight; in a hover the hands and boots carry the look)
+      const on = u > 0.02 && f.comp.available > 0 && !this.hideFlames && (flying || f.comp.slot !== 'back');
       f.holder.visible = on;
       if (on) {
         // Nozzles swivel: point the flame along the real thrust direction
