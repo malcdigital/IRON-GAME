@@ -277,7 +277,15 @@ export const CONFIG = {
   // Art style: 'toon' (cel shading and ink outlines, like the character sheet) or 'realistic'
   // Look: painted sunset sky, low warm sun, lavender haze, glow and a palette grade (see Renderer)
   art: {
-    style: 'anime',                 // suit shading: 'anime' (soft, warm rim light), 'toon' (hard bands) or 'realistic'
+    style: 'paint',                 // suit shading: 'paint' (painterly anime), 'anime' (soft, warm rim light), 'toon' (hard bands) or 'realistic'
+    // Painterly anime suit (art.style 'paint'): map = the repainted colours with ink lines;
+    // lit / shade = light colour where the sun hits / in shadow; step, soft = where the shadow edge
+    // falls (0..1) and how soft it is; ambient = fill-light tint; spec, specSize = painted highlight
+    // strength and how tight it is (closer to 1 = smaller); normal = panel-detail depth;
+    // outline = ink line round the silhouette (width in m)
+    paint: { map: 'assets/suit_paint.jpg', lit: 0xfff3e2, shade: 0x8a80c4, step: 0.5, soft: 0.06,
+             ambient: 0xb4b0d8, spec: 0.22, specSize: 0.94, normal: 0.3,
+             outline: { width: 0.012, color: 0x1c1828 } },
     exposure: 1.25,
     sunElevation: 14, sunAzimuth: 35,   // low sun (degrees above the horizon; direction round from -Z)
     sunColor: 0xffc994, sunIntensity: 3.2,

@@ -219,7 +219,7 @@ export class SuitView {
       const token = (this.buildToken = (this.buildToken ?? 0) + 1);
       loadSuitModel(CONFIG.suitModel.url).then((gltf) => {
         if (token !== this.buildToken) return;
-        const placed = placeModel(gltf, { ...CONFIG.suitModel, toon: CONFIG.art.style === 'toon', anime: CONFIG.art.style === 'anime', rim: CONFIG.art.rim });
+        const placed = placeModel(gltf, { ...CONFIG.suitModel, toon: CONFIG.art.style === 'toon', anime: CONFIG.art.style === 'anime', paint: CONFIG.art.style === 'paint' && CONFIG.art.paint, rim: CONFIG.art.rim });
         this.model = placed;
         this.modelBase = placed.mats.map((m) => m.color.clone());
         this.modelEmissive = placed.mats.map((m) => m.emissive.clone());

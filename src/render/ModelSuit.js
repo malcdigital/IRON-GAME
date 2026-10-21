@@ -84,6 +84,85 @@ function animeFrom(m, cfg) {
   return n;
 }
 
+// Painterly anime look (matches the key art): the colours repainted as flat ivory / navy / orange
+// shapes with ink lines (assets/suit_paint.jpg, baked from the model's own texture), soft two-tone
+// shading (warm where the sun hits, cool lavender in shade), a crisp painted highlight, the warm
+// sunset rim and a dark ink outline round the silhouette
+let paintMap = null;
+function paintTexture(cfg, like) {
+  if (!paintMap) {
+    paintMap = new THREE.TextureLoader().load(cfg.map);
+    paintMap.flipY = false;
+    paintMap.colorSpace = THREE.SRGBColorSpace;
+    paintMap.anisotropy = 4;
+  }
+  if (like) { paintMap.wrapS = like.wrapS; paintMap.wrapT = like.wrapT; paintMap.channel = like.channel; }
+  return paintMap;
+}
+function paintGradient(cfg) {
+  // dark to light across the terminator: shade colour, then a soft step up to the lit colour
+  const n = 16, data = new Uint8Array(n * 4), sh = new THREE.Color(cfg.shade), li = new THREE.Color(cfg.lit);
+  for (let i = 0; i < n; i++) {
+    const t = THREE.MathUtils.smoothstep(i / (n - 1), cfg.step - cfg.soft, cfg.step + cfg.soft);
+    const c = sh.clone().lerp(li, t);
+    data.set([c.r * 255, c.g * 255, c.b * 255, 255], i * 4);
+  }
+  const g = new THREE.DataTexture(data, n, 1);
+  g.minFilter = g.magFilter = THREE.LinearFilter;
+  g.needsUpdate = true;
+  return g;
+}
+function paintFrom(m, cfg) {
+  const p = cfg.paint, rim = cfg.rim;
+  const n = new THREE.MeshToonMaterial({
+    color: m.color, map: paintTexture(p, m.map),
+    emissive: m.emissive, emissiveMap: m.emissiveMap, emissiveIntensity: m.emissiveIntensity,
+    normalMap: m.normalMap, normalScale: new THREE.Vector2(p.normal, p.normal),
+    gradientMap: paintGradient(p), side: m.side,
+  });
+  n.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, {
+      rimColor: { value: new THREE.Color(rim.color) }, rimStrength: { value: rim.strength }, rimPower: { value: rim.power },
+      paintAmbient: { value: new THREE.Color(p.ambient) }, paintSpec: { value: p.spec }, paintSpecSize: { value: p.specSize },
+    });
+    sh.fragmentShader = 'uniform vec3 rimColor, paintAmbient; uniform float rimStrength, rimPower, paintSpec, paintSpecSize;\n' + sh.fragmentShader
+      .replace('#include <lights_fragment_begin>',
+        // rim: a soft painted band of warm light round the edges
+        'float rimT = 1.0 - saturate(dot(normal, normalize(vViewPosition)));\n' +
+        'totalEmissiveRadiance += rimColor * rimStrength * smoothstep(0.55, 0.85, pow(rimT, rimPower * 0.5));\n#include <lights_fragment_begin>')
+      .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
+        reflectedLight.indirectDiffuse *= paintAmbient;   // (cooler, softer fill so the two tones read)
+        #if NUM_DIR_LIGHTS > 0
+        {
+          vec3 H = normalize(directionalLights[0].direction + normalize(vViewPosition));
+          float sp = dot(normal, H);
+          totalEmissiveRadiance += directionalLights[0].color * paintSpec * smoothstep(paintSpecSize, paintSpecSize + 0.012, sp) * diffuseColor.rgb;
+        }
+        #endif`);
+  };
+  return n;
+}
+
+// Ink outline: a slightly fattened copy of the mesh drawn inside out in ink colour
+function inkOutline(o, cfg, scale) {
+  const ol = cfg.paint.outline;
+  const mat = new THREE.MeshBasicMaterial({ color: ol.color, side: THREE.BackSide });
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.olWidth = { value: ol.width * scale };
+    sh.vertexShader = 'uniform float olWidth;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed += normalize(normal) * olWidth;');   // (pushed out before skinning, so it bends with the bones)
+  };
+  let hull;
+  if (o.isSkinnedMesh) {
+    hull = new THREE.SkinnedMesh(o.geometry, mat);
+    hull.bind(o.skeleton, o.bindMatrix);
+    hull.bindMode = o.bindMode;
+  } else hull = new THREE.Mesh(o.geometry, mat);
+  hull.position.copy(o.position); hull.quaternion.copy(o.quaternion); hull.scale.copy(o.scale);
+  hull.frustumCulled = false;
+  hull.name = o.name + '_ink';
+  o.parent.add(hull);
+}
+
 // Fit the model to the suit's body: feet at the soles, facing -Z (the game's forward)
 export function placeModel(gltf, cfg) {
   const model = gltf.scene;
@@ -102,7 +181,10 @@ export function placeModel(gltf, cfg) {
     if (o.isMesh) {
       o.castShadow = true;
       o.frustumCulled = false;   // skinned meshes can be culled wrongly
-      if (cfg.anime && o.material) {
+      if (cfg.paint && o.material) {
+        if (!swapped.has(o.material)) swapped.set(o.material, paintFrom(o.material, cfg));
+        o.material = swapped.get(o.material);
+      } else if (cfg.anime && o.material) {
         if (!swapped.has(o.material)) swapped.set(o.material, animeFrom(o.material, cfg));
         o.material = swapped.get(o.material);
       } else if (cfg.toon && o.material) {
@@ -114,6 +196,16 @@ export function placeModel(gltf, cfg) {
       if (m && !mats.includes(m)) mats.push(m);
     }
   });
+  if (cfg.paint?.outline?.width) {
+    const meshes = [];
+    model.traverse((o) => { if (o.isMesh) meshes.push(o); });
+    for (const o of meshes) {
+      // outline width is in metres: convert to the mesh's own units
+      o.geometry.computeBoundingBox();
+      const gh = o.geometry.boundingBox.max.y - o.geometry.boundingBox.min.y, wb = new THREE.Box3().setFromObject(o);
+      inkOutline(o, cfg, gh / Math.max(1e-6, wb.max.y - wb.min.y));
+    }
+  }
   const bones = {};
   model.traverse((o) => { if (o.isBone) bones[o.name] = o; });
   // Back thruster pods (separated in Blender, pivot at their base mount)
