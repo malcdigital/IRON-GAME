@@ -86,7 +86,7 @@ export class Game {
     b.pos.y = this.surfaceBelow(b.pos) + CONFIG.pilot.feetHeight;   // standing on the pad (not hovering just above it)
     b.vel.set(0, 0, 0);
     b.angVel.set(0, 0, 0);
-    this.heroDrop = false; this.landLockT = 0; this.heroSteadyT = 0; this.flipLaunch = null;
+    this.heroDrop = false; this.landLockT = 0; this.heroSteadyT = 0; this.flipLaunch = null; this.helpless = false;
     b.quat.setFromAxisAngle(Y, this.world.spawn.heading);
     this.controller.reset(this.world.spawn.heading);
     this.suit.repair();
@@ -384,7 +384,7 @@ export class Game {
     if (this.stunT > 0) {
       // knocked out in the air: he turns onto his back (knees up, arms reaching up: the 'knocked'
       // pose), with a slow lazy wobble, instead of tumbling
-      if (!this.grounded && this.knockYaw != null) {
+      if (!this.grounded && this.knockYaw != null) {   // (also while helpless: see below)
         const R = CONFIG.crash.recovery, w = 0.12 * Math.sin(this.time * 2.3);
         const q = this._qTmp3b ??= new THREE.Quaternion();
         q.setFromAxisAngle(Y, this.knockYaw).multiply(this._qTmp2.setFromAxisAngle(this._xAxis.set(1, 0, 0), Math.PI / 2 + w));
@@ -398,14 +398,28 @@ export class Game {
           // a glancing hit that didn't kill your speed: straight back into flight along your path
           this.controller.enterFlight(body, null);
           events.emit('toast', { text: 'Back in flight' });
-        } else if ((this.caps.room ?? 0) > c.rescueMinRoom) {
-          // coming round in the air: twist to face the ground, burn to stop the fall, then upright
-          this.rescue = { phase: 'tuck', t: 0 };
+        } else {
+          // coming round in the air: tuck, flip upright and burn to stop the fall, if there's room
+          // to. Too low (or falling too fast for the room left): no saving it, he hits the ground.
+          const R = CONFIG.crash.recovery, fall = Math.max(0, -body.vel.y), room = this.caps.room ?? 0;
+          const need = fall * (R.tuckTime + R.flipTime * 0.5) + (fall * fall) / (2 * c.rescueBrakeAccel) + 1;
+          if (room > Math.max(c.rescueMinRoom, need)) this.rescue = { phase: 'tuck', t: 0 };
+          else if (fall > 3) this.helpless = true;
         }
       }
     }
     this.caps.attTarget = null;
     if (this.rescue) input = this.stepRescue(dt, input);
+    // came round too low to save himself: still on his back, jets off, no safety catch, until he lands
+    if (this.helpless && !this.grounded && this.knockYaw != null) {
+      const R = CONFIG.crash.recovery, q = this._qTmp3b ??= new THREE.Quaternion();
+      q.setFromAxisAngle(Y, this.knockYaw).multiply(this._qTmp2.setFromAxisAngle(this._xAxis.set(1, 0, 0), Math.PI / 2));
+      this.spinToward(q, R.settleRate, R.settleGain);
+    }
+    if (this.helpless) {
+      if (this.grounded || this.anyContact) this.helpless = false;
+      else input = { ...input, cut: true, cutLatch: true, up: 0, down: 0, forward: 0, strafe: 0, yaw: 0, boost: false, takeoffBoost: false };
+    }
     // Backflip launch in progress: hands off, hold your height (the jets carry you round)
     if (this.flipLaunch) {
       input = { ...input, forward: 0, strafe: 0, yaw: 0, up: 0, down: 0, cut: false, boost: false };
@@ -958,8 +972,8 @@ export class Game {
   stepRescue(dt, input) {
     const r = this.rescue, c = CONFIG.crash, R = c.recovery, b = this.body, g = CONFIG.physics.gravity;
     r.t += dt;
-    // too close to the ground: hand over to the safety catch and the normal hover
-    if ((this.caps.room ?? 0) < c.rescueAbortRoom) { this.rescue = null; return input; }
+    // (no bail-out near the ground: if the burn can't stop him in time, he hits it)
+    if (this.grounded) { this.rescue = null; return input; }
     // the jets burn through it: the fall slows to a gentle sink, the drift dies away
     const want = -c.rescueSinkSpeed, a = THREE.MathUtils.clamp((want - b.vel.y) * 3, 0, c.rescueBrakeAccel);
     const burn = r.phase === 'tuck' ? 0.6 : 1;
@@ -981,7 +995,7 @@ export class Game {
       b.angVel.set(0, 0, 0);
       events.emit('toast', { text: 'Systems back online' });
     }
-    return { ...input, cut: true, up: 0, down: 0, forward: 0, strafe: 0, yaw: 0, pitch: 0, roll: 0, boost: false, takeoffBoost: false };
+    return { ...input, cut: true, cutLatch: true, up: 0, down: 0, forward: 0, strafe: 0, yaw: 0, pitch: 0, roll: 0, boost: false, takeoffBoost: false };   // (cutLatch: the safety catch stays out of it)
   }
 
   // The recovery backflip, set after the physics step so it follows its path exactly

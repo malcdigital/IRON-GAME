@@ -384,10 +384,10 @@ export class SuitPoser {
     const want = { stand: grounded && !flying ? 1 : 0, hover: !grounded && !flying ? 1 : 0, flight: flying && !boost ? 1 : 0, boost: flying && boost ? 1 : 0 };
     // crashes: brace just before a hit; go limp while knocked out
     const C = CONFIG.crash;
-    const braceWant = !game.stunT && game.impactIn < C.braceTime ? 1 : 0;
+    const braceWant = !game.stunT && !game.helpless && game.impactIn < C.braceTime ? 1 : 0;
     this.brace += (braceWant - this.brace) * (1 - Math.exp(-(braceWant ? 18 : 4) * dt));
     // knocked out: in the air, the 'knocked' pose with the limbs a little loose; on the ground, limp
-    const stunned = game.stunT > 0, airKO = stunned && !grounded;
+    const stunned = game.stunT > 0 || !!game.helpless, airKO = stunned && !grounded;   // (helpless: came round too low to save himself)
     const limpWant = stunned ? (airKO ? CONFIG.crash.recovery.limp : 1) : 0;
     this.knocked = (this.knocked ?? 0) + ((airKO ? 1 : 0) - (this.knocked ?? 0)) * (1 - Math.exp(-(airKO ? 10 : game.rescue ? 25 : 4) * dt));
     // (the recovery flip snaps the limbs back under control at once; otherwise they firm up slowly)
@@ -435,14 +435,13 @@ export class SuitPoser {
     mo.hopClock += dt;
     mo.hop = mo.hopClock < M.hopTime ? Math.sin(Math.PI * mo.hopClock / M.hopTime) : 0;
     // knocked out → coming round
-    if (this.wasStunned && !(game.stunT > 0)) mo.recoverClock = 0;
-    this.wasStunned = game.stunT > 0;
+    const ko = game.stunT > 0 || !!game.helpless;   // (helpless: still out of it until he lands)
+    if (this.wasStunned && !ko) mo.recoverClock = 0;
+    this.wasStunned = ko;
     mo.recoverClock += dt;
     const rc = mo.recoverClock;
-    // held while the suit rights itself in the air (game.rescue), then a short fade
-    if (game.rescue) mo.recoverHold = 0; else mo.recoverHold = (mo.recoverHold ?? 9) + dt;
-    const hold = game.rescue ? 0 : Math.max(0, 1 - mo.recoverHold / 0.6);   // (during the recovery flip, the tuck takes over)
-    mo.recover = Math.max(hold * Math.min(1, rc / 0.15), rc < M.recoverTime ? Math.min(1, rc / 0.2) * Math.min(1, (M.recoverTime - rc) / 0.5) : 0);
+    // (coming round in the air is the recovery flip instead: see game.rescue below)
+    mo.recover = rc < M.recoverTime ? Math.min(1, rc / 0.2) * Math.min(1, (M.recoverTime - rc) / 0.5) : 0;
     // charging up (L1 + R1 on the ground): sink into the crouch and hold it
     const chG = game.charging && !game.chargeAir, chA = !!game.chargeAir;
     mo.charge = (mo.charge ?? 0) + ((chG ? 1 : 0) - (mo.charge ?? 0)) * (1 - Math.exp(-(chG ? 12 : 8) * dt));
