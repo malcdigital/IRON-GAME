@@ -1239,7 +1239,9 @@ export class Game {
     axis = along.multiplyScalar(Math.sign(axis.dot(along)) || 1);
     const dist = sp > R.minSpeed ? (sp * sp) / (2 * R.decel) : 0.2;
     const r = tumble ? R.tumbleRadius : R.rollRadius;   // (how far per turn: rolling, he slides a bit too)
-    const turns = sp > R.minSpeed ? Math.max(1, Math.round(dist / (Math.PI * 2 * r))) : 0;
+    // (capped: a fast crash would otherwise spin him over a dozen times; past the cap he skids)
+    const maxTurns = tumble ? (R.maxTumbleTurns ?? 2) : (R.maxRollTurns ?? 3);
+    const turns = sp > R.minSpeed ? Math.min(maxTurns, Math.max(1, Math.round(dist / (Math.PI * 2 * r)))) : 0;
     this.groundRoll = { t: 0, time: Math.max(R.minTime, sp / R.decel), dist, turns, axis, m: m.clone(), h: h.clone(), chestUp, tumble, qLie, q0: b.quat.clone(), p0: b.pos.clone() };
     this.helpless = false; this.stunT = 0; this.lyingDown = false;
     b.vel.set(0, 0, 0); b.angVel.set(0, 0, 0);

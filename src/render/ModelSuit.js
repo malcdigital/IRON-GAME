@@ -31,11 +31,22 @@ export function loadSuitModel(url) {
     cached = (async () => {
       const res = await fetch(url);
       if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
-      const { gltf, bin } = await res.json();
-      const raw = atob(bin), bytes = new Uint8Array(raw.length);
+      const data = await res.json();
+      const { gltf } = data;
+      const base = url.slice(0, url.lastIndexOf('/') + 1);
+      // the geometry is either inline (bin) or split across several files (binParts), each under the size limit
+      let b64 = data.bin;
+      if (data.binParts) {
+        const parts = await Promise.all(data.binParts.map(async (f) => {
+          const r = await fetch(base + f);
+          if (!r.ok) throw new Error(`${f}: HTTP ${r.status}`);
+          return (await r.json()).bin;
+        }));
+        b64 = parts.join('');
+      }
+      const raw = atob(b64), bytes = new Uint8Array(raw.length);
       for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
       gltf.buffers = [{ byteLength: bytes.length }];
-      const base = url.slice(0, url.lastIndexOf('/') + 1);
       return new Promise((resolve, reject) => new GLTFLoader().parse(packGlb(gltf, bytes), base, resolve, reject));
     })();
   }

@@ -491,7 +491,10 @@ export class SuitView {
       dmg /= Math.max(1, n);
       this.model.mats.forEach((m, i) => {
         m.color.copy(this.modelBase[i]).lerp(BURNT, dmg * 0.7);
-        m.emissive.copy(this.modelEmissive[i]).lerp(HOT, heat * heat);
+        // heat only brightens what already glows (a glow map, or a glowing material like the
+        // thruster rings); plain armour and undersuit aren't tinted
+        m.emissive.copy(this.modelEmissive[i]);
+        if (m.emissiveMap || this.modelEmissive[i].getHex() !== 0) m.emissive.lerp(HOT, heat * heat);
       });
     }
     // Heat glows orange, damage darkens the paint

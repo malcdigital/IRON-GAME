@@ -26,7 +26,7 @@ export class Renderer {
     this.scene.fog = new THREE.Fog(art.haze, art.hazeNear, art.hazeFar);
     this.scene.background = new THREE.Color(art.haze);
 
-    this.camera = new THREE.PerspectiveCamera(65, 1, 0.1, 9000);   // (far: the mountains on the horizon)
+    this.camera = new THREE.PerspectiveCamera(65, 1, 0.5, 9000);   // (far: the mountains on the horizon; near 0.5 m keeps the thin ground layers from flickering far away)
 
     // Sun direction (shared by the light, the sky's sun disc and its glow)
     const el = THREE.MathUtils.degToRad(art.sunElevation), az = THREE.MathUtils.degToRad(art.sunAzimuth);
@@ -133,8 +133,17 @@ export class Renderer {
 
   // Keep the shadow box and sky centered on the player
   follow(pos) {
-    this.sun.position.copy(pos).add(this.sunOffset);
-    this.sun.target.position.copy(pos);
+    // move the shadow box in whole shadow-map texels, so shadow edges don't crawl and flicker as you move
+    const sc = this.sun.shadow.camera, texel = (sc.right - sc.left) / this.sun.shadow.mapSize.x;
+    if (!this._lb) {
+      const f = this.sunDir.clone().negate(), r = new THREE.Vector3().crossVectors(f, new THREE.Vector3(0, 1, 0)).normalize();
+      this._lb = { f, r, u: new THREE.Vector3().crossVectors(r, f).normalize(), p: new THREE.Vector3() };
+    }
+    const { f, r, u, p } = this._lb;
+    p.copy(r).multiplyScalar(Math.round(pos.dot(r) / texel) * texel)
+      .addScaledVector(u, Math.round(pos.dot(u) / texel) * texel).addScaledVector(f, pos.dot(f));
+    this.sun.position.copy(p).add(this.sunOffset);
+    this.sun.target.position.copy(p);
     this.sky.position.copy(this.camera.position);
   }
 

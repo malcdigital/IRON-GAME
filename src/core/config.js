@@ -240,7 +240,8 @@ export const CONFIG = {
     // he swings up going over). Whole turns only, so he ends the way he landed. blendIn s to ease in
     // from how he hit; minTime s at the least.
     roll: { decel: 12, minSpeed: 3, radius: 0.22, rollRadius: 0.5, tumbleRadius: 0.55,   // (rollRadius: distance per log-roll turn ÷ 2π)
-      halfLength: 0.85, blendIn: 0.15, minTime: 0.35 },
+      halfLength: 0.85, blendIn: 0.15, minTime: 0.35,
+      maxTumbleTurns: 2, maxRollTurns: 3 },   // most flips / rolls after a crash; the rest of the speed is a skid along the ground
     clips: {
       back: { name: 'getUpBack', head: [0.21, 0.98], speed: 2.2, time: 8.27 },
       front: [{ name: 'getUpFront', head: [-0.46, -0.89], speed: 1.1, time: 2.33 }, { name: 'getUpFront2', head: [0.81, -0.4], speed: 1.1, time: 1.67 }],
@@ -277,7 +278,7 @@ export const CONFIG = {
   // Art style: 'toon' (cel shading and ink outlines, like the character sheet) or 'realistic'
   // Look: painted sunset sky, low warm sun, lavender haze, glow and a palette grade (see Renderer)
   art: {
-    style: 'paint',                 // suit shading: 'paint' (painterly anime), 'anime' (soft, warm rim light), 'toon' (hard bands) or 'realistic'
+    style: 'realistic',             // (split-suit test: show the suit's own textures and materials) suit shading: 'paint' (painterly anime), 'anime' (soft, warm rim light), 'toon' (hard bands) or 'realistic'
     // Painterly anime suit (art.style 'paint'): map = the repainted colours with ink lines;
     // lit / shade = light colour where the sun hits / in shadow; step, soft = where the shadow edge
     // falls (0..1) and how soft it is; ambient = fill-light tint; spec, specSize = painted highlight
@@ -397,7 +398,8 @@ export const CONFIG = {
   },
   suitModel: {
     backVent: [0.025, 0.1, 0.185],   // the back thruster: the black vent between the shoulder blades (x either side, up, back; m from the upper chest bone)
-    url: 'assets/suit.json', height: 1.9, feetY: -1.03, turn: Math.PI,
+    url: 'assets/suit2.json', height: 1.9,   // split, textured suit (test copy; the original is assets/suit.json)
+    feetY: -1.03, turn: Math.PI,
     pods: false,                    // the winged back pods (sheet A has none: a vent between the shoulders instead)
     podMaxDeg: 35, podRate: 8,      // back pods swing toward the thrust direction (up to podMaxDeg; podRate = how quickly)
     toonSteps: [140, 205, 255], toonNormal: 0.6 },   // cel shading (art.style 'toon'): light bands (0-255), panel-line depth
