@@ -86,7 +86,7 @@ export class Game {
     b.pos.y = this.surfaceBelow(b.pos) + CONFIG.pilot.feetHeight;   // standing on the pad (not hovering just above it)
     b.vel.set(0, 0, 0);
     b.angVel.set(0, 0, 0);
-    this.heroDrop = false; this.landLockT = 0; this.heroSteadyT = 0; this.flipLaunch = null; this.helpless = false; this.getUp = null;
+    this.heroDrop = false; this.landLockT = 0; this.heroSteadyT = 0; this.flipLaunch = null; this.helpless = false; this.getUp = null; this.groundRoll = null;
     b.quat.setFromAxisAngle(Y, this.world.spawn.heading);
     this.controller.reset(this.world.spawn.heading);
     this.suit.repair();
@@ -257,7 +257,7 @@ export class Game {
   handleAction(action) {
     switch (action) {
       case 'flight':
-        if (this.getUp) break;   // (still getting up off the ground)
+        if (this.getUp || this.groundRoll) break;   // (still getting up off the ground)
         if (this.controller.flying) {
           this.controller.exitFlight(this.body, this.hoverFraction());
           // (switching back straight after a launch: the launch's push, boost and climb stop here,
@@ -566,6 +566,7 @@ export class Game {
     if (input.up > 0 || this.controller.flying) this.heroDrop = false;   // (climbing away: no landing)
     this.caps.landSpeed = this.heroDrop && !this.grounded ? CONFIG.pose.landing.dropSpeed : null;
     // superhero landing: hold it a moment before you can walk off
+    if (this.groundRoll) input = { ...input, forward: 0, strafe: 0, yaw: 0, up: 0, down: 0, cut: true, cutLatch: true, boost: false, takeoffBoost: false };
     // lying on the ground about to get up: limp, jets off (no trying to hover upright off the floor)
     if (this.lyingDown) input = { ...input, forward: 0, strafe: 0, yaw: 0, up: 0, down: 0, cut: true, cutLatch: true, boost: false, takeoffBoost: false };
     // getting up off the ground (a clip, see checkRecover): hands off until he's up
@@ -858,7 +859,7 @@ export class Game {
     // Backflip launch: the body turns on a set path (ignoring the attitude jets), then fires into flight
     const fl = this.flipLaunch;
     const rflip = this.rescue?.phase === 'flip' || this.rescue?.phase === 'steady';
-    if (rflip) body.torque.set(0, 0, 0);
+    if (rflip || this.groundRoll) body.torque.set(0, 0, 0);
     if (fl) {
       body.torque.set(0, 0, 0);
       // the jets carry his weight through the flip (and soak up any climb or drop); the skid bleeds off
@@ -878,6 +879,7 @@ export class Game {
     if (fl) this.stepFlip(dt);
     if (rflip && this.rescue?.phase === 'flip') this.applyRescueFlip();
     if (rflip && this.rescue?.phase === 'steady') this.applyRescueSteady();
+    if (this.groundRoll) this.applyGroundRoll(dt);
     this.checkRecover(dt);
 
     // Touching down slowly in flight mode drops back to hover
@@ -949,6 +951,8 @@ export class Game {
       if (speed > hardest) hardest = speed;
       if (speed > 3) events.emit('impact', { point: c.point.clone(), speed });
     }
+    // hitting the ground knocked out (or helpless): roll along it, then get up
+    if (!wasGrounded && !this.groundRoll && !this.getUp && (this.helpless || this.stunT > 0) && contacts.some((c) => c.normal.y > 0.7)) this.startGroundRoll();
     // touching down: a hard landing (or the end of a drop) is a superhero landing
     if (this.grounded && !wasGrounded && !this.controller.flying && !(this.stunT > 0)) {
       const fall = -this._preHitVel.y, L = CONFIG.pose.landing;
@@ -1186,27 +1190,76 @@ export class Game {
   checkRecover(dt) {
     const b = this.body;
     this._up.copy(Y).applyQuaternion(b.quat);
-    const lying = this.anyContact && this._up.y < CONFIG.stance.minUp && b.vel.length() < 2;
+    const lying = this.anyContact && this._up.y < CONFIG.stance.minUp && b.vel.length() < 2 && !this.groundRoll;
     this.recoverTimer = lying && !this.getUp ? this.recoverTimer + dt : 0;
     this.lyingDown = lying && !this.getUp && !(this.stunT > 0);   // (lying still, about to get up)
     if (this.recoverTimer < CONFIG.recover.delay) return;
-    // get up with a clip that matches how he's lying: on his back or face down. The clip is turned
-    // so its head lines up with where his head really is.
-    const RC = CONFIG.recover.clips;
-    const chest = this._c.set(0, 0, -1).applyQuaternion(b.quat), head = this._v4.copy(this._up);
-    const clip = chest.y > 0 ? RC.back : (this.lastKnockSpeed ?? 0) > CONFIG.recover.slowAbove ? RC.frontSlow : RC.front[Math.floor(Math.random() * RC.front.length)];
+    const chest = this._c.set(0, 0, -1).applyQuaternion(b.quat);
+    this.startGetUp(chest.y > 0, this._v4.copy(this._up));
+  }
+
+  // Get up with a clip that matches how he's lying: on his back or face down. The clip is turned
+  // so its head lines up with where his head really is (head: the way it points, world).
+  startGetUp(onBack, head) {
+    const b = this.body, RC = CONFIG.recover.clips;
+    const clip = onBack ? RC.back : (this.lastKnockSpeed ?? 0) > CONFIG.recover.slowAbove ? RC.frontSlow : RC.front[Math.floor(Math.random() * RC.front.length)];
     const yawOfV = (x, z) => Math.atan2(-x, -z);
     const heading = Math.hypot(head.x, head.z) > 0.2 ? yawOfV(head.x, head.z) - yawOfV(clip.head[0], clip.head[1]) : yawOf(b.quat);
     this.getUp = { name: clip.name, t: 0, time: clip.time / clip.speed };
     this.lyingDown = false;
     b.quat.setFromAxisAngle(Y, heading);
-    const floor = Number.isFinite(this.supportHeight) ? this.supportHeight : b.pos.y - 0.3;
-    b.pos.y = floor + CONFIG.pilot.feetHeight + 0.02;
+    b.pos.y = this.surfaceBelow(b.pos) + CONFIG.pilot.feetHeight + 0.02;
     b.vel.set(0, 0, 0);
     b.angVel.set(0, 0, 0);
     this.controller.reset(heading);
     this.recoverTimer = 0;
   }
+
+  // Hitting the ground knocked out: a log roll along the ground that ends exactly on his back or
+  // face down, then straight into getting up (CONFIG.recover.roll)
+  startGroundRoll() {
+    const b = this.body, R = CONFIG.recover.roll;
+    const h = this._v1.copy(Y).applyQuaternion(b.quat).setY(0);   // (head, along the ground)
+    if (h.lengthSq() < 0.04) h.set(b.vel.x, 0, b.vel.z);
+    if (h.lengthSq() < 1e-4) h.set(0, 0, -1);
+    h.normalize();
+    const side = new THREE.Vector3().crossVectors(h, Y);   // (rolling the chest from up toward this moves him this way)
+    const sp = Math.hypot(b.vel.x, b.vel.z);
+    const dir = b.vel.dot(side) >= 0 ? 1 : -1;
+    // where the chest is now, as an angle round the head axis (0 = facing the sky)
+    const chest = this._v2.set(0, 0, -1).applyQuaternion(b.quat);
+    const th0 = Math.atan2(chest.dot(side), chest.dot(Y));
+    const turns = sp + Math.abs(b.vel.y) > R.bigAbove ? R.halfTurnsBig : R.halfTurns;
+    const th1 = Math.round((th0 + dir * turns * Math.PI) / Math.PI) * Math.PI;   // (lands exactly on his back or front)
+    this.groundRoll = { t: 0, h: h.clone(), side, th0, th1, q0: b.quat.clone(), p0: b.pos.clone(), time: R.time * Math.abs(th1 - th0) / Math.PI };
+    this.helpless = false; this.stunT = 0; this.lyingDown = false;
+    b.vel.set(0, 0, 0); b.angVel.set(0, 0, 0);
+  }
+
+  // The roll, set after the physics step so it follows its path exactly
+  applyGroundRoll(dt) {
+    const r = this.groundRoll, b = this.body, R = CONFIG.recover.roll;
+    r.t += dt;
+    const u = Math.min(1, r.t / r.time), e = 1 - (1 - u) * (1 - u);   // (fast off the hit, slowing to a stop)
+    const th = r.th0 + (r.th1 - r.th0) * e;
+    // lying along the head axis with the chest at angle th round it
+    const chest = this._v2.copy(Y).multiplyScalar(Math.cos(th)).addScaledVector(r.side, Math.sin(th));
+    const zAxis = this._v3.copy(chest).negate(), xAxis = this._v4.crossVectors(r.h, zAxis);
+    const m = this._rollM ??= new THREE.Matrix4();
+    m.makeBasis(xAxis, r.h, zAxis);
+    const q = this._qTmp.setFromRotationMatrix(m);
+    b.quat.copy(r.q0).slerp(q, Math.min(1, r.t / 0.08));
+    // rolling along the ground (a log about R.radius thick)
+    b.pos.copy(r.p0).addScaledVector(r.side, R.radius * (th - r.th0));
+    b.pos.y = this.surfaceBelow(b.pos) + R.radius;
+    b.vel.set(0, 0, 0); b.angVel.set(0, 0, 0);
+    if (u >= 1) {
+      this.groundRoll = null;
+      const onBack = Math.cos(r.th1) > 0;
+      this.startGetUp(onBack, this._v1.copy(r.h));
+    }
+  }
+
 
   telemetry() {
     const b = this.body, s = this.suit;

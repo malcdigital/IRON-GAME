@@ -149,6 +149,19 @@ export const POSES = {
     LeftFoot: { aim: [-0.1, 0.62, -0.78] }, RightFoot: { aim: [0.1, 0.66, -0.74] },
   },
 
+  // Log-rolling along the ground after hitting it: arms tucked across the chest, legs straight and
+  // together, chin tucked
+  roll: {
+    hands: { Left: { curl: 70, thumb: 30 }, Right: { curl: 70, thumb: 30 } },
+    neck: { aim: [0, 0.85, -0.52] }, Head: { aim: [0, 0.8, -0.6] },
+    LeftArm: { aim: [-0.25, -0.85, -0.46] }, RightArm: { aim: [0.25, -0.85, -0.46] },
+    LeftForeArm: { aim: [0.72, 0.4, -0.57] }, RightForeArm: { aim: [-0.72, 0.4, -0.57] },
+    LeftHand: { aim: [0.6, 0.6, -0.5] }, RightHand: { aim: [-0.6, 0.6, -0.5] },
+    LeftUpLeg: { aim: [0.03, -1, 0.02] }, RightUpLeg: { aim: [-0.03, -1, 0.02] },
+    LeftLeg: { aim: [0.02, -1, 0.04] }, RightLeg: { aim: [-0.02, -1, 0.04] },
+    LeftFoot: { aim: [0, -0.55, -0.83] }, RightFoot: { aim: [0, -0.55, -0.83] },
+  },
+
   // Getting up off the ground: the bones come from a clip (art/locomotion, see Locomotion.sampleFull)
   getup: {},
 
@@ -455,6 +468,7 @@ export class SuitPoser {
         this.crouch = 0;
       }
     }
+    if (game.groundRoll) { this.limp = 0; this.knocked = 0; }   // (rolling along the ground: tucked tight, not floppy)
     const ko = game.stunT > 0 || !!game.helpless;   // (helpless: still out of it until he lands)
     if (this.wasStunned && !ko) mo.recoverClock = 0;
     this.wasStunned = ko;
@@ -491,7 +505,9 @@ export class SuitPoser {
     const hc = mo.heroClock;
     mo.land = hc < 0.06 ? hc / 0.06 : hc < 0.06 + LD.heroHold ? 1 : Math.max(0, 1 - (hc - 0.06 - LD.heroHold) / LD.heroRise);
     if (flying || game.launchSeq) mo.land = 0;
-    const special = { brace: this.brace, flare: mo.flare, launch: mo.launch * (1 - mo.crouch), recover: mo.recover, crouch: Math.max(mo.crouch, mo.hop * 0.7, mo.charge), aircharge: mo.airCharge, land: mo.land, knocked: this.knocked, getup: mo.getup };
+    const special = { brace: this.brace, flare: mo.flare, launch: mo.launch * (1 - mo.crouch), recover: mo.recover, crouch: Math.max(mo.crouch, mo.hop * 0.7, mo.charge), aircharge: mo.airCharge, land: mo.land, knocked: this.knocked, getup: mo.getup, roll: game.groundRoll ? 1 : 0 };
+    // rolling along the ground and getting up: those alone (no shake-off, landing or bracing mixed in)
+    if (game.groundRoll || game.getUp) { for (const k in special) if (k !== 'roll' && k !== 'getup') special[k] = 0; mo.recoverClock = 9; }
     let sp = 0;
     for (const v of Object.values(special)) sp = Math.max(sp, v);
     for (const s of STATES) if (!(s in special)) want[s] *= 1 - sp;
