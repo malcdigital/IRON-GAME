@@ -389,8 +389,9 @@ export class SuitPoser {
     // knocked out: in the air, the 'knocked' pose with the limbs a little loose; on the ground, limp
     const stunned = game.stunT > 0, airKO = stunned && !grounded;
     const limpWant = stunned ? (airKO ? CONFIG.crash.recovery.limp : 1) : 0;
-    this.knocked = (this.knocked ?? 0) + ((airKO ? 1 : 0) - (this.knocked ?? 0)) * (1 - Math.exp(-(airKO ? 10 : 4) * dt));
-    this.limp += (limpWant - this.limp) * (1 - Math.exp(-(limpWant ? 20 : 2.5) * dt));
+    this.knocked = (this.knocked ?? 0) + ((airKO ? 1 : 0) - (this.knocked ?? 0)) * (1 - Math.exp(-(airKO ? 10 : game.rescue ? 25 : 4) * dt));
+    // (the recovery flip snaps the limbs back under control at once; otherwise they firm up slowly)
+    this.limp += (limpWant - this.limp) * (1 - Math.exp(-(limpWant ? 20 : game.rescue ? 30 : 2.5) * dt));
     // moments: braking into a hover, launching, coming round after a knockout
     const M = P.moments, mo = this.mom;
     // braking out of flight (the game's air brake runs for exitBrake.time)
@@ -453,6 +454,7 @@ export class SuitPoser {
       const env = r.phase === 'tuck' ? Math.min(1, r.t / 0.12) : 1 - THREE.MathUtils.smoothstep(r.t / R.flipTime, 0.55, 1);
       mo.airCharge = Math.max(mo.airCharge, env);
       mo.recover = 0;
+      mo.recoverClock = 9;   // (the flip is the recovery: no arms-up shake-off afterwards)
       // the arms throw out in front through the flip (the hand jets push him round)
       mo.rescueArms = r.phase === 'flip' ? Math.sin(Math.PI * Math.min(1, r.t / R.flipTime)) : 0;
     } else mo.rescueArms = 0;
