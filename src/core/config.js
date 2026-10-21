@@ -292,7 +292,12 @@ export const CONFIG = {
       shake: 0.2, dip: 0.35, fov: 6, shakeTime: 0.6, hitStop: 0.07, fullSpeed: 20,
       // dust cloud: puffs (count), speed out along the ground (m/s), rise (m/s), drag, size (m) and
       // how much it grows, life (s), opacity, colour; the shockwave ring's radius (m) and time (s)
-      dust: { puffs: 70, speed: 11, rise: 1.6, drag: 2.6, size: 0.7, grow: 2.2, life: 1.8, opacity: 0.55, color: 0xd9bfa3, ringRadius: 7, ringTime: 0.45 } },
+      dust: { puffs: 130, speed: 16, rise: 2.4, drag: 2.2, size: 1.0, grow: 3.6, life: 2.6, opacity: 0.55, color: 0xd9bfa3, ringRadius: 11, ringTime: 0.5 },
+      // cracks in the ground: count, length (m), width (m), chance to fork per step, how jagged,
+      // how fast they shoot out (s), how long they glow hot (s), stay (s) then fade (s), the dark
+      // scorch's radius (m), how many sets at once, colours
+      cracks: { count: 9, length: 4.5, width: 0.13, forks: 0.14, jag: 0.6, growTime: 0.18, coolTime: 0.7, stay: 8, fade: 2,
+        crater: 1.4, max: 4, color: 0x17110c, rim: 0xb8a088, glow: 0xff7a2a } },
     landSpeedFull: 10, landTime: 0.45, crouchDeg: 35,   // landing crouch: full at this fall speed, back up in landTime s
     stepsPerMeter: 0.9, walkSwing: 28,            // walking legs
     limits: true,                   // keep every joint within real human ranges (SuitPoses.js LIMITS)

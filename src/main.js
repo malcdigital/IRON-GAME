@@ -10,6 +10,7 @@ import { SuitView } from './render/SuitView.js';
 import { CargoView } from './render/CargoView.js';
 import { Effects } from './render/Effects.js';
 import { DustCloud } from './render/DustCloud.js';
+import { GroundCracks } from './render/GroundCracks.js';
 import { CameraRig } from './render/CameraRig.js';
 import { SpeedLines } from './render/SpeedLines.js';
 import { VaporTrails } from './render/VaporTrails.js';
@@ -34,6 +35,7 @@ function start(hotData) {
   const cargoView = new CargoView(renderer.scene, game.cargo);
   const effects = new Effects(renderer.scene);
   const dust = new DustCloud(renderer.scene);
+  const cracks = new GroundCracks(renderer.scene);
   loadSavedShots();
   const cam = new CameraRig(renderer.camera);
   const speedLines = new SpeedLines(renderer.scene);
@@ -105,6 +107,7 @@ function start(hotData) {
   events.on('heroLand', ({ point, speed }) => {
     const L = CONFIG.pose.landing, p = Math.min(1.3, speed / L.fullSpeed);
     dust.burst(point, Math.min(1, p));
+    cracks.burst(point, p);
     effects.burst(point, Math.round(25 * p), 6 * p);
     input.gamepad.rumble(Math.min(1, p), Math.min(1, p), 180 + 200 * p);
     hitStop = L.hitStop * Math.min(1, p);
@@ -148,7 +151,7 @@ function start(hotData) {
   }
 
   // Debug hook for automated tests: open the page with ?debug
-  if (location.search.includes('debug')) window.__scrapjack = { game, cam, hud, CONFIG, input, studio, suitView, poseStudio };
+  if (location.search.includes('debug')) window.__scrapjack = { game, cam, hud, CONFIG, input, studio, suitView, poseStudio, cracks, dust };
 
   // Keep the build when the page is updated while open
   window.claude?.hot?.snapshot?.(() => ({ loadout: game.suit.loadout }));
@@ -182,6 +185,7 @@ function start(hotData) {
     cargoView.update(clockTime);
     worldView.update(game.course, clockTime);
     effects.update(dt);
+    cracks.update(dt);
     dust.update(dt, renderer.camera, renderer.renderer?.domElement?.height ?? innerHeight);
     speedLines.update(game.body, dt);
     vapor.update(game, dt);

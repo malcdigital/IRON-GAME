@@ -263,6 +263,9 @@ export class Game {
       case 'flight':
         if (this.controller.flying) {
           this.controller.exitFlight(this.body, this.hoverFraction());
+          // (switching back straight after a launch: the launch's push, boost and climb stop here,
+          // so they don't keep shoving you around in the hover)
+          this.launchKick = null; this.launchT = 0; this.launchClimb = null; this.burst = null;
           this.hoverBrakeT = CONFIG.assist.exitBrake.time;   // air-brake down to a hover
           const v = this.body.vel;
           this.brakeDir = new THREE.Vector3(v.x, 0, v.z);
@@ -892,7 +895,7 @@ export class Game {
         b.angVel.set(0, 0, 0);
         b.vel.x = 0; b.vel.z = 0;   // (stops dead: no sliding)
         this.lastHeroSpeed = fall;
-        events.emit('heroLand', { point: new THREE.Vector3(b.pos.x, this.supportHeight ?? b.pos.y - CONFIG.pilot.feetHeight, b.pos.z), speed: fall });
+        events.emit('heroLand', { point: new THREE.Vector3(b.pos.x, this.surfaceBelow(b.pos), b.pos.z), speed: fall });
       }
       this.heroDrop = false;
     }
