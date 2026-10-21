@@ -453,7 +453,9 @@ export class SuitPoser {
       const env = r.phase === 'tuck' ? Math.min(1, r.t / 0.12) : 1 - THREE.MathUtils.smoothstep(r.t / R.flipTime, 0.55, 1);
       mo.airCharge = Math.max(mo.airCharge, env);
       mo.recover = 0;
-    }
+      // the arms throw out in front through the flip (the hand jets push him round)
+      mo.rescueArms = r.phase === 'flip' ? Math.sin(Math.PI * Math.min(1, r.t / R.flipTime)) : 0;
+    } else mo.rescueArms = 0;
     // backflip launch: knees tucked tight through the flip, opening out as he comes round
     if (game.flipLaunch) mo.airCharge = Math.max(mo.airCharge, Math.min(1, Math.sin(Math.PI * Math.min(1, game.flipLaunch.t / CONFIG.launch.air.flip.time)) * 1.6));
     if (game.launchSeq) mo.charge = 0;   // (launching from the crouch: the launch timeline takes it from here)
@@ -595,6 +597,17 @@ export class SuitPoser {
       steer('LeftArm', -0.35, 1, 0.15); steer('RightArm', 0.35, 1, 0.15);
       steer('LeftForeArm', -0.25, 1, 0); steer('RightForeArm', 0.25, 1, 0);
       steer('LeftUpLeg', -0.12, 0.95, -0.3); steer('RightUpLeg', 0.12, 0.95, -0.18);   // (knees up toward the way you're going)
+    }
+    // recovery flip: arms thrown out in front, palms open, driving the flip with the hand jets
+    if ((this.mom.rescueArms ?? 0) > 0.01) {
+      const k = this.mom.rescueArms;
+      for (const [n, a] of [['LeftArm', [-0.35, 0.1, -0.93]], ['RightArm', [0.35, 0.1, -0.93]], ['LeftForeArm', [-0.2, 0.2, -0.96]], ['RightForeArm', [0.2, 0.2, -0.96]], ['LeftHand', [-0.1, 0.55, -0.83]], ['RightHand', [0.1, 0.55, -0.83]]]) {
+        const b = R[n];
+        if (!b?.dir) continue;
+        if (!b.hasAim) { b.aim.copy(b.dir); b.hasAim = true; }
+        b.aim.normalize().lerp(_v.fromArray(a).normalize(), k).normalize();
+      }
+      this.handCurl('Left', -25 * k); this.handCurl('Right', -25 * k);
     }
     // hands: curl each finger joint
     for (const s of STATES) {

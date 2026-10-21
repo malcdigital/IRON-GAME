@@ -733,11 +733,16 @@ export class Game {
     // Rescue burn: the hand and boot thrusters fire at the ground (shown on the flames)
     if (this.rescue && this.rescue.level > 0.02) {
       const upBody = this._c.set(0, 1, 0).applyQuaternion(this._qTmp.copy(body.quat).invert());
+      // through the flip the hand jets fire forward and the boots fire back, driving him round;
+      // as he comes upright they swing back to firing at the ground
+      const r = this.rescue, u = r.phase === 'flip' ? r.t / CONFIG.crash.recovery.flipTime : 1;
+      const drive = r.phase === 'flip' ? 1 - THREE.MathUtils.smoothstep(u, 0.6, 0.9) : 0;
       for (const t of thr) {
         const slot = t.comp?.slot ?? t.slot;
         if (slot !== 'gauntlets' && slot !== 'boots') continue;
-        t.throttle = Math.max(t.throttle, this.rescue.level);
-        t.thrustDir.copy(upBody);
+        t.throttle = Math.max(t.throttle, this.rescue.level, drive);
+        if (!t.thrustDir) t.thrustDir = new THREE.Vector3();
+        t.thrustDir.copy(upBody).lerp(this._v4.set(0, 0, slot === 'gauntlets' ? 1 : -1), drive).normalize();
       }
     }
 

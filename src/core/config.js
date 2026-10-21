@@ -412,12 +412,12 @@ export const CONFIG = {
     // burn to slow the fall to rescueSinkSpeed (up to rescueBrakeAccel m/s² extra); below
     // rescueAbortRoom the normal hover takes over.
     rescueMinRoom: 5, rescueAbortRoom: 2.5, rescueTurnGain: 2.5, rescueFacedDeg: 20, rescueOrientMax: 1.2, rescueSpin: 7,
-    rescueSinkSpeed: 1.5, rescueBrakeAccel: 22,
+    rescueSinkSpeed: 1.5, rescueBrakeAccel: 34,
     keepFlightSpeed: 18,   // knocked out in flight but still moving faster than this (m/s, sideways)? come round straight back into flight
     // knocked out in the air: he turns onto his back (pose 'knocked': knees up, arms reaching up)
     // at up to settleRate rad/s, limbs a little loose (limp 0..1). Coming round: tuck (tuckTime s),
     // then a backflip (and twist to face the way you're going) back upright over flipTime s
-    recovery: { settleRate: 5, settleGain: 7, limp: 0.3, tuckTime: 0.22, flipTime: 0.75 },
+    recovery: { settleRate: 5, settleGain: 7, limp: 0.3, tuckTime: 0.12, flipTime: 0.45 },   // (the arms throw out and the jets drive the flip round)
   },
 
   // Key bindings. Values are KeyboardEvent.code names.
