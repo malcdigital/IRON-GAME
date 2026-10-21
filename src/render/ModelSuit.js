@@ -205,6 +205,9 @@ export function placeModel(gltf, cfg) {
         o.material = swapped.get(o.material);
       }
       const m = o.material;
+      // per-material colour boost (multiplies the texture: e.g. lift the near-black navy undersuit)
+      const t = m && cfg.tint?.[m.name];
+      if (t && !m.userData.tinted) { m.color.multiply(new THREE.Color(...t)); m.userData.tinted = true; }
       if (m && !mats.includes(m)) mats.push(m);
     }
   });
