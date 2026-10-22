@@ -58,7 +58,7 @@ export class WorldView {
         const col = c.kind === 'skyline' ? (rand() < 0.5 ? 0xf4f1ee : W.pastels[bIndex % W.pastels.length]) : W.pastels[(bIndex * 7 + Math.floor(rand() * 3)) % W.pastels.length];
         this.merge.facade[variant].push(worldBox(size, c.center, col, variant === 3 ? 8 : 6, 4));
         bIndex++;
-        this.roof(c, size);
+        this.roof(c);
         if (c.kind === 'skyline' && c.spire) this.spire(c, size);
         continue;
       }
@@ -94,7 +94,7 @@ export class WorldView {
       mesh.castShadow = mesh.receiveShadow = true;
       this.group.add(mesh);
 
-      if (c.kind === 'pillar' || c.kind === 'block') this.roof(c, size);   // (a proper rooftop up there too)
+      if (c.kind === 'pillar' || c.kind === 'block') this.roof(c);   // (a proper rooftop up there too)
       if (c.kind === 'bridgeDeck') this.bridgeDetail(c, size);
       if (c.kind === 'bridgePylon') this.cables(c);
       if (c.pad) {
@@ -189,107 +189,19 @@ export class WorldView {
     for (let k = 0; k < 40; k++) { const a = rand() * Math.PI * 2, r = 30 + rand() * (P.radius - 40); this.roofPalms.push([P.center[0] + Math.cos(a) * r, 0, P.center[1] + Math.sin(a) * r, 0.9 + rand() * 0.5]); }
   }
 
-  // A rooftop: a membrane deck with a parapet and coping round the edge, then the clutter of a real
-  // roof (scaled to its size): a stair hut, AC units, water tanks on legs, vent pipes, skylights,
-  // sometimes solar panels or a garden with palms; tall towers get a mast with a red light
-  roof(c, size) {
-    const W = CONFIG.world, top = c.max.y, cx = c.center.x, cz = c.center.z;
-    const V = (x, y, z) => new THREE.Vector3(x, y, z);
-    const box = (list, sx, sy, sz, x, y, z, col, uw = 6, uh = 4) => list.push(worldBox(V(sx, sy, sz), V(x, y, z), col, uw, uh));
-    // deck (the collider's top is the walking surface)
-    const decks = [0xd9d4cc, 0xcfc8bd, 0xc9cbc6, 0xd8cdbd, 0xbfc4bd];
-    box(this.merge.deck, size.x, 0.1, size.z, cx, top + 0.05, cz, decks[Math.floor(rand() * decks.length)], 6, 6);
-    // parapet + coping
-    const ph = 0.75 + rand() * 0.35, t = 0.35, coping = 0xfbf7ef, wall = 0xf1ebe0;
-    for (const s of [-1, 1]) {
-      box(this.merge.cap, size.x + 0.3, ph, t, cx, top + ph / 2, cz + s * (size.z / 2 - t / 2 + 0.15), wall);
-      box(this.merge.cap, t, ph, size.z + 0.3, cx + s * (size.x / 2 - t / 2 + 0.15), top + ph / 2, cz, wall);
-      box(this.merge.cap, size.x + 0.5, 0.12, t + 0.2, cx, top + ph + 0.06, cz + s * (size.z / 2 - t / 2 + 0.15), coping);
-      box(this.merge.cap, t + 0.2, 0.12, size.z + 0.5, cx + s * (size.x / 2 - t / 2 + 0.15), top + ph + 0.06, cz, coping);
+  // A rooftop: drawn from the world's roof layout (src/world/roofs.js), which the physics shares
+  roof(c) {
+    if (!c.roof) return;
+    const M = this.merge, V = (a) => new THREE.Vector3(a[0], a[1], a[2]);
+    for (const q of c.roof.pieces) {
+      const list = M[q.list];
+      if (q.t === 'box') list.push(worldBox(V(q.s), V(q.p), q.col, q.uw, q.uh));
+      else if (q.t === 'cyl') list.push(worldCyl(q.r, q.h, V(q.p), q.col, q.seg));
+      else if (q.t === 'cone') list.push(worldCone(q.r, q.h, V(q.p), q.col));
+      else if (q.t === 'sphere') list.push(worldSphere(q.r, V(q.p), q.col));
+      else if (q.t === 'panel') list.push(colorize(new THREE.BoxGeometry(q.s[0], q.s[1], q.s[2]).rotateX(q.tilt).translate(q.p[0], q.p[1], q.p[2]), q.col));
     }
-    // places on the roof, kept clear of each other and the parapet
-    const taken = [];
-    const spot = (w, d, margin = 1.2) => {
-      for (let tries = 0; tries < 12; tries++) {
-        const x = cx + (rand() - 0.5) * Math.max(0, size.x - w - margin * 2), z = cz + (rand() - 0.5) * Math.max(0, size.z - d - margin * 2);
-        if (taken.every((r) => Math.abs(r[0] - x) > (r[2] + w) / 2 + 0.6 || Math.abs(r[1] - z) > (r[3] + d) / 2 + 0.6)) { taken.push([x, z, w, d]); return [x, z]; }
-      }
-      return null;
-    };
-    const area = size.x * size.z, tall = size.y > 45;
-    // stair hut with a door
-    const hw = Math.min(5, size.x * 0.3), hd = Math.min(4, size.z * 0.25), hh = 2.6;
-    const hut = spot(hw, hd);
-    if (hut) {
-      box(this.merge.room, hw, hh, hd, hut[0], top + hh / 2, hut[1], 0xece5da);
-      box(this.merge.room, hw + 0.3, 0.15, hd + 0.3, hut[0], top + hh + 0.07, hut[1], 0xd6cfc4);
-      box(this.merge.mech, 1, 2, 0.06, hut[0], top + 1, hut[1] + hd / 2 + 0.03, 0x6d7480, 1, 1);
-    }
-    if (c.kind === 'building' && rand() < W.roofPalms) {
-      // roof garden (planter with palms)
-      const gw = size.x * 0.45, gd = size.z * 0.45, g = spot(gw, gd);
-      if (g) {
-        box(this.merge.cap, gw + 0.5, 0.6, gd + 0.5, g[0], top + 0.3, g[1], 0xe9e1d3);
-        box(this.merge.garden, gw, 0.2, gd, g[0], top + 0.62, g[1], W.grass);
-        const n = 1 + Math.floor(rand() * 3);
-        for (let k = 0; k < n; k++) this.roofPalms.push([g[0] + (rand() - 0.5) * gw * 0.7, top + 0.7, g[1] + (rand() - 0.5) * gd * 0.7, 0.6 + rand() * 0.4]);
-      }
-    } else if (area > 500 && rand() < 0.45) {
-      // solar panels in rows, tilted to the sun
-      const rows = Math.min(5, Math.floor(size.z / 6)), pw = Math.min(14, size.x * 0.5);
-      const p = spot(pw, rows * 3);
-      if (p) for (let r = 0; r < rows; r++) {
-        const g = new THREE.BoxGeometry(pw, 0.08, 1.8);
-        g.rotateX(-0.45);
-        const z = p[1] - (rows - 1) * 1.5 + r * 3;
-        g.translate(p[0], top + 0.9, z);
-        colorize(g, 0xc8d2ea);
-        this.merge.panel.push(g);
-        box(this.merge.mech, pw * 0.96, 0.7, 0.12, p[0], top + 0.35, z + 0.55, 0x9aa1aa, 2, 1);
-      }
-    }
-    // AC units (a box with a fan on top)
-    const nAc = Math.min(8, 1 + Math.floor(area / 160));
-    for (let k = 0; k < nAc; k++) {
-      const w = 1.4 + rand() * 0.8, d = 1.1 + rand() * 0.5, h = 0.9 + rand() * 0.5, a = spot(w, d);
-      if (!a) continue;
-      box(this.merge.mech, w, h, d, a[0], top + h / 2, a[1], 0xd7dade, 1.5, 1);
-      this.merge.mech.push(worldCyl(Math.min(w, d) * 0.36, 0.08, V(a[0], top + h + 0.04, a[1]), 0x3c4048));
-    }
-    // water tank on legs
-    if (area > 260 && rand() < 0.55) {
-      const r = 1.1 + rand() * 0.6, a = spot(r * 2 + 0.4, r * 2 + 0.4);
-      if (a) {
-        const leg = 1.6;
-        for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) box(this.merge.mech, 0.16, leg, 0.16, a[0] + dx * r * 0.65, top + leg / 2, a[1] + dz * r * 0.65, 0x5e5852, 1, 1);
-        this.merge.room.push(worldCyl(r, 2.4, V(a[0], top + leg + 1.2, a[1]), rand() < 0.5 ? 0xb98a63 : 0xe7e2da, 14));
-        this.merge.room.push(worldCone(r * 1.08, 0.7, V(a[0], top + leg + 2.75, a[1]), 0x8f6a4c));
-      }
-    }
-    // vent pipes and skylights
-    const nPipe = Math.min(6, Math.floor(area / 220) + (rand() < 0.5 ? 1 : 0));
-    for (let k = 0; k < nPipe; k++) {
-      const a = spot(0.5, 0.5, 0.8);
-      if (!a) continue;
-      const h = 0.8 + rand() * 1.2;
-      this.merge.mech.push(worldCyl(0.14 + rand() * 0.1, h, V(a[0], top + h / 2, a[1]), 0xb5bac2));
-    }
-    const nSky = area > 400 ? Math.floor(rand() * 3) : 0;
-    for (let k = 0; k < nSky; k++) {
-      const w = 2 + rand() * 2, d = 1.5 + rand() * 1.5, a = spot(w, d);
-      if (!a) continue;
-      box(this.merge.cap, w + 0.3, 0.4, d + 0.3, a[0], top + 0.2, a[1], 0xe9e3d8);
-      box(this.merge.glass, w, 0.12, d, a[0], top + 0.45, a[1], 0x5f86a8);
-    }
-    // tall towers: a mast with a red light
-    if (tall || c.kind === 'skyline') {
-      const a = spot(0.6, 0.6, 2);
-      if (a) {
-        const h = 4 + rand() * 5;
-        this.merge.mech.push(worldCyl(0.08, h, V(a[0], top + h / 2, a[1]), 0xc9ccd2, 6));
-        this.merge.beacon.push(worldSphere(0.22, V(a[0], top + h + 0.1, a[1]), 0xff5a4a));
-      }
-    }
+    for (const pl of c.roof.palms) this.roofPalms.push(pl);
   }
 
   spire(c, size) {

@@ -241,7 +241,11 @@ export class Game {
   surfaceBelow(p) {
     let top = this.world.groundAt(p.x, p.z);   // (land, or the sea)
     for (const c of this.world.colliders) {
-      if (p.x > c.min.x && p.x < c.max.x && p.z > c.min.z && p.z < c.max.z && c.max.y <= p.y + 0.5 && c.max.y > top) top = c.max.y;
+      if (!(p.x > c.min.x && p.x < c.max.x && p.z > c.min.z && p.z < c.max.z)) continue;
+      if (c.max.y <= p.y + 0.5 && c.max.y > top) top = c.max.y;
+      if (c.gear) for (const g of c.gear) {   // (standing on an AC unit, a planter, the parapet...)
+        if (p.x > g.min.x && p.x < g.max.x && p.z > g.min.z && p.z < g.max.z && g.max.y <= p.y + 0.5 && g.max.y > top) top = g.max.y;
+      }
     }
     return top;
   }

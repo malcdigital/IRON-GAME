@@ -238,34 +238,25 @@ export class CityScenery {
     if (isl && !isl.skyline && !isl.headland) this.buildIsland(isl);
   }
 
-  // An island out in the bay: a green hill with a little pastel village and palms
+  // An island out in the bay: a green hill (the same shape the ground follows: World.hillAt) and
+  // palms; its village houses are solid buildings (World.villageHouses), drawn with the city's
   buildIsland(isl) {
-    const W = CONFIG.world, [cx, cz] = isl.center, r = isl.radius;
-    const hill = new THREE.ConeGeometry(r * 0.75, r * 0.55, 18, 6);
+    const W = CONFIG.world, [cx, cz] = isl.center, r = isl.radius, R = r * 0.8 + 2;
+    const hill = new THREE.PlaneGeometry(R * 2, R * 2, 72, 72);
+    hill.rotateX(-Math.PI / 2);
     const p = hill.attributes.position;
     for (let i = 0; i < p.count; i++) {
-      const y = p.getY(i);
-      const k = 1 + (rand() - 0.5) * 0.25;
-      p.setX(i, p.getX(i) * k); p.setZ(i, p.getZ(i) * k); p.setY(i, y + (rand() - 0.5) * r * 0.04);
+      const x = cx + p.getX(i), z = cz + p.getZ(i), h = this.world.hillAt(x, z);
+      p.setXYZ(i, x, h > 0 ? h + 0.03 : -0.3, z);   // (off the hill: tucked under the island's own ground)
     }
     hill.computeVertexNormals();
     const hm = new THREE.Mesh(hill, new THREE.MeshStandardMaterial({ color: W.hill, roughness: 1, flatShading: true }));
-    hm.position.set(cx, r * 0.27 - 2, cz);
-    hm.scale.y = 0.55;
+    hm.receiveShadow = true;
     this.group.add(hm);
-    // village: little pastel houses round the hill's foot, terraced up it a bit
-    const houses = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ roughness: 0.85 }), isl.houses);
-    const m = new THREE.Matrix4(), c = new THREE.Color();
-    for (let k = 0; k < isl.houses; k++) {
-      const a = rand() * Math.PI * 2, rr = r * (0.45 + rand() * 0.4), hh = 6 + rand() * 10;
-      const lift = Math.max(0, (0.8 - rr / r) * r * 0.5) * 0.6;
-      m.compose(new THREE.Vector3(cx + Math.cos(a) * rr, lift + hh / 2, cz + Math.sin(a) * rr), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rand() * 3), new THREE.Vector3(8 + rand() * 8, hh, 8 + rand() * 8));
-      houses.setMatrixAt(k, m);
-      houses.setColorAt(k, c.setHex(W.pastels[k % W.pastels.length]));
+    for (let k = 0; k < 14; k++) {
+      const a = rand() * Math.PI * 2, rr = r * (0.55 + rand() * 0.35), x = cx + Math.cos(a) * rr, z = cz + Math.sin(a) * rr;
+      this.palmSpots.push([x, this.world.hillAt(x, z), z, 1 + rand() * 0.6]);
     }
-    houses.castShadow = true;
-    this.group.add(houses);
-    for (let k = 0; k < 14; k++) { const a = rand() * Math.PI * 2, rr = r * (0.55 + rand() * 0.35); this.palmSpots.push([cx + Math.cos(a) * rr, 0, cz + Math.sin(a) * rr, 1 + rand() * 0.6]); }
   }
 
   // ---------------------------------------------------------------- distance

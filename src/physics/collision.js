@@ -23,12 +23,25 @@ export function sphereContacts(center, r, colliders, out, groundAt = null) {
     });
   }
   for (const c of colliders) {
+    boxContact(center, r, c, out);
+    // its rooftop pieces (only when the sphere is over the roof, up to the tallest piece)
+    if (c.gear && center.y - r < c.gearTop && center.y + r > c.max.y - 0.1
+      && center.x + r > c.min.x - 0.5 && center.x - r < c.max.x + 0.5 && center.z + r > c.min.z - 0.5 && center.z - r < c.max.z + 0.5) {
+      for (const g of c.gear) boxContact(center, r, g, out);
+    }
+  }
+  return out;
+}
+
+// Contact between a sphere and one axis-aligned box (none if they don't touch)
+function boxContact(center, r, c, out) {
+  {
     const px = Math.max(c.min.x, Math.min(center.x, c.max.x));
     const py = Math.max(c.min.y, Math.min(center.y, c.max.y));
     const pz = Math.max(c.min.z, Math.min(center.z, c.max.z));
     const dx = center.x - px, dy = center.y - py, dz = center.z - pz;
     const d2 = dx * dx + dy * dy + dz * dz;
-    if (d2 > r * r) continue;
+    if (d2 > r * r) return;
 
     if (d2 > 1e-10) {
       const d = Math.sqrt(d2);
