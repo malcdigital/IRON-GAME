@@ -248,7 +248,7 @@ const LIMP = { LeftArm: 0.85, RightArm: 0.85, LeftForeArm: 0.9, RightForeArm: 0.
 const JOINT_SHARE = [1, 1.1, 0.8];   // how a hand's curl spreads over the knuckle, middle and end joints
 const D2R = Math.PI / 180;
 const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _e = new THREE.Euler();
-const _v = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3();
+const _v = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3(), _lp = new THREE.Vector3();
 const _lq1 = new THREE.Quaternion(), _lq2 = new THREE.Quaternion(), _lq3 = new THREE.Quaternion(), _lq4 = new THREE.Quaternion(), _lq5 = new THREE.Quaternion(), _lv1 = new THREE.Vector3();
 
 // The launch timeline. Before the thrusters fire (seqT = time since you pressed launch): crouch
@@ -370,6 +370,7 @@ export class SuitPoser {
   // Which pose the suit wants right now, and the extra motion on top
   update(game, boost, dt) {
     if (dt <= 0) return;
+    this.game = game;
     if (this.preview) this.locoOn = false;   // (the Pose Studio shows the poses as written)
     if (this.preview && this.previewLaunch != null) {
       // Pose Studio launch timeline: play the sequence at time previewLaunch (s)
@@ -898,6 +899,40 @@ export class SuitPoser {
       const f = this.footY();
       this.model.position.y += (this.restFootY - f) * cw;
     }
+    // Getting up: the clips were made for another body, so keep whatever part of the suit is lowest
+    // (hands, knees, back, feet) right on the ground: no floating, no sinking in
+    const gw = this.w.getup ?? 0;
+    if (gw > 0.001 && this.game?.surfaceBelow) {
+      const low = this.lowestPoint();
+      if (low != null) {
+        const ground = this.game.surfaceBelow(this.game.body.pos);
+        this.model.position.y += (ground - low) * gw;   // (up if he's sunk in, down if he's floating)
+      }
+    }
+  }
+
+  // Lowest point of the suit's surface right now (world height), from a fixed spread of points on
+  // the skinned meshes (a few thousand: quick, and close enough to a cm or two)
+  lowestPoint() {
+    if (!this.samples) {
+      this.samples = [];
+      const meshes = [];
+      this.model.traverse((o) => { if (o.isSkinnedMesh && !o.name.endsWith('_ink')) meshes.push(o); });
+      const total = meshes.reduce((n, m) => n + m.geometry.attributes.position.count, 0);
+      for (const m of meshes) {
+        const n = m.geometry.attributes.position.count, k = Math.max(20, Math.round(3000 * n / Math.max(1, total)));
+        for (let i = 0; i < k; i++) this.samples.push([m, Math.floor((i + 0.5) / k * n)]);
+      }
+    }
+    if (!this.samples.length) return null;
+    (this.model.parent ?? this.model).updateMatrixWorld(true);   // (the suit may have just been turned upright this frame)
+    let min = Infinity;
+    for (const [m, i] of this.samples) {
+      m.getVertexPosition(i, _lp);
+      _lp.applyMatrix4(m.matrixWorld);
+      if (_lp.y < min) min = _lp.y;
+    }
+    return min;
   }
 
   // Keep a bone within its joint's real range. Its turn beyond just following its parent is split

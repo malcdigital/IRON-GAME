@@ -341,6 +341,12 @@ export class SuitView {
     // pose the skeleton, then move the flames onto their (posed) bones
     if (this.poser) {
       this.poser.update(game, boost, dt);
+      // rolling along the ground or lying there: rest the suit's lowest point on the ground (the
+      // physics treats him as a ball; the model is a different shape, so it would sink in or float)
+      if (game.groundRoll || game.lyingDown) {
+        const low = this.poser.lowestPoint();
+        if (low != null) this.root.position.y += game.surfaceBelow(b.pos) - low;
+      }
       this.root.updateMatrixWorld(true);
       for (const f of this.flames) {
         if (!f.bone) continue;

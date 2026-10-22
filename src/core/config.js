@@ -397,7 +397,7 @@ export const CONFIG = {
     },               // counts as standing when the feet are within this of the ground (m)
   },
   suitModel: {
-    backVent: [0.025, 0.1, 0.185],   // the back thruster: the black vent between the shoulder blades (x either side, up, back; m from the upper chest bone)
+    backVent: [0.01, -0.012, 0.17],   // the back thruster: the black vent between the shoulder blades (x either side, up, back; m from the upper chest bone)
     url: 'assets/suit2.json', height: 1.9,   // split, textured suit (test copy; the original is assets/suit.json)
     feetY: -1.03, turn: Math.PI,
     tint: { Undersuit_Navy: [3, 2.9, 4] },
