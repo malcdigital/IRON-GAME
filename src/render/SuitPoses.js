@@ -195,6 +195,19 @@ export const POSES = {
     LeftFoot: { aim: [-0.1, -0.85, -0.5] }, RightFoot: { aim: [0.1, -0.85, -0.5] },
   },
 
+  // Climbing up onto a ledge (mantle): leaning in over the edge, both hands planted on top pushing
+  // down, right knee hooked up onto it, left leg hanging
+  mantle: {
+    hands: { Left: { curl: -10, thumb: -10 }, Right: { curl: -10, thumb: -10 } },
+    Spine02: { aim: [0, 0.75, -0.66] }, Spine01: { aim: [0, 0.8, -0.6] }, Spine: { aim: [0, 0.85, -0.52] },
+    neck: { aim: [0, 0.85, -0.53] }, Head: { aim: [0, 0.55, -0.83] },
+    LeftArm: { aim: [-0.25, -0.62, -0.74] }, RightArm: { aim: [0.25, -0.62, -0.74] },
+    LeftForeArm: { aim: [-0.08, -0.93, -0.36] }, RightForeArm: { aim: [0.08, -0.93, -0.36] },
+    LeftHand: { aim: [-0.05, -0.25, -0.97] }, RightHand: { aim: [0.05, -0.25, -0.97] },
+    RightUpLeg: { aim: [0.12, 0.35, -0.93] }, RightLeg: { aim: [0.05, -0.85, -0.52] }, RightFoot: { aim: [0.05, -0.4, -0.92] },
+    LeftUpLeg: { aim: [-0.1, -0.97, 0.2] }, LeftLeg: { aim: [-0.05, -0.95, 0.3] }, LeftFoot: { aim: [-0.05, -0.6, -0.8] },
+  },
+
   crouch: {
     Hips: { rot: [-35, 0, 0] },
     Spine02: { aim: [-0.01, 0.58, -0.81] }, Spine01: { aim: [-0.01, 0.5, -0.87] },
@@ -506,7 +519,8 @@ export class SuitPoser {
     const hc = mo.heroClock;
     mo.land = hc < 0.06 ? hc / 0.06 : hc < 0.06 + LD.heroHold ? 1 : Math.max(0, 1 - (hc - 0.06 - LD.heroHold) / LD.heroRise);
     if (flying || game.launchSeq) mo.land = 0;
-    const special = { brace: this.brace, flare: mo.flare, launch: mo.launch * (1 - mo.crouch), recover: mo.recover, crouch: Math.max(mo.crouch, mo.hop * 0.7, mo.charge), aircharge: mo.airCharge, land: mo.land, knocked: this.knocked, getup: mo.getup, roll: game.groundRoll ? 1 : 0 };
+    const special = { brace: this.brace, flare: mo.flare, launch: mo.launch * (1 - mo.crouch), recover: mo.recover, crouch: Math.max(mo.crouch, mo.hop * 0.7, mo.charge), aircharge: mo.airCharge, land: mo.land, knocked: this.knocked, getup: mo.getup, roll: game.groundRoll ? 1 : 0,
+      mantle: game.mantle?.kind === 'climb' ? Math.min(1, game.mantle.t / 0.12, (game.mantle.time - game.mantle.t) / 0.2) : 0 };
     // rolling along the ground and getting up: those alone (no shake-off, landing or bracing mixed in)
     if (game.groundRoll || game.getUp) { for (const k in special) if (k !== 'roll' && k !== 'getup') special[k] = 0; mo.recoverClock = 9; }
     let sp = 0;

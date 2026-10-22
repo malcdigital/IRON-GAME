@@ -201,6 +201,13 @@ export const CONFIG = {
     sideUse: 0.6,     // share of the swivel push the assist may use for sliding (rest keeps you up)
     allowManual: false, // manual hover (tips with the stick, throttle stays put): off; set true to bring back the toggle
     walkSpeed: 2.25, runSpeed: 6,   // on the ground the stick walks (boost = run)
+    // On foot (walking / running about on roofs and the ground): walking off a ledge drops you with
+    // the jets off (press climb to fire them); walking into a ledge climbs it.
+    //   stepDown: drops up to this (m) are just a step down; stepUp: ledges up to this you step up
+    //   onto; mantleMax: ledges up to this above your feet you climb (mantle); reach: how far ahead
+    //   (m from your middle) a ledge is found; inset: how far onto the top you end up;
+    //   stepTime / mantleTime (+ mantlePerM per metre of height): how long it takes (s)
+    onFoot: { stepDown: 0.5, stepUp: 0.5, mantleMax: 2.2, reach: 0.8, inset: 0.5, stepTime: 0.2, mantleTime: 0.5, mantlePerM: 0.3 },
     // leaving flight: an aggressive brake to a hover. The body swings back leanDeg past upright into
     // the wind (turnGain: how hard it whips round), hands and boots fire forward, height is held
     // (holdGain); slows at up to maxG g. fx: flame flare, camera shake and fov squeeze as it hits.

@@ -86,7 +86,7 @@ export class Game {
     b.pos.y = this.surfaceBelow(b.pos) + CONFIG.pilot.feetHeight;   // standing on the pad (not hovering just above it)
     b.vel.set(0, 0, 0);
     b.angVel.set(0, 0, 0);
-    this.heroDrop = false; this.landLockT = 0; this.heroSteadyT = 0; this.flipLaunch = null; this.helpless = false; this.getUp = null; this.groundRoll = null;
+    this.heroDrop = false; this.landLockT = 0; this.heroSteadyT = 0; this.flipLaunch = null; this.helpless = false; this.getUp = null; this.groundRoll = null; this.mantle = null; this.walkDrop = false; this.onFoot = false;
     b.quat.setFromAxisAngle(Y, this.world.spawn.heading);
     this.controller.reset(this.world.spawn.heading);
     this.suit.repair();
@@ -548,11 +548,12 @@ export class Game {
     this.caps.aeroAccel.lerp(this._tmp.copy(this.aero).divideScalar(body.mass), k);
 
     // 2. What does the pilot want?
+    input = this.onFootStep(input, dt);
     // Thruster cut-off (hover): free-fall while held. Safety catch: if whatever is below is
     // coming up too fast to stop in time, the thrusters fire anyway.
     const hovering = this.controller.mode === 'assist' && !this.controller.flying;
     // (double-tapped cut: the thrusters stay off all the way down; you land on your feet, superhero style)
-    if (input.cut && input.cutLatch && hovering && !this.grounded && !this.launchSeq && body.vel.y < -4) this.heroDrop = true;
+    if (input.cut && input.cutLatch && hovering && !this.grounded && !this.launchSeq && body.vel.y < -4 && !this.walkDrop) this.heroDrop = true;
     if (input.cut && !input.cutLatch && hovering && !this.grounded && !this.launchSeq) {
       const co = CONFIG.assist.cutoff, fall = Math.max(0, -body.vel.y);
       const room = body.pos.y - CONFIG.pilot.feetHeight - this.surfaceBelow(body.pos);
@@ -885,6 +886,7 @@ export class Game {
     if (rflip && this.rescue?.phase === 'flip') this.applyRescueFlip();
     if (rflip && this.rescue?.phase === 'steady') this.applyRescueSteady();
     if (this.groundRoll) this.applyGroundRoll(dt);
+    if (this.mantle) this.applyMantle(dt);
     this.checkRecover(dt);
 
     // Touching down slowly in flight mode drops back to hover
@@ -905,6 +907,78 @@ export class Game {
       this.flareTimer += dt;
       if (this.flareTimer >= e.flareRecharge) { this.flareTimer = 0; this.flares++; }
     } else this.flareTimer = 0;
+  }
+
+  // On foot: walking off a ledge drops you (jets off, your running speed carried; small drops are just
+  // a step down), walking into a ledge steps up onto it or climbs it (mantle). Pressing climb fires
+  // the jets as usual.
+  onFootStep(input, dt) {
+    const b = this.body, F = CONFIG.assist.onFoot, feetH = CONFIG.pilot.feetHeight;
+    const handsOff = { forward: 0, strafe: 0, yaw: 0, up: 0, down: 0, cut: true, cutLatch: true, boost: false, takeoffBoost: false };
+    if (this.mantle) return { ...input, ...handsOff };
+    const busy = this.controller.flying || this.launchSeq || this.burst || this.flipLaunch || this.groundRoll || this.getUp || this.stunT > 0 || this.helpless;
+    if (busy || input.up > 0 || input.takeoffBoost) { this.onFoot = false; this.walkDrop = false; return input; }
+    if (this.grounded) this.onFoot = true;
+    if (!this.onFoot) return input;
+    if (!this.grounded && !this.walkDrop) {
+      const room = b.pos.y - feetH - this.surfaceBelow(b.pos);
+      if (room > F.stepDown) this.walkDrop = true;   // off the edge: fall
+      else if (room > 0.01) { b.pos.y -= Math.min(room, 5 * dt); b.vel.y = Math.min(b.vel.y, 0); }   // (a step down: stay on your feet)
+    }
+    if (this.walkDrop) return { ...input, cut: true, cutLatch: true };
+    // walking into a ledge?
+    const wv = this.walkVel;
+    if (this.grounded && wv && Math.hypot(wv.x, wv.z) > 0.3) {
+      const sp = Math.hypot(wv.x, wv.z), dx = wv.x / sp, dz = wv.z / sp, feet = b.pos.y - feetH;
+      const px = b.pos.x + dx * F.reach, pz = b.pos.z + dz * F.reach;
+      let top = -Infinity, tooTall = false;
+      for (const c of this.boxesAt(px, pz)) {
+        if (c.max.y <= feet + 0.08 || c.min.y > feet + F.mantleMax) continue;   // (below your feet, or overhead)
+        if (c.max.y > feet + F.mantleMax) tooTall = true; else top = Math.max(top, c.max.y);
+      }
+      if (!tooTall && top > feet + 0.08) {
+        // where to end up: on the top (something there to stand on, room to stand up), as far in as fits
+        let tx = 0, tz = 0, ok = false;
+        for (const d of [F.inset, 0.25, 0.05]) {
+          tx = px + dx * d; tz = pz + dz * d;
+          const here = this.boxesAt(tx, tz);
+          if (here.some((c) => Math.abs(c.max.y - top) < 0.06) && here.every((c) => c.max.y <= top + 0.05 || c.min.y >= top + 2.1)) { ok = true; break; }
+        }
+        if (ok) {
+          const h = top - feet, step = h <= F.stepUp;
+          this.mantle = { t: 0, time: step ? F.stepTime : F.mantleTime + F.mantlePerM * h, kind: step ? 'step' : 'climb', h,
+            from: b.pos.clone(), to: new THREE.Vector3(tx, top + feetH, tz), heading: Math.atan2(-dx, -dz) };
+          return { ...input, ...handsOff };
+        }
+      }
+    }
+    return input;
+  }
+
+  // Every solid box standing at (x, z): world boxes and the rooftop pieces on them
+  boxesAt(x, z) {
+    const out = [];
+    for (const c of this.world.colliders) {
+      const over = x > c.min.x - 0.5 && x < c.max.x + 0.5 && z > c.min.z - 0.5 && z < c.max.z + 0.5;
+      if (!over) continue;
+      if (x > c.min.x && x < c.max.x && z > c.min.z && z < c.max.z) out.push(c);
+      if (c.gear) for (const g of c.gear) if (x > g.min.x && x < g.max.x && z > g.min.z && z < g.max.z) out.push(g);
+    }
+    return out;
+  }
+
+  // Stepping up / climbing a ledge: up first (hands on the edge, pull and push), then over onto the top
+  applyMantle(dt) {
+    const m = this.mantle, b = this.body;
+    m.t += dt;
+    const u = Math.min(1, m.t / m.time), ease = (x) => x * x * (3 - 2 * x);
+    const rise = m.kind === 'step' ? 0.5 : 0.62;   // (share of the time spent going up)
+    const up = ease(Math.min(1, u / rise)), over = u < rise ? 0.15 * up : 0.15 + 0.85 * ease((u - rise) / (1 - rise));
+    b.pos.set(m.from.x + (m.to.x - m.from.x) * over, m.from.y + (m.to.y - m.from.y) * up, m.from.z + (m.to.z - m.from.z) * over);
+    b.vel.set(0, 0, 0); b.angVel.set(0, 0, 0);
+    b.quat.setFromAxisAngle(Y, m.heading);
+    this.controller.heading = m.heading;
+    if (u >= 1) { this.mantle = null; this.onFoot = true; }
   }
 
   // Legs keep you upright while standing
@@ -950,7 +1024,7 @@ export class Game {
       }
       const dmg = impactDamage(speed);
       // feet first onto the ground at the end of a drop: the suit takes it (superhero landing)
-      const footDrop = this.heroDrop && c.sphere.foot && c.normal.y > 0.7;
+      const footDrop = (this.heroDrop || this.walkDrop) && c.sphere.foot && c.normal.y > 0.7;
       if (footDrop) continue;
       if (dmg > 0 && !(this.catchGrace > 0)) applyZoneDamage(this.suit, c.sphere.zone, dmg);   // (never hurt by a safety catch)
       if (speed > hardest) hardest = speed;
@@ -971,6 +1045,7 @@ export class Game {
         events.emit('heroLand', { point: new THREE.Vector3(b.pos.x, this.surfaceBelow(b.pos), b.pos.z), speed: fall });
       }
       this.heroDrop = false;
+      this.walkDrop = false;
     }
     if (hardest > CONFIG.damage.safeImpactSpeed) events.emit('crash', { speed: hardest });
     if (hardest > CONFIG.crash.knockSpeed && !(this.catchGrace > 0)) this.knockOut(hardest, this._preHitVel);
