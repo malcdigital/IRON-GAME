@@ -700,10 +700,10 @@ export class SuitPoser {
     const yaw = clampD(this.yawRate * H.twistPerRads, H.twistMax) * hv;
     add('Spine01', 0, yaw * 0.6, 0); add('Head', 0, yaw * 0.5, 0);
     add('LeftUpLeg', 0, -yaw * 0.5, 0); add('RightUpLeg', 0, -yaw * 0.5, 0);
-    // climbing: arms press down to the sides, toes point; dropping: arms lift out, knees tuck
+    // climbing: arms ease slightly out from the sides, toes point; dropping: arms lift out, knees tuck
     const up = THREE.MathUtils.clamp(this.upS ?? 0, -1, 1) * hv;
-    const climb = Math.max(0, up), drop = Math.max(0, -up);
-    add('LeftArm', 0, 0, climb * 14 - drop * 28); add('RightArm', 0, 0, -climb * 14 + drop * 28);
+    const climb = Math.max(0, up), drop = Math.max(0, -up), armOut = H.climbArmOut ?? 12;
+    add('LeftArm', 0, 0, -climb * armOut - drop * 28); add('RightArm', 0, 0, climb * armOut + drop * 28);
     add('LeftFoot', -climb * 18 + drop * 15, 0, 0); add('RightFoot', -climb * 18 + drop * 15, 0, 0);
     add('LeftUpLeg', drop * 22, 0, 0); add('RightUpLeg', drop * 16, 0, 0);
     add('LeftLeg', -drop * 38, 0, 0); add('RightLeg', -drop * 30, 0, 0);

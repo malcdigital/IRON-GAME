@@ -393,7 +393,8 @@ export const CONFIG = {
       twistPerRads: 14, twistMax: 25,   // turning: chest twist per rad/s of turn (degrees)
       climbFull: 10,                // climb / drop speed (m/s) for the full arms-and-legs reaction
       intentShare: 0.6,             // how much pressing climb / descend leans into the pose before the speed builds
-      vertSpring: 7,                // how quickly the climb / drop / idle poses ease into each other (higher = snappier)
+      vertSpring: 12,               // how quickly the climb / drop / idle poses ease into each other (higher = snappier)
+      climbArmOut: 12,              // climbing: how far the arms swing out from the sides (degrees)
     },               // counts as standing when the feet are within this of the ground (m)
   },
   suitModel: {
