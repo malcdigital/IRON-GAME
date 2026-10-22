@@ -691,13 +691,15 @@ export class SuitPoser {
     // head stay level while the hips and legs swing out behind as one straight piece (pendulum)
     const side = Math.abs(rt);
     add('Hips', 0, 0, -rt * H.sideHips);                                    // pelvis and legs swing
-    add('Spine02', -fwd * 0.5, 0, rt * H.sideHips * 0.6); add('Spine01', -fwd * 0.3, 0, rt * H.sideHips * 0.4);   // chest back to level
-    add('Head', fwd * 0.45, 0, 0);
+    // (going backwards the torso stays straight: the physics already tilts the whole body back)
+    const fwdT = Math.max(0, fwd);
+    add('Spine02', -fwdT * 0.5, 0, rt * H.sideHips * 0.6); add('Spine01', -fwdT * 0.3, 0, rt * H.sideHips * 0.4);   // chest back to level
+    add('Head', fwdT * 0.45, 0, 0);
     const legT = { Left: { x: -fwd * H.legTrail, z: -rt * H.sideTrail }, Right: { x: -fwd * H.legTrail, z: -rt * H.sideTrail } };   // legs together (sprung, below)
     for (const n of ['LeftLeg', 'RightLeg']) add(n, side * H.sideStraight, 0, 0);                  // knees straighten (the joint limit stops them at straight)
     for (const n of ['LeftFoot', 'RightFoot']) add(n, -side * 0.4, 0, 0);                         // toes point
     for (const n of ['LeftLeg', 'RightLeg']) add(n, -Math.abs(fwd) * 0.5, 0, 0);                 // knees fold as they swing back
-    // arms sweep back behind going forward; going backwards they only drift a little to the front
+    // arms sweep back behind going forward; going backwards they reach out in front
     // (sideways they stay evenly spread)
     for (const n of ['LeftArm', 'RightArm']) add(n, -fwd * (fwd > 0 ? H.armSweep : H.armSweepBack ?? 0.5), 0, 0);
     for (const n of ['LeftForeArm', 'RightForeArm']) add(n, -Math.max(0, fwd) * H.armSweep * 0.4, 0, 0);   // forearms trail too

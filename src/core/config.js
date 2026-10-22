@@ -389,7 +389,7 @@ export const CONFIG = {
       tiltMax: 32,                  // most the body tilts (degrees)
       pushPerMs2: 1.4,              // extra tilt per m/s² of speeding up or braking
       legTrail: 1.6, armSweep: 1.7, // how far legs trail and arms sweep back behind, × the tilt
-      armSweepBack: 0.35,           // moving backwards: how far the arms drift forward, × the tilt (small: they stay near the sides)
+      armSweepBack: 1.4,            // moving backwards: how far the arms reach out in front, × the tilt (the torso itself stays straight)
       sideHips: 0.12, sideTrail: 0.45, sideStraight: 1.2,   // moving sideways: pelvis tilt, legs swinging out at the hip joints, how much the knees straighten
       twistPerRads: 14, twistMax: 25,   // turning: chest twist per rad/s of turn (degrees)
       climbFull: 10,                // climb / drop speed (m/s) for the full arms-and-legs reaction
