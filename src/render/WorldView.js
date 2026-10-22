@@ -162,8 +162,9 @@ export class WorldView {
   buildStreets() {
     const range = this.world.range, asphalt = [], walk = [];
     const add = (x, z, pitch, block) => {
-      asphalt.push(worldBox(new THREE.Vector3(pitch, 0.02, pitch), new THREE.Vector3(x, 0.01, z), 0x5d5a63));
-      walk.push(worldBox(new THREE.Vector3(block + 4, 0.06, block + 4), new THREE.Vector3(x, 0.03, z), 0xe6dccd));
+      // (heights spaced a few cm apart so the layers never flicker through each other far away)
+      asphalt.push(worldBox(new THREE.Vector3(pitch, 0.035, pitch), new THREE.Vector3(x, 0.0175, z), 0x5d5a63));
+      walk.push(worldBox(new THREE.Vector3(block + 4, 0.08, block + 4), new THREE.Vector3(x, 0.04, z), 0xe6dccd));
     };
     for (const [x, z] of range.cityCells ?? []) add(x, z, range.cityGrid.pitch, range.cityGrid.block);
     const blds = this.world.colliders.filter((c) => c.id?.startsWith('bld-'));
@@ -182,7 +183,7 @@ export class WorldView {
     if (!P) return;
     const g = new THREE.Mesh(new THREE.CircleGeometry(P.radius, 64), new THREE.MeshStandardMaterial({ color: CONFIG.world.grass, roughness: 1 }));
     g.rotation.x = -Math.PI / 2;
-    g.position.set(P.center[0], 0.02, P.center[1]);
+    g.position.set(P.center[0], 0.03, P.center[1]);
     g.receiveShadow = true;
     this.group.add(g);
     for (let k = 0; k < 40; k++) { const a = rand() * Math.PI * 2, r = 30 + rand() * (P.radius - 40); this.roofPalms.push([P.center[0] + Math.cos(a) * r, 0, P.center[1] + Math.sin(a) * r, 0.9 + rand() * 0.5]); }
@@ -340,7 +341,7 @@ export class WorldView {
     const lawn = new THREE.MeshStandardMaterial({ color: W.grass, roughness: 1 });
     for (const [x, z, w, d] of [[-48, -120, 50, 150], [48, -120, 50, 150], [-48, -270, 50, 100], [48, -270, 50, 100], [-55, 30, 40, 40], [55, 30, 40, 40]]) {
       const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), lawn);
-      m.rotation.x = -Math.PI / 2; m.position.set(x, 0.015, z); m.receiveShadow = true;
+      m.rotation.x = -Math.PI / 2; m.position.set(x, 0.03, z); m.receiveShadow = true;
       this.group.add(m);
     }
   }
