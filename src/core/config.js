@@ -389,12 +389,13 @@ export const CONFIG = {
       tiltMax: 32,                  // most the body tilts (degrees)
       pushPerMs2: 1.4,              // extra tilt per m/s² of speeding up or braking
       legTrail: 1.6, armSweep: 1.7, // how far legs trail and arms sweep back behind, × the tilt
+      armSweepBack: 0.35,           // moving backwards: how far the arms drift forward, × the tilt (small: they stay near the sides)
       sideHips: 0.12, sideTrail: 0.45, sideStraight: 1.2,   // moving sideways: pelvis tilt, legs swinging out at the hip joints, how much the knees straighten
       twistPerRads: 14, twistMax: 25,   // turning: chest twist per rad/s of turn (degrees)
       climbFull: 10,                // climb / drop speed (m/s) for the full arms-and-legs reaction
       intentShare: 0.6,             // how much pressing climb / descend leans into the pose before the speed builds
       vertSpring: 12,               // how quickly the climb / drop / idle poses ease into each other (higher = snappier)
-      climbArmOut: 12,              // climbing: how far the arms swing out from the sides (degrees)
+      climbArmIn: 4,                // climbing: how far the arms draw in from the idle hover spread (degrees; they stay clear of the sides)
     },               // counts as standing when the feet are within this of the ground (m)
   },
   suitModel: {

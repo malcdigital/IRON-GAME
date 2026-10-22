@@ -564,10 +564,13 @@ export class SuitPoser {
     // between climbing, dropping and idle)
     const inp = game.lastInput ?? {}, intent = flying ? 0 : (inp.up ?? 0) - (inp.down ?? 0);
     const upWant = THREE.MathUtils.clamp(body.vel.y / H.climbFull + intent * H.intentShare, -1, 1);
-    const om = H.vertSpring, ud = (this.upV ?? 0);
-    const accU = om * om * (upWant - (this.upS ?? 0)) - 2 * om * ud;
-    this.upV = ud + accU * dt;
-    this.upS = THREE.MathUtils.clamp((this.upS ?? 0) + this.upV * dt, -1.2, 1.2);
+    // (small steps, so a stiff spring stays steady even at a low frame rate)
+    const om = H.vertSpring, nSub = Math.max(1, Math.ceil(dt * om / 0.15)), h = dt / nSub;
+    for (let k = 0; k < nSub; k++) {
+      const accU = om * om * (upWant - (this.upS ?? 0)) - 2 * om * (this.upV ?? 0);
+      this.upV = (this.upV ?? 0) + accU * h;
+      this.upS = THREE.MathUtils.clamp((this.upS ?? 0) + this.upV * h, -1.2, 1.2);
+    }
     // gravity as the body feels it: real gravity minus its own acceleration (in free fall: nothing)
     const gw = _v3.set(0, -CONFIG.physics.gravity, 0).sub(_v.copy(body.vel).sub(this._prevVel ?? body.vel).multiplyScalar(1 / dt));
     this._prevVel = (this._prevVel ?? new THREE.Vector3()).copy(body.vel);
@@ -694,16 +697,19 @@ export class SuitPoser {
     for (const n of ['LeftLeg', 'RightLeg']) add(n, side * H.sideStraight, 0, 0);                  // knees straighten (the joint limit stops them at straight)
     for (const n of ['LeftFoot', 'RightFoot']) add(n, -side * 0.4, 0, 0);                         // toes point
     for (const n of ['LeftLeg', 'RightLeg']) add(n, -Math.abs(fwd) * 0.5, 0, 0);                 // knees fold as they swing back
-    for (const n of ['LeftArm', 'RightArm']) add(n, -fwd * H.armSweep, 0, 0);   // arms sweep back behind (sideways they stay evenly spread)
+    // arms sweep back behind going forward; going backwards they only drift a little to the front
+    // (sideways they stay evenly spread)
+    for (const n of ['LeftArm', 'RightArm']) add(n, -fwd * (fwd > 0 ? H.armSweep : H.armSweepBack ?? 0.5), 0, 0);
     for (const n of ['LeftForeArm', 'RightForeArm']) add(n, -Math.max(0, fwd) * H.armSweep * 0.4, 0, 0);   // forearms trail too
     // turning: the chest leads into the turn, the hips and legs lag behind
     const yaw = clampD(this.yawRate * H.twistPerRads, H.twistMax) * hv;
     add('Spine01', 0, yaw * 0.6, 0); add('Head', 0, yaw * 0.5, 0);
     add('LeftUpLeg', 0, -yaw * 0.5, 0); add('RightUpLeg', 0, -yaw * 0.5, 0);
-    // climbing: arms ease slightly out from the sides, toes point; dropping: arms lift out, knees tuck
+    // climbing: arms draw in closer than the idle hover (still clear of the sides), toes point;
+    // dropping: arms lift out, knees tuck
     const up = THREE.MathUtils.clamp(this.upS ?? 0, -1, 1) * hv;
-    const climb = Math.max(0, up), drop = Math.max(0, -up), armOut = H.climbArmOut ?? 12;
-    add('LeftArm', 0, 0, -climb * armOut - drop * 28); add('RightArm', 0, 0, climb * armOut + drop * 28);
+    const climb = Math.max(0, up), drop = Math.max(0, -up), armIn = H.climbArmIn ?? 20;
+    add('LeftArm', 0, 0, climb * armIn - drop * 28); add('RightArm', 0, 0, -climb * armIn + drop * 28);
     add('LeftFoot', -climb * 18 + drop * 15, 0, 0); add('RightFoot', -climb * 18 + drop * 15, 0, 0);
     add('LeftUpLeg', drop * 22, 0, 0); add('RightUpLeg', drop * 16, 0, 0);
     add('LeftLeg', -drop * 38, 0, 0); add('RightLeg', -drop * 30, 0, 0);
