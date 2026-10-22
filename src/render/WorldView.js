@@ -22,7 +22,7 @@ export class WorldView {
     this.scenery = new CityScenery(scene, world, renderer);
     this.roofPalms = [];
     this.buildPad();
-    this.merge = { facade: [[], [], [], []], cap: [], garden: [], room: [], cliff: [], cliffTop: [] };
+    this.merge = { facade: [[], [], [], []], cap: [], garden: [], room: [], cliff: [], cliffTop: [], deck: [], mech: [], panel: [], glass: [], beacon: [] };
     this.buildBoxes();
     this.buildMerged();
     this.buildStreets();
@@ -94,6 +94,7 @@ export class WorldView {
       mesh.castShadow = mesh.receiveShadow = true;
       this.group.add(mesh);
 
+      if (c.kind === 'pillar' || c.kind === 'block') this.roof(c, size);   // (a proper rooftop up there too)
       if (c.kind === 'bridgeDeck') this.bridgeDetail(c, size);
       if (c.kind === 'bridgePylon') this.cables(c);
       if (c.pad) {
@@ -139,6 +140,21 @@ export class WorldView {
       mesh.castShadow = mesh.receiveShadow = true;
       this.group.add(mesh);
     }
+    // rooftops: the membrane, the machinery, solar panels, skylights and the red lights on the masts
+    const roofMats = {
+      deck: new THREE.MeshStandardMaterial({ map: roofTexture(), vertexColors: true, roughness: 0.95 }),
+      mech: new THREE.MeshStandardMaterial({ map: grilleTexture(), vertexColors: true, roughness: 0.55, metalness: 0.35 }),
+      panel: new THREE.MeshStandardMaterial({ map: solarTexture(), vertexColors: true, roughness: 0.25, metalness: 0.5 }),
+      glass: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.15, metalness: 0.4, emissive: 0x8fb6d8, emissiveIntensity: 0.15 }),
+      beacon: new THREE.MeshStandardMaterial({ vertexColors: true, emissive: 0xff2a1a, emissiveIntensity: 2.2 }),
+    };
+    for (const [k, mat] of Object.entries(roofMats)) {
+      if (!this.merge[k].length) continue;
+      const mesh = new THREE.Mesh(mergeGeometries(this.merge[k]), mat);
+      mesh.castShadow = k !== 'deck' && k !== 'beacon';
+      mesh.receiveShadow = true;
+      this.group.add(mesh);
+    }
   }
 
   // Streets: asphalt under each city block with a pale sidewalk round the block (and the same
@@ -172,17 +188,106 @@ export class WorldView {
     for (let k = 0; k < 40; k++) { const a = rand() * Math.PI * 2, r = 30 + rand() * (P.radius - 40); this.roofPalms.push([P.center[0] + Math.cos(a) * r, 0, P.center[1] + Math.sin(a) * r, 0.9 + rand() * 0.5]); }
   }
 
-  // A rooftop: a pale cap and parapet, and sometimes a garden with palms or a little plant room
+  // A rooftop: a membrane deck with a parapet and coping round the edge, then the clutter of a real
+  // roof (scaled to its size): a stair hut, AC units, water tanks on legs, vent pipes, skylights,
+  // sometimes solar panels or a garden with palms; tall towers get a mast with a red light
   roof(c, size) {
-    const W = CONFIG.world;
-    this.merge.cap.push(worldBox(new THREE.Vector3(size.x + 0.6, 0.7, size.z + 0.6), new THREE.Vector3(c.center.x, c.max.y + 0.15, c.center.z), 0xf8f3ea));
-    if (c.kind !== 'building') return;
-    if (rand() < W.roofPalms) {
-      this.merge.garden.push(worldBox(new THREE.Vector3(size.x * 0.6, 0.5, size.z * 0.6), new THREE.Vector3(c.center.x, c.max.y + 0.6, c.center.z), W.grass));
-      const n = 1 + Math.floor(rand() * 3);
-      for (let k = 0; k < n; k++) this.roofPalms.push([c.center.x + (rand() - 0.5) * size.x * 0.5, c.max.y + 0.8, c.center.z + (rand() - 0.5) * size.z * 0.5, 0.6 + rand() * 0.4]);
-    } else {
-      this.merge.room.push(worldBox(new THREE.Vector3(size.x * 0.3, 2.4, size.z * 0.25), new THREE.Vector3(c.center.x + (rand() - 0.5) * size.x * 0.3, c.max.y + 1.6, c.center.z + (rand() - 0.5) * size.z * 0.3), 0xece5da));
+    const W = CONFIG.world, top = c.max.y, cx = c.center.x, cz = c.center.z;
+    const V = (x, y, z) => new THREE.Vector3(x, y, z);
+    const box = (list, sx, sy, sz, x, y, z, col, uw = 6, uh = 4) => list.push(worldBox(V(sx, sy, sz), V(x, y, z), col, uw, uh));
+    // deck (the collider's top is the walking surface)
+    const decks = [0xd9d4cc, 0xcfc8bd, 0xc9cbc6, 0xd8cdbd, 0xbfc4bd];
+    box(this.merge.deck, size.x, 0.1, size.z, cx, top + 0.05, cz, decks[Math.floor(rand() * decks.length)], 6, 6);
+    // parapet + coping
+    const ph = 0.75 + rand() * 0.35, t = 0.35, coping = 0xfbf7ef, wall = 0xf1ebe0;
+    for (const s of [-1, 1]) {
+      box(this.merge.cap, size.x + 0.3, ph, t, cx, top + ph / 2, cz + s * (size.z / 2 - t / 2 + 0.15), wall);
+      box(this.merge.cap, t, ph, size.z + 0.3, cx + s * (size.x / 2 - t / 2 + 0.15), top + ph / 2, cz, wall);
+      box(this.merge.cap, size.x + 0.5, 0.12, t + 0.2, cx, top + ph + 0.06, cz + s * (size.z / 2 - t / 2 + 0.15), coping);
+      box(this.merge.cap, t + 0.2, 0.12, size.z + 0.5, cx + s * (size.x / 2 - t / 2 + 0.15), top + ph + 0.06, cz, coping);
+    }
+    // places on the roof, kept clear of each other and the parapet
+    const taken = [];
+    const spot = (w, d, margin = 1.2) => {
+      for (let tries = 0; tries < 12; tries++) {
+        const x = cx + (rand() - 0.5) * Math.max(0, size.x - w - margin * 2), z = cz + (rand() - 0.5) * Math.max(0, size.z - d - margin * 2);
+        if (taken.every((r) => Math.abs(r[0] - x) > (r[2] + w) / 2 + 0.6 || Math.abs(r[1] - z) > (r[3] + d) / 2 + 0.6)) { taken.push([x, z, w, d]); return [x, z]; }
+      }
+      return null;
+    };
+    const area = size.x * size.z, tall = size.y > 45;
+    // stair hut with a door
+    const hw = Math.min(5, size.x * 0.3), hd = Math.min(4, size.z * 0.25), hh = 2.6;
+    const hut = spot(hw, hd);
+    if (hut) {
+      box(this.merge.room, hw, hh, hd, hut[0], top + hh / 2, hut[1], 0xece5da);
+      box(this.merge.room, hw + 0.3, 0.15, hd + 0.3, hut[0], top + hh + 0.07, hut[1], 0xd6cfc4);
+      box(this.merge.mech, 1, 2, 0.06, hut[0], top + 1, hut[1] + hd / 2 + 0.03, 0x6d7480, 1, 1);
+    }
+    if (c.kind === 'building' && rand() < W.roofPalms) {
+      // roof garden (planter with palms)
+      const gw = size.x * 0.45, gd = size.z * 0.45, g = spot(gw, gd);
+      if (g) {
+        box(this.merge.cap, gw + 0.5, 0.6, gd + 0.5, g[0], top + 0.3, g[1], 0xe9e1d3);
+        box(this.merge.garden, gw, 0.2, gd, g[0], top + 0.62, g[1], W.grass);
+        const n = 1 + Math.floor(rand() * 3);
+        for (let k = 0; k < n; k++) this.roofPalms.push([g[0] + (rand() - 0.5) * gw * 0.7, top + 0.7, g[1] + (rand() - 0.5) * gd * 0.7, 0.6 + rand() * 0.4]);
+      }
+    } else if (area > 500 && rand() < 0.45) {
+      // solar panels in rows, tilted to the sun
+      const rows = Math.min(5, Math.floor(size.z / 6)), pw = Math.min(14, size.x * 0.5);
+      const p = spot(pw, rows * 3);
+      if (p) for (let r = 0; r < rows; r++) {
+        const g = new THREE.BoxGeometry(pw, 0.08, 1.8);
+        g.rotateX(-0.45);
+        const z = p[1] - (rows - 1) * 1.5 + r * 3;
+        g.translate(p[0], top + 0.9, z);
+        colorize(g, 0xc8d2ea);
+        this.merge.panel.push(g);
+        box(this.merge.mech, pw * 0.96, 0.7, 0.12, p[0], top + 0.35, z + 0.55, 0x9aa1aa, 2, 1);
+      }
+    }
+    // AC units (a box with a fan on top)
+    const nAc = Math.min(8, 1 + Math.floor(area / 160));
+    for (let k = 0; k < nAc; k++) {
+      const w = 1.4 + rand() * 0.8, d = 1.1 + rand() * 0.5, h = 0.9 + rand() * 0.5, a = spot(w, d);
+      if (!a) continue;
+      box(this.merge.mech, w, h, d, a[0], top + h / 2, a[1], 0xd7dade, 1.5, 1);
+      this.merge.mech.push(worldCyl(Math.min(w, d) * 0.36, 0.08, V(a[0], top + h + 0.04, a[1]), 0x3c4048));
+    }
+    // water tank on legs
+    if (area > 260 && rand() < 0.55) {
+      const r = 1.1 + rand() * 0.6, a = spot(r * 2 + 0.4, r * 2 + 0.4);
+      if (a) {
+        const leg = 1.6;
+        for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) box(this.merge.mech, 0.16, leg, 0.16, a[0] + dx * r * 0.65, top + leg / 2, a[1] + dz * r * 0.65, 0x5e5852, 1, 1);
+        this.merge.room.push(worldCyl(r, 2.4, V(a[0], top + leg + 1.2, a[1]), rand() < 0.5 ? 0xb98a63 : 0xe7e2da, 14));
+        this.merge.room.push(worldCone(r * 1.08, 0.7, V(a[0], top + leg + 2.75, a[1]), 0x8f6a4c));
+      }
+    }
+    // vent pipes and skylights
+    const nPipe = Math.min(6, Math.floor(area / 220) + (rand() < 0.5 ? 1 : 0));
+    for (let k = 0; k < nPipe; k++) {
+      const a = spot(0.5, 0.5, 0.8);
+      if (!a) continue;
+      const h = 0.8 + rand() * 1.2;
+      this.merge.mech.push(worldCyl(0.14 + rand() * 0.1, h, V(a[0], top + h / 2, a[1]), 0xb5bac2));
+    }
+    const nSky = area > 400 ? Math.floor(rand() * 3) : 0;
+    for (let k = 0; k < nSky; k++) {
+      const w = 2 + rand() * 2, d = 1.5 + rand() * 1.5, a = spot(w, d);
+      if (!a) continue;
+      box(this.merge.cap, w + 0.3, 0.4, d + 0.3, a[0], top + 0.2, a[1], 0xe9e3d8);
+      box(this.merge.glass, w, 0.12, d, a[0], top + 0.45, a[1], 0x5f86a8);
+    }
+    // tall towers: a mast with a red light
+    if (tall || c.kind === 'skyline') {
+      const a = spot(0.6, 0.6, 2);
+      if (a) {
+        const h = 4 + rand() * 5;
+        this.merge.mech.push(worldCyl(0.08, h, V(a[0], top + h / 2, a[1]), 0xc9ccd2, 6));
+        this.merge.beacon.push(worldSphere(0.22, V(a[0], top + h + 0.1, a[1]), 0xff5a4a));
+      }
     }
   }
 
@@ -291,6 +396,64 @@ function facadeTextures(variant, glass = false) {
 
 // A box as geometry placed in the world, with its colour in the vertex colours and its texture
 // tiling by size (a texture repeat every uw metres across and uh up), ready to merge
+function colorize(g, color) {
+  const c = new THREE.Color(color), n = g.attributes.position.count, cols = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) { cols[i * 3] = c.r; cols[i * 3 + 1] = c.g; cols[i * 3 + 2] = c.b; }
+  g.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+  return g;
+}
+const worldCyl = (r, h, center, color, seg = 10) => colorize(new THREE.CylinderGeometry(r, r, h, seg).translate(center.x, center.y, center.z), color);
+const worldCone = (r, h, center, color) => colorize(new THREE.ConeGeometry(r, h, 14).translate(center.x, center.y, center.z), color);
+const worldSphere = (r, center, color) => colorize(new THREE.SphereGeometry(r, 8, 6).translate(center.x, center.y, center.z), color);
+
+// Roof membrane: pale with seam lines, soft stains and the odd drain (tinted by the roof's colour)
+function roofTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const g = c.getContext('2d');
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 1800; i++) {   // (fine grit)
+    const v = 200 + Math.random() * 55;
+    g.fillStyle = `rgba(${v},${v},${v},0.5)`; g.fillRect(Math.random() * 256, Math.random() * 256, 1.5, 1.5);
+  }
+  for (let i = 0; i < 9; i++) {   // (stains)
+    const x = Math.random() * 256, y = Math.random() * 256, r = 15 + Math.random() * 40;
+    const gr = g.createRadialGradient(x, y, 0, x, y, r);
+    gr.addColorStop(0, 'rgba(120,110,100,0.12)'); gr.addColorStop(1, 'rgba(120,110,100,0)');
+    g.fillStyle = gr; g.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+  g.strokeStyle = 'rgba(110,105,100,0.35)'; g.lineWidth = 2;   // (membrane seams)
+  for (let y = 0; y <= 256; y += 64) { g.beginPath(); g.moveTo(0, y); g.lineTo(256, y); g.stroke(); }
+  for (let x = 0; x <= 256; x += 128) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, 256); g.stroke(); }
+  g.fillStyle = 'rgba(60,60,65,0.6)'; g.beginPath(); g.arc(190, 160, 5, 0, Math.PI * 2); g.fill();   // (drain)
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  return t;
+}
+// Machinery: horizontal louvres / grille lines
+function grilleTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d');
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, 64, 64);
+  g.fillStyle = 'rgba(90,95,105,0.35)';
+  for (let y = 4; y < 64; y += 6) g.fillRect(4, y, 56, 2);
+  g.strokeStyle = 'rgba(80,85,95,0.5)'; g.lineWidth = 2; g.strokeRect(1, 1, 62, 62);
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+// Solar panel: dark blue cells with silver lines
+function solarTexture() {
+  const c = document.createElement('canvas'); c.width = 128; c.height = 32;
+  const g = c.getContext('2d');
+  g.fillStyle = '#1d2c52'; g.fillRect(0, 0, 128, 32);
+  g.strokeStyle = 'rgba(200,210,230,0.55)'; g.lineWidth = 1;
+  for (let x = 0; x <= 128; x += 16) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, 32); g.stroke(); }
+  for (let y = 0; y <= 32; y += 16) { g.beginPath(); g.moveTo(0, y); g.lineTo(128, y); g.stroke(); }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
 function worldBox(size, center, color, uw = 6, uh = 4) {
   const g = new THREE.BoxGeometry(size.x, size.y, size.z);
   const uv = g.attributes.uv, n = g.attributes.normal;
