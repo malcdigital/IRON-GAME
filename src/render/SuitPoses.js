@@ -702,6 +702,23 @@ export class SuitPoser {
     // arms sweep back behind going forward; going backwards they reach out in front
     // (sideways they stay evenly spread)
     for (const n of ['LeftArm', 'RightArm']) add(n, -fwd * (fwd > 0 ? H.armSweep : H.armSweepBack ?? 0.5), 0, 0);
+    // ...with the palms turned forward, pushing (hands bent back at the wrist, fingers open)
+    const push = THREE.MathUtils.clamp(-fwd / (H.pushFullDeg ?? 12), 0, 1);
+    if (push > 0.01) {
+      for (const [sd, sx] of [['Left', -1], ['Right', 1]]) {
+        const b = R[`${sd}Hand`];
+        if (!b?.dir) continue;
+        if (!b.hasAim) { b.aim.copy(b.dir); b.hasAim = true; }
+        b.aim.normalize().lerp(_v.set(sx * 0.05, 0.88, -0.47).normalize(), push).normalize();
+        const fa = R[`${sd}ForeArm`];   // forearms level, like pushing on a wall
+        if (fa?.dir) {
+          if (!fa.hasAim) { fa.aim.copy(fa.dir); fa.hasAim = true; }
+          fa.aim.normalize().lerp(_v2.set(sx * 0.12, 0.12, -0.98).normalize(), push).normalize();
+          fa.twist += sx * (H.pushTwist ?? -60) * push;   // (turn the forearm so the palm faces ahead)
+        }
+        this.handCurl(sd, -30 * push);
+      }
+    }
     for (const n of ['LeftForeArm', 'RightForeArm']) add(n, -Math.max(0, fwd) * H.armSweep * 0.4, 0, 0);   // forearms trail too
     // turning: the chest leads into the turn, the hips and legs lag behind
     const yaw = clampD(this.yawRate * H.twistPerRads, H.twistMax) * hv;
