@@ -4,6 +4,7 @@ import { RenderPass } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/
 import { UnrealBloomPass } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/OutputPass.js';
+import { GTAOPass } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/GTAOPass.js';
 import { CONFIG } from '../core/config.js';
 import { HAZE } from './ThrusterFx.js';
 
@@ -14,6 +15,10 @@ export class Renderer {
   constructor(container) {
     const art = CONFIG.art;
     this.container = container;
+    // graphics quality: 'high' (desktop) or 'low' (phones / tablets: no ambient occlusion, a smaller shadow map)
+    const q = CONFIG.graphics?.quality ?? 'auto';
+    this.quality = q !== 'auto' ? q : (navigator.maxTouchPoints > 0 && Math.min(screen.width, screen.height) < 900 ? 'low' : 'high');
+    const G = CONFIG.graphics?.[this.quality] ?? {};
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
     this.renderer.shadowMap.enabled = true;
@@ -37,16 +42,37 @@ export class Renderer {
     this.scene.add(new THREE.HemisphereLight(art.skyLight, art.groundLight, art.ambient));
     this.sun = new THREE.DirectionalLight(art.sunColor, art.sunIntensity);
     this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(1024, 1024);
+    // (a big shadow box round you: the buildings all round cast shadows, not just the nearest few)
+    const sm = G.shadowMap ?? 1024, sr = G.shadowRange ?? 30;
+    this.sun.shadow.mapSize.set(sm, sm);
     const sc = this.sun.shadow.camera;
-    sc.left = sc.bottom = -30; sc.right = sc.top = 30; sc.near = 1; sc.far = 200;
-    this.sun.shadow.bias = -0.0005;
-    this.sunOffset = this.sunDir.clone().multiplyScalar(90);
+    sc.left = sc.bottom = -sr; sc.right = sc.top = sr; sc.near = 1; sc.far = 700;
+    this.sun.shadow.bias = -0.0004;
+    this.sun.shadow.normalBias = 0.03;
+    this.sunOffset = this.sunDir.clone().multiplyScalar(300);
     this.scene.add(this.sun, this.sun.target);
 
     // Post: bloom (glow) and the colour grade
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
+    // Ambient occlusion: soft shade where things meet (walls and the ground, under ledges, round
+    // the rooftop clutter). Skips the sky, sea, flames, smoke and anything see-through.
+    const AO = art.ao;
+    if (AO?.enabled && G.ao !== false) {
+      this.ao = new GTAOPass(this.scene, this.camera, 512, 512);
+      this.ao.overrideVisibility = function () {
+        const cache = this._visibilityCache;
+        this.scene.traverse((o) => {
+          cache.set(o, o.visible);
+          const m = o.material;
+          if (o.isPoints || o.isLine || o.isSprite || o.userData.noAO || (m && (m.transparent || m.isShaderMaterial || m.isMeshBasicMaterial))) o.visible = false;
+        });
+      };
+      this.ao.updateGtaoMaterial({ radius: AO.radius, distanceExponent: AO.distanceExponent, thickness: AO.thickness, scale: AO.scale, samples: AO.samples, distanceFallOff: AO.distanceFallOff });
+      this.ao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 16 });
+      this.ao.blendIntensity = AO.intensity;
+      this.composer.addPass(this.ao);
+    }
     this.haze = new ShaderPass(HAZE);   // heat shimmer behind the thrusters (SuitView sets where)
     this.composer.addPass(this.haze);
     this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), art.bloom.strength, art.bloom.radius, art.bloom.threshold);
@@ -125,6 +151,7 @@ export class Renderer {
     const h = this.container.clientHeight || window.innerHeight;
     this.renderer.setSize(w, h, false);
     this.composer.setSize(w, h);
+    if (this.ao) this.ao.setSize(w, h);
     this.bloom.resolution.set(w / 2, h / 2);
     this.camera.aspect = w / h;
     this.haze.uniforms.aspect.value = w / h;

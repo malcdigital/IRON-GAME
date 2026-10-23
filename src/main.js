@@ -152,7 +152,7 @@ function start(hotData) {
   }
 
   // Debug hook for automated tests: open the page with ?debug
-  if (location.search.includes('debug')) window.__scrapjack = { game, cam, hud, CONFIG, input, studio, suitView, poseStudio, cracks, dust };
+  if (location.search.includes('debug')) window.__scrapjack = { game, cam, hud, CONFIG, input, studio, suitView, poseStudio, cracks, dust, renderer };
 
   // Keep the build when the page is updated while open
   window.claude?.hot?.snapshot?.(() => ({ loadout: game.suit.loadout }));

@@ -293,6 +293,9 @@ export const CONFIG = {
   // Suit look: 'hero' (the character sheet: ivory, navy, orange) or 'scrap' (each part its own junk colours)
   // Art style: 'toon' (cel shading and ink outlines, like the character sheet) or 'realistic'
   // Look: painted sunset sky, low warm sun, lavender haze, glow and a palette grade (see Renderer)
+  // Graphics quality ('auto' picks low on phones and tablets): shadowMap = shadow sharpness (pixels),
+  // shadowRange = how far round you shadows reach (m), ao = ambient occlusion on/off
+  graphics: { quality: 'auto', high: { shadowMap: 4096, shadowRange: 120, ao: true }, low: { shadowMap: 2048, shadowRange: 60, ao: false } },
   art: {
     style: 'realistic',             // (split-suit test: show the suit's own textures and materials) suit shading: 'paint' (painterly anime), 'anime' (soft, warm rim light), 'toon' (hard bands) or 'realistic'
     // Painterly anime suit (art.style 'paint'): map = the repainted colours with ink lines;
@@ -313,6 +316,8 @@ export const CONFIG = {
     bloom: { strength: 0.35, radius: 0.5, threshold: 0.93 },    // glow on bright things
     grade: { warm: 0xffeedd, cool: 0xd2dcf4, saturation: 1.12, vignette: 0.15 },
     rim: { color: 0xffa860, strength: 0.45, power: 3.2 },        // warm edge light on the suit
+    // ambient occlusion (soft shade where surfaces meet): radius (m) it reaches, intensity 0..1
+    ao: { enabled: true, radius: 4, distanceExponent: 1, thickness: 8, scale: 2, samples: 12, distanceFallOff: 1, intensity: 1 },
     // Thrust streaks: each nozzle leaves a glowing ribbon. life = how long a bit of it lasts (s);
     // it drifts out of the nozzle at exhaustSpeed (m/s) plus carry × the suit's own speed
     // Thruster looks (src/render/ThrusterFx.js). Flame colours down the jet: hot (at the nozzle) ->
