@@ -198,6 +198,51 @@ function colorLock(m, key, cfg) {
   m.needsUpdate = true;
 }
 
+// Rigid armour: the glTF blends each armour vertex across several bones, so plates bend and stretch like
+// rubber. Lock them instead: a plate (a connected piece) that mostly follows one bone rides on that bone
+// alone; a big shell spanning several bones keeps a sharpened blend (solid, bending only near the joint). Materials not listed (the undersuit) stay smoothly skinned.
+function rigidArmour(o, cfg) {
+  const g = o.geometry, pos = g.attributes.position, si = g.attributes.skinIndex, sw = g.attributes.skinWeight;
+  if (!si || !sw) return;
+  const n = pos.count, G = ['getX', 'getY', 'getZ', 'getW'];
+  const W = (i, k) => sw[G[k]](i), B = (i, k) => si[G[k]](i);
+  // weld by position (UV seams split vertices), then join along triangles into pieces
+  const key = new Map(), weld = new Int32Array(n);
+  for (let i = 0; i < n; i++) {
+    const k = `${Math.round(pos.getX(i) * 1e4)},${Math.round(pos.getY(i) * 1e4)},${Math.round(pos.getZ(i) * 1e4)}`;
+    if (!key.has(k)) key.set(k, key.size);
+    weld[i] = key.get(k);
+  }
+  const par = new Int32Array(key.size).map((_, i) => i);
+  const find = (a) => { while (par[a] !== a) { par[a] = par[par[a]]; a = par[a]; } return a; };
+  const idx = g.index ? g.index.array : Array.from({ length: n }, (_, i) => i);
+  for (let t = 0; t < idx.length; t += 3) {
+    const a = find(weld[idx[t]]);
+    par[find(weld[idx[t + 1]])] = a; par[find(weld[idx[t + 2]])] = a;
+  }
+  // each piece's total weight per bone
+  const pieces = new Map();
+  for (let i = 0; i < n; i++) {
+    const r = find(weld[i]);
+    let p = pieces.get(r); if (!p) pieces.set(r, (p = { w: new Map(), n: 0 }));
+    p.n++;
+    for (let k = 0; k < 4; k++) { const w = W(i, k); if (w > 0) { const b = B(i, k); p.w.set(b, (p.w.get(b) ?? 0) + w); } }
+  }
+  for (const p of pieces.values()) {
+    let best = -1, bw = 0, tot = 0;
+    for (const [b, w] of p.w) { tot += w; if (w > bw) { bw = w; best = b; } }
+    p.bone = (bw / tot >= cfg.share || p.n <= cfg.small) ? best : -1;   // (-1: lock point by point)
+  }
+  for (let i = 0; i < n; i++) {
+    const b = pieces.get(find(weld[i])).bone;
+    if (b >= 0) { si.setXYZW(i, b, 0, 0, 0); sw.setXYZW(i, 1, 0, 0, 0); continue; }
+    // a shell across joints: sharpen its blend so most of it is solid and the bend squeezes into the joint
+    const w = [0, 1, 2, 3].map((k) => W(i, k) ** cfg.sharpen), t = w[0] + w[1] + w[2] + w[3] || 1;
+    sw.setXYZW(i, w[0] / t, w[1] / t, w[2] / t, w[3] / t);
+  }
+  si.needsUpdate = sw.needsUpdate = true;
+}
+
 // Fit the model to the suit's body: feet at the soles, facing -Z (the game's forward)
 export function placeModel(gltf, cfg) {
   const model = gltf.scene;
@@ -228,6 +273,7 @@ export function placeModel(gltf, cfg) {
         o.material = swapped.get(o.material);
       }
       const m = o.material;
+      if (o.isSkinnedMesh && m && cfg.rigid?.mats?.includes(m.name)) rigidArmour(o, cfg.rigid);
       // per-material colour boost (multiplies the texture: e.g. lift the near-black navy undersuit)
       const t = m && cfg.tint?.[m.name];
       if (t && !m.userData.tinted) { m.color.multiply(new THREE.Color(...t)); m.userData.tinted = true; }

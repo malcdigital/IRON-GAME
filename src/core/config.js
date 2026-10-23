@@ -426,6 +426,10 @@ export const CONFIG = {
     url: 'assets/suit2.json', height: 1.9,   // split, textured suit (test copy; the original is assets/suit.json)
     feetY: -1.03, turn: Math.PI,
     tint: { Undersuit_Navy: [3, 2.9, 4] },
+    // rigid armour: these materials' plates ride on one bone each instead of bending like rubber
+    // (share: a plate that much on one bone moves with it whole; small: plates up to this many points always do;
+    //  sharpen: shells across a joint bend only close to it - higher = stiffer, with a tighter crease)
+    rigid: { share: 0.9, small: 40, sharpen: 4, mats: ['Armor_Ivory', 'Accent_Orange', 'Visor_Glass', 'Thruster_Graphite', 'Thruster_Glow_Ring', 'Thruster_Amber_Core'] },
     // each part keeps its own colour (stray specks of other colours in the shared texture are ignored);
     // lo..hi = how much of the texture's light and dark shading still shows
     colorLock: { lo: 0.82, hi: 1.08, mats: { Armor_Ivory: 0xf3e7dc, Undersuit_Navy: 0x121c2a, Accent_Orange: 0xf36b2d } },   // colour boost per material (r, g, b; 1 = as painted): the undersuit reads navy, not black
