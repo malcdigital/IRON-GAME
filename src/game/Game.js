@@ -1046,7 +1046,7 @@ export class Game {
     if (this.grounded && !wasGrounded && !this.controller.flying && !(this.stunT > 0)) {
       const fall = -this._preHitVel.y, L = CONFIG.pose.landing;
       // (walking off a ledge: only a real height (onFoot.heroFromM) ends in the superhero landing)
-      const heroFrom = this.walkDrop ? Math.sqrt(2 * CONFIG.physics.gravity * CONFIG.assist.onFoot.heroFromM) : L.heroFrom;
+      const heroFrom = this.walkDrop ? 0.93 * Math.sqrt(2 * CONFIG.physics.gravity * CONFIG.assist.onFoot.heroFromM) : L.heroFrom;   // (0.93: air drag)
       if (fall > heroFrom || (this.heroDrop && fall > 2)) {
         this.heroLandCount = (this.heroLandCount ?? 0) + 1;
         this.landLockT = L.heroHold;
