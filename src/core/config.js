@@ -480,7 +480,8 @@ export const CONFIG = {
   // Crashes: a hit harder than knockSpeed (m/s) knocks the pilot out. Thrusters cut, no control, the
   // suit tumbles and falls on its own physics, then reboots into hover. Above braceSpeed the suit
   // braces when it will hit something within braceTime seconds.
-  crash: { knockSpeed: 14, stunMin: 0.5, stunPerMs: 0.02, stunMax: 1.5, braceSpeed: 12, braceTime: 0.45,
+  crash: { carKnockSpeed: 3, carThrow: 1.3, carLift: 3,   // hit by a car going faster than carKnockSpeed (m/s): thrown carThrow × its speed, carLift m/s up
+    knockSpeed: 14, stunMin: 0.5, stunPerMs: 0.02, stunMax: 1.5, braceSpeed: 12, braceTime: 0.45,
     tumble: 0.09,     // spin from an off-centre hit: rad/s per m/s of impact speed
     // Coming round in the air (more than rescueMinRoom m up): the recovery flip (below) while the jets
     // burn to slow the fall to rescueSinkSpeed (up to rescueBrakeAccel m/s² extra); below

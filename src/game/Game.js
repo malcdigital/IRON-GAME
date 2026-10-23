@@ -1045,6 +1045,9 @@ export class Game {
       if (speed > hardest) hardest = speed;
       if (speed > 3) events.emit('impact', { point: c.point.clone(), speed });
     }
+    // hit by a moving car: knocked flying the way it was going
+    const carHit = contacts.find((c) => c.collider.kind === 'car' && (c.collider.v ?? 0) > CONFIG.crash.carKnockSpeed);
+    if (carHit && !(this.stunT > 0) && !this.groundRoll && !this.getUp && !this.helpless) this.hitByCar(carHit.collider);
     // hitting the ground knocked out (or helpless): roll along it, then get up
     if (!wasGrounded && !this.groundRoll && !this.getUp && (this.helpless || this.stunT > 0) && contacts.some((c) => c.normal.y > 0.7)) this.startGroundRoll();
     // touching down: a hard landing (or the end of a drop) is a superhero landing
@@ -1245,6 +1248,20 @@ export class Game {
   }
 
   // A hard hit knocks the pilot out for a moment (longer for harder hits)
+  // A car ran into him: thrown along its way with a little lift, knocked out (the tumble, roll and
+  // get-up follow as for any crash), a knock to the suit; the car brakes hard
+  hitByCar(car) {
+    const b = this.body, v = car.v, C = CONFIG.crash;
+    b.vel.set(car.fx * v * C.carThrow, C.carLift + v * 0.15, car.fz * v * C.carThrow);
+    this._preHitVel.copy(b.vel);
+    this.knockOut(Math.max(C.knockSpeed + 2, v * 1.6), b.vel.clone());
+    applyZoneDamage(this.suit, 'chest', Math.min(25, v * 1.5));
+    events.emit('crash', { speed: v });
+    events.emit('impact', { point: b.pos.clone(), speed: v });
+    if (this.controller.flying) this.controller.exitFlight(b, this.hoverFraction());
+    car.v *= 0.3;
+  }
+
   knockOut(speed, before) {
     const c = CONFIG.crash;
     // No hit is perfectly centred: the body is sent tumbling (more for harder hits), feet carrying on
