@@ -155,15 +155,15 @@ export const POSES = {
   // the chest, knees pulled up tight, hands gripping the knees
   tuck: {
     hands: { Left: { curl: 45, thumb: 20 }, Right: { curl: 45, thumb: 20 } },
-    Hips: { rot: [-20, 0, 0] },
-    Spine02: { aim: [0, 0.55, -0.83] }, Spine01: { aim: [0, 0.6, -0.8] }, Spine: { aim: [0, 0.75, -0.66] },
-    neck: { aim: [0, 0.5, -0.87] }, Head: { aim: [0, 0.15, -0.99] },
-    LeftUpLeg: { aim: [-0.12, 0.45, -0.88] }, RightUpLeg: { aim: [0.12, 0.45, -0.88] },
-    LeftLeg: { aim: [-0.05, -0.75, 0.66] }, RightLeg: { aim: [0.05, -0.75, 0.66] },
-    LeftFoot: { aim: [-0.05, -0.85, -0.52] }, RightFoot: { aim: [0.05, -0.85, -0.52] },
-    LeftArm: { aim: [-0.8, -0.54, -0.22] }, RightArm: { aim: [0.8, -0.54, -0.22] },   // (elbows out, hugging the knees in)
-    LeftForeArm: { aim: [0.96, 0.08, -0.05] }, RightForeArm: { aim: [-0.96, 0.08, -0.05] },
-    LeftHand: { aim: [0.15, -0.7, -0.7] }, RightHand: { aim: [-0.15, -0.7, -0.7] },   // (palms cupped over the knees)
+    Hips: { rot: [-12, 0, 0] },
+    Spine02: { aim: [0, 0.65, -0.76] }, Spine01: { aim: [0, 0.7, -0.71] }, Spine: { aim: [0, 0.8, -0.6] },
+    neck: { aim: [0, 0.6, -0.8] }, Head: { aim: [0, 0.25, -0.97] },
+    LeftUpLeg: { aim: [-0.03, 0.2, -0.98] }, RightUpLeg: { aim: [0.03, 0.2, -0.98] },   // (knees together)
+    LeftLeg: { aim: [-0.02, -0.82, 0.57] }, RightLeg: { aim: [0.02, -0.82, 0.57] },
+    LeftFoot: { aim: [-0.02, -0.85, -0.52] }, RightFoot: { aim: [0.02, -0.85, -0.52] },
+    LeftArm: { aim: [-0.84, -0.52, -0.18] }, RightArm: { aim: [0.84, -0.52, -0.18] },   // (elbows out, hugging the knees in)
+    LeftForeArm: { aim: [0.91, -0.35, -0.28] }, RightForeArm: { aim: [-0.91, -0.35, -0.28] },
+    LeftHand: { aim: [0.2, -0.7, -0.68] }, RightHand: { aim: [-0.2, -0.7, -0.68] },   // (palms cupped over the knees)
   },
 
   roll: {
@@ -277,6 +277,7 @@ const JOINT_SHARE = [1, 1.1, 0.8];   // how a hand's curl spreads over the knuck
 const D2R = Math.PI / 180;
 const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _e = new THREE.Euler();
 const _v = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3(), _lp = new THREE.Vector3();
+const _gm = new THREE.Matrix4();
 const _lq1 = new THREE.Quaternion(), _lq2 = new THREE.Quaternion(), _lq3 = new THREE.Quaternion(), _lq4 = new THREE.Quaternion(), _lq5 = new THREE.Quaternion(), _lv1 = new THREE.Vector3();
 
 // The launch timeline. Before the thrusters fire (seqT = time since you pressed launch): crouch
@@ -399,6 +400,14 @@ export class SuitPoser {
   update(game, boost, dt) {
     if (dt <= 0) return;
     this.game = game;
+    // the get-up clip just started: remember every bone exactly as it was last drawn (lying where
+    // the roll left him), so the clip can be blended in from there (see blendIntoGetUp)
+    if (game.getUp && !this.guPrev && this.list.length) {
+      this.guSnap = { q: new Map(this.list.map((b) => [b.bone, new THREE.Quaternion().setFromRotationMatrix(_gm.extractRotation(b.bone.matrixWorld))])),
+        hips: this.byName.Hips ? new THREE.Vector3().setFromMatrixPosition(this.byName.Hips.bone.matrixWorld) : null };
+      this.guT = 0;
+    }
+    this.guPrev = !!game.getUp;
     if (this.preview) this.locoOn = false;   // (the Pose Studio shows the poses as written)
     if (this.preview && this.previewLaunch != null) {
       // Pose Studio launch timeline: play the sequence at time previewLaunch (s)
@@ -497,7 +506,13 @@ export class SuitPoser {
         this.crouch = 0;
       }
     }
-    if (game.groundRoll) { this.limp = 0; this.knocked = 0; }   // (rolling along the ground: tucked tight, not floppy)
+    if (game.groundRoll) {
+      // rolling along the ground: tucked tight, not floppy... except a tumble that lets go part way:
+      // then the limbs flop with the roll
+      const gr = game.groundRoll, RR = CONFIG.recover.roll;
+      this.limp = gr.tumble && !gr.extra ? RR.flop * THREE.MathUtils.smoothstep(gr.t / gr.time, RR.tuckUntil, RR.tuckUntil + RR.flopIn) : 0;
+      this.knocked = 0;
+    }
     const ko = game.stunT > 0 || !!game.helpless;   // (helpless: still out of it until he lands)
     if (this.wasStunned && !ko) mo.recoverClock = 0;
     this.wasStunned = ko;
@@ -534,9 +549,11 @@ export class SuitPoser {
     const hc = mo.heroClock;
     mo.land = hc < 0.06 ? hc / 0.06 : hc < 0.06 + LD.heroHold ? 1 : Math.max(0, 1 - (hc - 0.06 - LD.heroHold) / LD.heroRise);
     if (flying || game.launchSeq) mo.land = 0;
-    const special = { brace: this.brace, flare: mo.flare, launch: mo.launch * (1 - mo.crouch), recover: mo.recover, crouch: Math.max(mo.crouch, mo.hop * 0.7, mo.charge), aircharge: mo.airCharge, land: mo.land, knocked: this.knocked, getup: mo.getup, roll: game.groundRoll && !game.groundRoll.extra ? 1 : 0,
-      // (tuck and roll: tight from the first instant, opening out as he comes up onto his feet)
-      tuck: game.groundRoll?.extra ? 1 - THREE.MathUtils.smoothstep(game.groundRoll.t / game.groundRoll.time, 1 - (CONFIG.recover.roll.standUp ?? 0.3), 1) : 0,
+    const special = { brace: this.brace, flare: mo.flare, launch: mo.launch * (1 - mo.crouch), recover: mo.recover, crouch: Math.max(mo.crouch, mo.hop * 0.7, mo.charge), aircharge: mo.airCharge, land: mo.land, knocked: this.knocked, getup: mo.getup, roll: game.groundRoll && !game.groundRoll.tumble ? 1 : 0,
+      // tumbling: tight from the first instant; rolling out onto his feet it opens out at the end,
+      // otherwise it lets go part way and the limbs flop (see the limp below)
+      tuck: !game.groundRoll?.tumble ? 0 : game.groundRoll.extra ? 1 - THREE.MathUtils.smoothstep(game.groundRoll.t / game.groundRoll.time, 1 - (CONFIG.recover.roll.standUp ?? 0.3), 1)
+        : 1 - THREE.MathUtils.smoothstep(game.groundRoll.t / game.groundRoll.time, CONFIG.recover.roll.tuckUntil, CONFIG.recover.roll.tuckUntil + CONFIG.recover.roll.flopIn),
       mantle: game.mantle?.kind === 'climb' ? Math.min(1, game.mantle.t / (game.mantle.time * 0.2), (game.mantle.time - game.mantle.t) / (game.mantle.time * 0.3))
         : game.mantle?.kind === 'jet' ? THREE.MathUtils.clamp(Math.min((game.mantle.t / game.mantle.time - 0.35) / 0.25, (game.mantle.time - game.mantle.t) / (game.mantle.time * 0.25)), 0, 1) : 0 };
     // boosting up a high ledge: the launch stance (arms down, palms firing) while the jets push, then the mantle
@@ -967,6 +984,35 @@ export class SuitPoser {
         const ground = this.game.surfaceBelow(this.game.body.pos);
         this.model.position.y += (ground - low) * gw;   // (up if he's sunk in, down if he's floating)
       }
+    }
+    this.blendIntoGetUp();
+  }
+
+  // The first moment of getting up: ease every bone (and the hips' place) from how he lay at the end
+  // of the roll into the clip, instead of snapping to the clip's first frame
+  blendIntoGetUp() {
+    const S = this.guSnap, game = this.game;
+    if (!S || !game?.getUp) { this.guSnap = null; return; }
+    const T = CONFIG.recover.roll.getupBlend ?? 0.35;
+    this.guT += Math.min(0.05, this.dtLast ?? 0.016);
+    if (this.guT >= T) { this.guSnap = null; return; }
+    const w = THREE.MathUtils.smoothstep(this.guT / T, 0, 1);
+    const parent = this.model.parent ?? this.model;
+    parent.updateMatrixWorld(true);
+    const target = new Map(this.list.map((b) => [b.bone, b.bone.getWorldQuaternion(new THREE.Quaternion())]));
+    if (S.hips && this.byName.Hips) {
+      const now = this.byName.Hips.bone.getWorldPosition(new THREE.Vector3());
+      const pq = parent.getWorldQuaternion(new THREE.Quaternion()).invert();
+      this.model.position.add(S.hips.clone().sub(now).multiplyScalar(1 - w).applyQuaternion(pq));
+    }
+    const blended = new Map();
+    for (const b of this.list) {
+      const from = S.q.get(b.bone), to = target.get(b.bone);
+      if (!from || !to) continue;
+      const q = from.clone().slerp(to, w);
+      const pq = blended.get(b.bone.parent) ?? b.bone.parent.getWorldQuaternion(new THREE.Quaternion());
+      b.bone.quaternion.copy(pq.clone().invert().multiply(q));
+      blended.set(b.bone, q);
     }
   }
 

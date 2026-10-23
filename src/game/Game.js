@@ -1336,7 +1336,7 @@ export class Game {
     // tumbling: tucked into a ball, he rolls on round onto his feet (an extra quarter or three
     // quarters of a turn, whichever brings his head up) instead of ending up lying down
     let extra = 0;
-    if (tumble && turns > 0) {
+    if (tumble && turns > 0 && R.rollOut) {
       const test = (a) => this._v4.copy(Y).applyQuaternion(this._qTmp3.setFromAxisAngle(axis, turns * Math.PI * 2 + a).multiply(qLie)).y;
       extra = test(Math.PI / 2) > test(Math.PI * 1.5) ? Math.PI / 2 : Math.PI * 1.5;
     }

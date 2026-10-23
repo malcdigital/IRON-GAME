@@ -252,7 +252,11 @@ export const CONFIG = {
     // from how he hit; minTime s at the least.
     roll: { decel: 12, minSpeed: 3, radius: 0.22, rollRadius: 0.5, tumbleRadius: 0.55,   // (rollRadius: distance per log-roll turn ÷ 2π)
       halfLength: 0.85, blendIn: 0.15, minTime: 0.35,
-      tuckLift: 0.15, standUp: 0.3,   // tumbling forward he tucks into a ball (tuckLift: how much he rises going over) and rolls out onto his feet (standUp: share of the roll spent coming up)
+      tuckLift: 0.15, standUp: 0.3,   // tumbling forward he tucks into a ball (tuckLift: how much he rises going over); rollOut: roll on up onto his feet (standUp: share of the roll spent coming up)
+      rollOut: false,
+      // (rollOut off) tucked for the first part (tuckUntil, share of the tumble), then the limbs go loose
+      // and flop with the roll (flop 0..1, eased in over flopIn), ending lying and blending into the get-up
+      tuckUntil: 0.45, flopIn: 0.15, flop: 0.85, getupBlend: 0.35,
       maxTumbleTurns: 2, maxRollTurns: 3 },   // most flips / rolls after a crash; the rest of the speed is a skid along the ground
     clips: {
       back: { name: 'getUpBack', head: [0.21, 0.98], speed: 2.2, time: 8.27 },
