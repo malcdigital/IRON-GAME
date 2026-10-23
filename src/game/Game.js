@@ -1045,7 +1045,9 @@ export class Game {
     // touching down: a hard landing (or the end of a drop) is a superhero landing
     if (this.grounded && !wasGrounded && !this.controller.flying && !(this.stunT > 0)) {
       const fall = -this._preHitVel.y, L = CONFIG.pose.landing;
-      if (fall > L.heroFrom || (this.heroDrop && fall > 2)) {
+      // (walking off a ledge: only a real height (onFoot.heroFromM) ends in the superhero landing)
+      const heroFrom = this.walkDrop ? Math.sqrt(2 * CONFIG.physics.gravity * CONFIG.assist.onFoot.heroFromM) : L.heroFrom;
+      if (fall > heroFrom || (this.heroDrop && fall > 2)) {
         this.heroLandCount = (this.heroLandCount ?? 0) + 1;
         this.landLockT = L.heroHold;
         this.heroSteadyT = L.heroHold + L.heroRise;   // (held steady and upright through it: no tipping over)
