@@ -256,7 +256,7 @@ export const CONFIG = {
       rollOut: false,
       // (rollOut off) tucked for the first part (tuckUntil, share of the tumble), then the limbs go loose
       // and flop with the roll (flop 0..1, eased in over flopIn), ending lying and blending into the get-up
-      tuckUntil: 0.45, flopIn: 0.15, flop: 0.85, getupBlend: 0.35,
+      tuckUntil: 0.6, flopIn: 0.15, flop: 0.85, getupBlend: 0.35,
       maxTumbleTurns: 2, maxRollTurns: 3 },   // most flips / rolls after a crash; the rest of the speed is a skid along the ground
     clips: {
       back: { name: 'getUpBack', head: [0.21, 0.98], speed: 2.2, time: 8.27 },
