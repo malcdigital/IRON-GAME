@@ -898,6 +898,7 @@ export class Game {
       events.emit('toast', { text: 'Landed. Hover mode.' });
     }
 
+    this.world.traffic?.update(dt, body.pos);   // (cars drive, stop at lights and for you)
     this.course.update(body.pos, this.time);
     this.cargo.update(dt, body, CONFIG.physics);
     this.chase.update(dt, body.pos, this.time);

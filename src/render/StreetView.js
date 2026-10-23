@@ -75,36 +75,57 @@ export class StreetView {
     const car = carGeometry(), carMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.35, metalness: 0.3 });
     const parked = inst(car, carMat, S.parked);
     if (parked) { S.parked.forEach((p, i) => parked.setColorAt(i, new THREE.Color(CAR_COLOURS[p[3] % CAR_COLOURS.length]))); parked.instanceColor.needsUpdate = true; }
-    // traffic: a few cars per long street, each way, wrapping round at the ends
-    this.traffic = [];
-    let s = 99;
-    const rand = () => ((s = (s * 16807) % 2147483647) / 2147483647);
-    for (const L of S.lanes) {
-      const n = Math.max(1, Math.round(L.len / 70));
-      for (const dir of [1, -1]) for (let k = 0; k < n; k++) this.traffic.push({ L, dir, t: (k + rand() * 0.6) / n, speed: 9 + rand() * 5, col: CAR_COLOURS[Math.floor(rand() * CAR_COLOURS.length)] });
-    }
-    if (this.traffic.length) {
-      this.moving = new THREE.InstancedMesh(car, carMat, this.traffic.length);
-      this.traffic.forEach((c, i) => this.moving.setColorAt(i, new THREE.Color(c.col)));
+    // traffic (simulated in src/world/traffic.js): one instanced mesh, moved every frame
+    this.traffic = world.traffic;
+    if (this.traffic?.cars.length) {
+      this.moving = new THREE.InstancedMesh(car, carMat, this.traffic.cars.length);
+      this.traffic.cars.forEach((c, i) => this.moving.setColorAt(i, new THREE.Color(CAR_COLOURS[c.colour % CAR_COLOURS.length])));
       this.moving.instanceColor.needsUpdate = true;
       this.moving.castShadow = true; this.moving.receiveShadow = true;
       this.moving.frustumCulled = false;
       this.group.add(this.moving);
-      this._m4 = m4; this._q = q; this._Y = Y; this._one = one; this._p = new THREE.Vector3();
-      this.update(0);
     }
+    // traffic lights: a pole on each corner of every crossing, red / yellow / green lamps
+    this.poles = [];
+    for (const [ci, c] of (S.crossings ?? []).entries()) for (const [sx, sz] of c.corners ?? [[1, 1], [-1, -1], [1, -1], [-1, 1]]) {
+      this.poles.push({ ci, alongX: sx === sz, x: c.x + sx * (c.R + 0.9), z: c.z + sz * (c.R + 0.9), state: null });
+    }
+    if (this.poles.length) {
+      const signal = mergeGeometries([
+        part(new THREE.CylinderGeometry(0.08, 0.1, 3.6, 8), 0x2f343c, 0, 1.8, 0),
+        part(new THREE.BoxGeometry(0.42, 1.15, 0.22), 0x22262c, 0, 3.95, 0),
+        part(new THREE.BoxGeometry(0.56, 1.25, 0.06), 0x1a1d22, 0, 3.95, 0),
+      ]);
+      inst(signal, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0.4 }), this.poles.map((p) => [p.x, p.z, p.alongX ? Math.PI / 2 : 0]));
+      // the lamps poke out of both faces of the housing, so they show to traffic from either way
+      this.lamps = ['red', 'yellow', 'green'].map((k, n) => {
+        const m = new THREE.InstancedMesh(new THREE.SphereGeometry(0.16, 12, 8), new THREE.MeshBasicMaterial({ toneMapped: false }), this.poles.length);
+        this.poles.forEach((p, i) => place(m, i, p.x, 4.33 - n * 0.37, p.z));
+        m.instanceMatrix.needsUpdate = true;
+        this.group.add(m);
+        return m;
+      });
+      this.lampOn = { red: new THREE.Color(2.2, 0.25, 0.15), yellow: new THREE.Color(2.2, 1.5, 0.2), green: new THREE.Color(0.3, 2.2, 0.6) };
+      this.lampOff = new THREE.Color(0.12, 0.12, 0.13);
+    }
+    this._m4 = m4; this._q = q; this._Y = Y; this._one = one; this._p = new THREE.Vector3();
+    this.update(0);
   }
 
   update(dt) {
-    if (!this.moving) return;
-    this.traffic.forEach((c, i) => {
-      const L = c.L;
-      c.t = (c.t + (c.speed * dt * c.dir) / L.len + 1) % 1;
-      const along = L.ax === L.bx ? 'z' : 'x', off = (L.R ?? 5) * 0.45 * c.dir;   // (keep right: each way in its own lane)
-      const x = L.ax + (L.bx - L.ax) * c.t + (along === 'z' ? -off : 0), z = L.az + (L.bz - L.az) * c.t + (along === 'x' ? off : 0);
-      const ang = along === 'z' ? (c.dir > 0 ? Math.PI : 0) : (c.dir > 0 ? -Math.PI / 2 : Math.PI / 2);
-      this.moving.setMatrixAt(i, this._m4.compose(this._p.set(x, 0, z), this._q.setFromAxisAngle(this._Y, ang), this._one));
-    });
-    this.moving.instanceMatrix.needsUpdate = true;
+    if (this.moving) {
+      this.traffic.cars.forEach((c, i) => this.moving.setMatrixAt(i, this._m4.compose(this._p.set(c.x, 0, c.z), this._q.setFromAxisAngle(this._Y, c.angle), this._one)));
+      this.moving.instanceMatrix.needsUpdate = true;
+    }
+    if (this.lamps && this.traffic) {
+      let changed = false;
+      this.poles.forEach((p, i) => {
+        const st = this.traffic.light(p.ci, p.alongX);
+        if (st === p.state) return;
+        p.state = st; changed = true;
+        ['red', 'yellow', 'green'].forEach((k, n) => this.lamps[n].setColorAt(i, k === st ? this.lampOn[k] : this.lampOff));
+      });
+      if (changed) for (const m of this.lamps) m.instanceColor.needsUpdate = true;
+    }
   }
 }

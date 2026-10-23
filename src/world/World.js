@@ -1,6 +1,7 @@
 import * as THREE from '../lib/three.js';
 import { layoutRoof, hasRoof } from './roofs.js';
 import { layoutStreets } from './streets.js';
+import { Traffic } from './traffic.js';
 import { CONFIG } from '../core/config.js';
 
 // Turns range data into colliders and rings. No rendering here.
@@ -58,10 +59,11 @@ export class World {
       if (!this.streetGrid.has(k)) this.streetGrid.set(k, []);
       this.streetGrid.get(k).push(c);
     }
+    this.traffic = new Traffic(this.streets);   // (the moving cars: solid too)
     this.streetNear = (x, z) => {
       const gx = Math.floor(x / 16), gz = Math.floor(z / 16), out = [];
       for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { const l = this.streetGrid.get(`${gx + i},${gz + j}`); if (l) out.push(...l); }
-      return out;
+      return this.traffic.near(x, z, out);
     };
     // ground height: land (0, plus the island hills), the sandy beach round it, or the sea
     const beach = CONFIG.world.beachWidth ?? 16, sand = this.seaLevel + 0.25;

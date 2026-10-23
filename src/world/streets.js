@@ -7,12 +7,14 @@
 //   lamps:    [x, z, angle] (the arm reaches out over the road along angle)
 //   benches:  [x, z, angle] (facing the road), cans [x, z], hydrants [x, z]
 //   parked:   [x, z, angle, colourIndex]
-//   lanes:    straight runs of road for traffic: { ax, az, bx, bz, len } (driven both ways)
+//   lanes:    straight runs of road for traffic: { ax, az, bx, bz, len, R, stops } (driven both ways;
+//             stops: distances along it of the intersections with traffic lights)
+//   crossings: intersections { x, z, R, phase } (traffic lights on each corner)
 
 export function layoutStreets(world) {
   let s = 4242;
   const rand = () => ((s = (s * 16807) % 2147483647) / 2147483647);
-  const range = world.range, out = { paint: [], lamps: [], benches: [], cans: [], hydrants: [], parked: [], lanes: [] };
+  const range = world.range, out = { paint: [], lamps: [], benches: [], cans: [], hydrants: [], parked: [], lanes: [], crossings: [] };
   const grids = [];
   if (range.cityCells?.length) grids.push({ cells: range.cityCells, P: range.cityGrid.pitch, W: range.cityGrid.block + 4 });
   const down = world.colliders.filter((c) => c.id?.startsWith('bld-')).map((c) => [Math.round(c.center.x), Math.round(c.center.z)]);
@@ -63,6 +65,17 @@ export function layoutStreets(world) {
       }
       if (rand() < 0.7) { const k = Math.floor(rand() * 4), [nx, nz] = [[1, 0], [-1, 0], [0, 1], [0, -1]][k], a = (rand() - 0.5) * (W - 8); out.hydrants.push([x + (nx ? nx * (h - 0.9) : a), z + (nz ? nz * (h - 0.9) : a)]); }
     }
+    // intersections: where a road along x meets a road along z (a corner shared by blocks with roads both ways)
+    const crossKeys = new Set();
+    for (const [x, z] of cells) for (const [ax, az] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+      const X = x + ax * P / 2, Z = z + az * P / 2, k = `${X},${Z}`;
+      if (crossKeys.has(k)) continue;
+      const roadZ = (has.has(`${X - P / 2},${Z - P / 2}`) && has.has(`${X + P / 2},${Z - P / 2}`)) || (has.has(`${X - P / 2},${Z + P / 2}`) && has.has(`${X + P / 2},${Z + P / 2}`));   // (a road along z through it)
+      const roadX = (has.has(`${X - P / 2},${Z - P / 2}`) && has.has(`${X - P / 2},${Z + P / 2}`)) || (has.has(`${X + P / 2},${Z - P / 2}`) && has.has(`${X + P / 2},${Z + P / 2}`));
+      // (corners: the corners with a block's sidewalk on them, where the signal poles stand)
+      const corners = [[1, 1], [-1, -1], [1, -1], [-1, 1]].filter(([a, b]) => has.has(`${X + a * P / 2},${Z + b * P / 2}`));
+      if (roadZ && roadX) { crossKeys.add(k); out.crossings.push({ x: X, z: Z, R, phase: rand() * 22, corners }); }
+    }
     // traffic lanes: each line's touching stretches joined into long runs
     for (const [key, list] of runs) {
       list.sort((a, b) => a[0] - b[0]);
@@ -71,7 +84,10 @@ export function layoutStreets(world) {
       const at = +key.slice(1), alongX = key[0] === 'z';
       for (const [a0, a1] of merged) {
         if (a1 - a0 < P * 1.5) continue;
-        out.lanes.push(alongX ? { ax: a0, az: at, bx: a1, bz: at, len: a1 - a0, R } : { ax: at, az: a0, bx: at, bz: a1, len: a1 - a0, R });
+        const L = alongX ? { ax: a0, az: at, bx: a1, bz: at, len: a1 - a0, R } : { ax: at, az: a0, bx: at, bz: a1, len: a1 - a0, R };
+        // the intersections along it (distance from its start, and which crossing)
+        L.stops = out.crossings.map((c, i) => (alongX ? (Math.abs(c.z - at) < 0.5 && c.x > a0 && c.x < a1 ? { s: c.x - a0, i } : null) : (Math.abs(c.x - at) < 0.5 && c.z > a0 && c.z < a1 ? { s: c.z - a0, i } : null))).filter(Boolean).sort((a, b) => a.s - b.s);
+        out.lanes.push(L);
       }
     }
   }
