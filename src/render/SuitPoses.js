@@ -152,18 +152,18 @@ export const POSES = {
   // Log-rolling along the ground after hitting it: arms tucked across the chest, legs straight and
   // together, chin tucked
   // Tuck and roll (tumbling forward along the ground after a crash): curled into a ball, chin to
-  // the chest, knees pulled up tight, arms wrapped round the shins
+  // the chest, knees pulled up tight, hands gripping the knees
   tuck: {
-    hands: { Left: { curl: 80, thumb: 40 }, Right: { curl: 80, thumb: 40 } },
+    hands: { Left: { curl: 45, thumb: 20 }, Right: { curl: 45, thumb: 20 } },
     Hips: { rot: [-20, 0, 0] },
     Spine02: { aim: [0, 0.55, -0.83] }, Spine01: { aim: [0, 0.6, -0.8] }, Spine: { aim: [0, 0.75, -0.66] },
     neck: { aim: [0, 0.5, -0.87] }, Head: { aim: [0, 0.15, -0.99] },
     LeftUpLeg: { aim: [-0.12, 0.45, -0.88] }, RightUpLeg: { aim: [0.12, 0.45, -0.88] },
     LeftLeg: { aim: [-0.05, -0.75, 0.66] }, RightLeg: { aim: [0.05, -0.75, 0.66] },
     LeftFoot: { aim: [-0.05, -0.85, -0.52] }, RightFoot: { aim: [0.05, -0.85, -0.52] },
-    LeftArm: { aim: [-0.3, -0.45, -0.84] }, RightArm: { aim: [0.3, -0.45, -0.84] },
-    LeftForeArm: { aim: [0.55, -0.55, -0.63] }, RightForeArm: { aim: [-0.55, -0.55, -0.63] },
-    LeftHand: { aim: [0.6, -0.3, -0.74] }, RightHand: { aim: [-0.6, -0.3, -0.74] },
+    LeftArm: { aim: [-0.8, -0.54, -0.22] }, RightArm: { aim: [0.8, -0.54, -0.22] },   // (elbows out, hugging the knees in)
+    LeftForeArm: { aim: [0.96, 0.08, -0.05] }, RightForeArm: { aim: [-0.96, 0.08, -0.05] },
+    LeftHand: { aim: [0.15, -0.7, -0.7] }, RightHand: { aim: [-0.15, -0.7, -0.7] },   // (palms cupped over the knees)
   },
 
   roll: {
