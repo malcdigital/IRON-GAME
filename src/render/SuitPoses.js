@@ -151,6 +151,21 @@ export const POSES = {
 
   // Log-rolling along the ground after hitting it: arms tucked across the chest, legs straight and
   // together, chin tucked
+  // Tuck and roll (tumbling forward along the ground after a crash): curled into a ball, chin to
+  // the chest, knees pulled up tight, arms wrapped round the shins
+  tuck: {
+    hands: { Left: { curl: 80, thumb: 40 }, Right: { curl: 80, thumb: 40 } },
+    Hips: { rot: [-20, 0, 0] },
+    Spine02: { aim: [0, 0.55, -0.83] }, Spine01: { aim: [0, 0.6, -0.8] }, Spine: { aim: [0, 0.75, -0.66] },
+    neck: { aim: [0, 0.5, -0.87] }, Head: { aim: [0, 0.15, -0.99] },
+    LeftUpLeg: { aim: [-0.12, 0.45, -0.88] }, RightUpLeg: { aim: [0.12, 0.45, -0.88] },
+    LeftLeg: { aim: [-0.05, -0.75, 0.66] }, RightLeg: { aim: [0.05, -0.75, 0.66] },
+    LeftFoot: { aim: [-0.05, -0.85, -0.52] }, RightFoot: { aim: [0.05, -0.85, -0.52] },
+    LeftArm: { aim: [-0.3, -0.45, -0.84] }, RightArm: { aim: [0.3, -0.45, -0.84] },
+    LeftForeArm: { aim: [0.55, -0.55, -0.63] }, RightForeArm: { aim: [-0.55, -0.55, -0.63] },
+    LeftHand: { aim: [0.6, -0.3, -0.74] }, RightHand: { aim: [-0.6, -0.3, -0.74] },
+  },
+
   roll: {
     hands: { Left: { curl: 70, thumb: 30 }, Right: { curl: 70, thumb: 30 } },
     neck: { aim: [0, 0.85, -0.52] }, Head: { aim: [0, 0.8, -0.6] },
@@ -519,13 +534,15 @@ export class SuitPoser {
     const hc = mo.heroClock;
     mo.land = hc < 0.06 ? hc / 0.06 : hc < 0.06 + LD.heroHold ? 1 : Math.max(0, 1 - (hc - 0.06 - LD.heroHold) / LD.heroRise);
     if (flying || game.launchSeq) mo.land = 0;
-    const special = { brace: this.brace, flare: mo.flare, launch: mo.launch * (1 - mo.crouch), recover: mo.recover, crouch: Math.max(mo.crouch, mo.hop * 0.7, mo.charge), aircharge: mo.airCharge, land: mo.land, knocked: this.knocked, getup: mo.getup, roll: game.groundRoll ? 1 : 0,
+    const special = { brace: this.brace, flare: mo.flare, launch: mo.launch * (1 - mo.crouch), recover: mo.recover, crouch: Math.max(mo.crouch, mo.hop * 0.7, mo.charge), aircharge: mo.airCharge, land: mo.land, knocked: this.knocked, getup: mo.getup, roll: game.groundRoll && !game.groundRoll.extra ? 1 : 0,
+      // (tuck and roll: tight from the first instant, opening out as he comes up onto his feet)
+      tuck: game.groundRoll?.extra ? 1 - THREE.MathUtils.smoothstep(game.groundRoll.t / game.groundRoll.time, 1 - (CONFIG.recover.roll.standUp ?? 0.3), 1) : 0,
       mantle: game.mantle?.kind === 'climb' ? Math.min(1, game.mantle.t / (game.mantle.time * 0.2), (game.mantle.time - game.mantle.t) / (game.mantle.time * 0.3))
         : game.mantle?.kind === 'jet' ? THREE.MathUtils.clamp(Math.min((game.mantle.t / game.mantle.time - 0.35) / 0.25, (game.mantle.time - game.mantle.t) / (game.mantle.time * 0.25)), 0, 1) : 0 };
     // boosting up a high ledge: the launch stance (arms down, palms firing) while the jets push, then the mantle
     if (game.mantle?.kind === 'jet') special.launch = Math.max(special.launch, game.mantle.jet ?? 0);
     // rolling along the ground and getting up: those alone (no shake-off, landing or bracing mixed in)
-    if (game.groundRoll || game.getUp) { for (const k in special) if (k !== 'roll' && k !== 'getup') special[k] = 0; mo.recoverClock = 9; }
+    if (game.groundRoll || game.getUp) { for (const k in special) if (k !== 'roll' && k !== 'getup' && k !== 'tuck') special[k] = 0; mo.recoverClock = 9; }
     let sp = 0;
     for (const v of Object.values(special)) sp = Math.max(sp, v);
     for (const s of STATES) if (!(s in special)) want[s] *= 1 - sp;

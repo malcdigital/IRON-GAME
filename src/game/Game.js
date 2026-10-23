@@ -1333,7 +1333,14 @@ export class Game {
     // (capped: a fast crash would otherwise spin him over a dozen times; past the cap he skids)
     const maxTurns = tumble ? (R.maxTumbleTurns ?? 2) : (R.maxRollTurns ?? 3);
     const turns = sp > R.minSpeed ? Math.min(maxTurns, Math.max(1, Math.round(dist / (Math.PI * 2 * r)))) : 0;
-    this.groundRoll = { t: 0, time: Math.max(R.minTime, sp / R.decel), dist, turns, axis, m: m.clone(), h: h.clone(), chestUp, tumble, qLie, q0: b.quat.clone(), p0: b.pos.clone() };
+    // tumbling: tucked into a ball, he rolls on round onto his feet (an extra quarter or three
+    // quarters of a turn, whichever brings his head up) instead of ending up lying down
+    let extra = 0;
+    if (tumble && turns > 0) {
+      const test = (a) => this._v4.copy(Y).applyQuaternion(this._qTmp3.setFromAxisAngle(axis, turns * Math.PI * 2 + a).multiply(qLie)).y;
+      extra = test(Math.PI / 2) > test(Math.PI * 1.5) ? Math.PI / 2 : Math.PI * 1.5;
+    }
+    this.groundRoll = { t: 0, time: Math.max(R.minTime, sp / R.decel) * (extra ? 1 + extra / (Math.PI * 2 * turns) : 1), dist, turns, extra, axis, m: m.clone(), h: h.clone(), chestUp, tumble, qLie, q0: b.quat.clone(), p0: b.pos.clone() };
     this.helpless = false; this.stunT = 0; this.lyingDown = false;
     b.vel.set(0, 0, 0); b.angVel.set(0, 0, 0);
   }
@@ -1343,17 +1350,25 @@ export class Game {
     const r = this.groundRoll, b = this.body, R = CONFIG.recover.roll;
     r.t += dt;
     const u = Math.min(1, r.t / r.time), e = 1 - (1 - u) * (1 - u);   // (fast off the hit, slowing to a stop)
-    const ang = r.turns * Math.PI * 2 * e;
+    const ang = (r.turns * Math.PI * 2 + (r.extra ?? 0)) * e;
     const q = this._qTmp.setFromAxisAngle(r.axis, ang).multiply(r.qLie);
     b.quat.copy(r.q0).slerp(q, THREE.MathUtils.smoothstep(r.t, 0, R.blendIn));   // (eases in from exactly how he landed)
     b.pos.copy(r.p0).addScaledVector(r.m, r.dist * e);
-    // tumbling, the body swings up through standing on end as it goes over
-    const lift = r.tumble ? (R.halfLength - R.radius) * Math.abs(Math.sin(ang)) : 0;
-    b.pos.y = this.surfaceBelow(b.pos) + R.radius + lift;
+    // tumbling: a tight ball, rising a little as it goes over, then up onto his feet at the end
+    const lift = r.tumble ? (R.tuckLift ?? 0.15) * Math.abs(Math.sin(ang)) : 0;
+    const ground = this.surfaceBelow(b.pos), stand = r.extra ? THREE.MathUtils.smoothstep(u, 1 - (R.standUp ?? 0.3), 1) : 0;
+    b.pos.y = ground + (R.radius + lift) * (1 - stand) + CONFIG.pilot.feetHeight * stand;
     b.vel.set(0, 0, 0); b.angVel.set(0, 0, 0);
     if (u >= 1) {
       this.groundRoll = null;
-      this.startGetUp(r.chestUp, this._v1.copy(r.h));
+      if (r.extra) {
+        // rolled out onto his feet: upright, facing the way he was going, and his own again
+        const fwd = this._v1.set(0, 0, -1).applyQuaternion(b.quat).setY(0);
+        const hd = fwd.lengthSq() > 1e-4 ? Math.atan2(-fwd.x, -fwd.z) : Math.atan2(-r.m.x, -r.m.z);
+        b.quat.setFromAxisAngle(Y, hd); this.controller.heading = hd;
+        b.pos.y = ground + CONFIG.pilot.feetHeight;
+        this.onFoot = true;
+      } else this.startGetUp(r.chestUp, this._v1.copy(r.h));
     }
   }
 
