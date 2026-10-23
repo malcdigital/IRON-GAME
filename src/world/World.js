@@ -1,5 +1,6 @@
 import * as THREE from '../lib/three.js';
 import { layoutRoof, hasRoof } from './roofs.js';
+import { layoutStreets } from './streets.js';
 import { CONFIG } from '../core/config.js';
 
 // Turns range data into colliders and rings. No rendering here.
@@ -48,6 +49,20 @@ export class World {
       heading: range.spawn.heading,
     };
     this.workshopPad = { pos: new THREE.Vector3(...range.workshopPad.pos), radius: range.workshopPad.radius };
+    // Streets: markings, lamps, benches, parked cars (solid) and traffic lanes. The parked cars sit
+    // in a 16 m grid so collisions only look at the few round you (streetNear)
+    this.streets = layoutStreets(this);
+    this.streetGrid = new Map();
+    for (const c of this.streets.solids) {
+      const k = `${Math.floor((c.min.x + c.max.x) / 32)},${Math.floor((c.min.z + c.max.z) / 32)}`;
+      if (!this.streetGrid.has(k)) this.streetGrid.set(k, []);
+      this.streetGrid.get(k).push(c);
+    }
+    this.streetNear = (x, z) => {
+      const gx = Math.floor(x / 16), gz = Math.floor(z / 16), out = [];
+      for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { const l = this.streetGrid.get(`${gx + i},${gz + j}`); if (l) out.push(...l); }
+      return out;
+    };
     // ground height: land (0, plus the island hills), the sandy beach round it, or the sea
     const beach = CONFIG.world.beachWidth ?? 16, sand = this.seaLevel + 0.25;
     this.outlines = [this.coast, ...this.islands.map((i) => i.outline)].map((P) => ({ P, box: bounds(P, beach) }));

@@ -247,6 +247,9 @@ export class Game {
         if (p.x > g.min.x && p.x < g.max.x && p.z > g.min.z && p.z < g.max.z && g.max.y <= p.y + 0.5 && g.max.y > top) top = g.max.y;
       }
     }
+    for (const g of this.world.streetNear?.(p.x, p.z) ?? []) {   // (standing on a parked car)
+      if (p.x > g.min.x && p.x < g.max.x && p.z > g.min.z && p.z < g.max.z && g.max.y <= p.y + 0.5 && g.max.y > top) top = g.max.y;
+    }
     return top;
   }
 
@@ -967,6 +970,7 @@ export class Game {
       if (x > c.min.x && x < c.max.x && z > c.min.z && z < c.max.z) out.push(c);
       if (c.gear) for (const g of c.gear) if (x > g.min.x && x < g.max.x && z > g.min.z && z < g.max.z) out.push(g);
     }
+    for (const g of this.world.streetNear?.(x, z) ?? []) if (x > g.min.x && x < g.max.x && z > g.min.z && z < g.max.z) out.push(g);
     return out;
   }
 
@@ -1017,7 +1021,7 @@ export class Game {
     const contacts = [];
     for (const s of SPHERES) {
       b.pointToWorld(s.local, this._c);
-      const found = sphereContacts(this._c, s.r, this.world.colliders, [], this.world.groundAt);
+      const found = sphereContacts(this._c, s.r, this.world.colliders, [], this.world.groundAt, this.world.streetNear);
       for (const c of found) { c.sphere = s; if (s.foot && this.walkVel) c.surfaceVel = this.walkVel; contacts.push(c); }
     }
     if (!contacts.length) return;

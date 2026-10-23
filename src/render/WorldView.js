@@ -2,6 +2,7 @@ import * as THREE from '../lib/three.js';
 import { CONFIG } from '../core/config.js';
 import { hazardTexture, padTexture, sheetMetalTexture } from './textures.js';
 import { CityScenery } from './CityScenery.js';
+import { StreetView } from './StreetView.js';
 import { mergeGeometries } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/utils/BufferGeometryUtils.js';
 
 // Draws the world: the solid things from World data (buildings, towers, the monorail track, the
@@ -26,6 +27,7 @@ export class WorldView {
     this.buildBoxes();
     this.buildMerged();
     this.buildStreets();
+    this.streetView = new StreetView(this.group, world);   // (markings, lamps, benches, cars, traffic)
     this.buildPark();
     this.buildStreetPalms();
     this.scenery.buildPalms(this.roofPalms);
@@ -301,7 +303,7 @@ export class WorldView {
     const g = range.cityGrid;
     for (const [x, z] of range.cityCells ?? []) for (const [a, b] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
       if (rand() < 0.5) continue;
-      const px = x + a * (g.block / 2 + 3), pz = z + b * (g.block / 2 + 3);
+      const px = x + a * ((g.block + 4) / 2 - 1.3), pz = z + b * ((g.block + 4) / 2 - 1.3);   // (on the sidewalk corner, clear of the road)
       if (this.world.onLand(px, pz)) this.roofPalms.push([px, 0, pz, 0.8 + rand() * 0.4]);
     }
     // the plaza: a palm-lined boulevard from the workshop toward downtown, with lawns either side
@@ -329,6 +331,7 @@ export class WorldView {
   // Highlight the next ring; move the sea, train and boats
   update(course, time, dt = 0.016) {
     this.scenery.update(dt, time);
+    this.streetView?.update(dt);
     this.ringMeshes.forEach((m, i) => {
       const isNext = i === course.next;
       const done = course.running && i < course.next;

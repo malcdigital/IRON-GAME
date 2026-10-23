@@ -78,7 +78,7 @@ export class CargoSystem {
       c.vel.multiplyScalar(1 - 0.05 * dt);
       c.pos.addScaledVector(c.vel, dt);
 
-      const contacts = sphereContacts(c.pos, r, this.world.colliders, [], this.world.groundAt);
+      const contacts = sphereContacts(c.pos, r, this.world.colliders, [], this.world.groundAt, this.world.streetNear);
       let onDelivery = false;
       for (const k of contacts) {
         c.pos.addScaledVector(k.normal, k.depth);

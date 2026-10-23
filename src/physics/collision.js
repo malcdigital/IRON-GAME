@@ -12,7 +12,8 @@ const _imp = new THREE.Vector3();
 // Find contacts between a sphere and the world (ground plane + axis-aligned boxes).
 // Pushes { point, normal, depth, collider } objects into `out`.
 // groundAt(x, z): the height of the ground there (the city is at 0, the sea lower); none = flat at 0
-export function sphereContacts(center, r, colliders, out, groundAt = null) {
+// near(x, z): extra small solids round a point (parked cars), if any
+export function sphereContacts(center, r, colliders, out, groundAt = null, near = null) {
   const gy = groundAt ? groundAt(center.x, center.z) : 0;
   if (center.y - r < gy) {
     out.push({
@@ -30,6 +31,7 @@ export function sphereContacts(center, r, colliders, out, groundAt = null) {
       for (const g of c.gear) boxContact(center, r, g, out);
     }
   }
+  if (near) for (const c of near(center.x, center.z)) boxContact(center, r, c, out);
   return out;
 }
 
