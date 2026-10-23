@@ -84,6 +84,15 @@ export class StreetView {
       this.moving.castShadow = true; this.moving.receiveShadow = true;
       this.moving.frustumCulled = false;
       this.group.add(this.moving);
+      // brake lights (red, bright while slowing or stopped) and turn signals (amber, blinking on the
+      // side it's turning), riding on each car
+      const lamp = (pts) => mergeGeometries(pts.map(([x, z]) => new THREE.BoxGeometry(0.42, 0.14, 0.06).translate(x, 0.66, z)));
+      const mk = (geo) => { const m = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ toneMapped: false }), this.traffic.cars.length); m.frustumCulled = false; this.group.add(m); return m; };
+      this.brake = mk(lamp([[-0.62, 2.19], [0.62, 2.19]]));
+      this.blinkL = mk(lamp([[-0.86, -2.19], [-0.86, 2.2]]).scale(0.5, 1, 1).translate(-0.43, 0, 0));
+      this.blinkR = mk(lamp([[0.86, -2.19], [0.86, 2.2]]).scale(0.5, 1, 1).translate(0.43, 0, 0));
+      this.lampCol = { brakeOn: new THREE.Color(2.2, 0.02, 0.02), brakeOff: new THREE.Color(0.3, 0.02, 0.02), amberOn: new THREE.Color(2.6, 1.9, 0.15), amberOff: new THREE.Color(0.3, 0.2, 0.08) };
+      this.blinkT = 0;
     }
     // traffic lights: a pole on each corner of every crossing, red / yellow / green lamps
     this.poles = [];
@@ -114,8 +123,17 @@ export class StreetView {
 
   update(dt) {
     if (this.moving) {
-      this.traffic.cars.forEach((c, i) => this.moving.setMatrixAt(i, this._m4.compose(this._p.set(c.x, 0, c.z), this._q.setFromAxisAngle(this._Y, c.angle), this._one)));
-      this.moving.instanceMatrix.needsUpdate = true;
+      this.blinkT += dt;
+      const blinkOn = this.blinkT % 0.8 < 0.45, L = this.lampCol;
+      this.traffic.cars.forEach((c, i) => {
+        this._m4.compose(this._p.set(c.x, 0, c.z), this._q.setFromAxisAngle(this._Y, c.angle), this._one);
+        for (const m of [this.moving, this.brake, this.blinkL, this.blinkR]) m.setMatrixAt(i, this._m4);
+        this.brake.setColorAt(i, c.braking ? L.brakeOn : L.brakeOff);
+        this.blinkL.setColorAt(i, c.signal === 'L' && blinkOn ? L.amberOn : L.amberOff);
+        this.blinkR.setColorAt(i, c.signal === 'R' && blinkOn ? L.amberOn : L.amberOff);
+      });
+      for (const m of [this.moving, this.brake, this.blinkL, this.blinkR]) m.instanceMatrix.needsUpdate = true;
+      for (const m of [this.brake, this.blinkL, this.blinkR]) m.instanceColor.needsUpdate = true;
     }
     if (this.lamps && this.traffic) {
       let changed = false;

@@ -5,9 +5,9 @@
 // The traffic lights at each crossing cycle: green one way while the other waits, then yellow, a
 // moment of all-red, and the other way's turn. No rendering here (StreetView draws it).
 
-export const LIGHT = { green: 8, yellow: 2, allRed: 1 };   // seconds
+export const LIGHT = { green: 8, yellow: 2, allRed: 2 };   // seconds
 const CYCLE = 2 * (LIGHT.green + LIGHT.yellow + LIGHT.allRed);
-const CAR = { length: 4.3, width: 1.9, height: 1.5, accel: 3, brake: 7, gap: 2.5, look: 22, seeYou: 12, turnSpeed: 6, spacing: 140, jamTime: 40, jamHide: 80 };
+const CAR = { length: 4.3, width: 1.9, height: 1.5, accel: 3, brake: 7, gap: 2.5, look: 22, seeYou: 12, turnSpeed: 6, spacing: 90, jamTime: 40, jamHide: 80, claim: 10, signalFrom: 45, gapLeft: 25 };
 
 export class Traffic {
   constructor(streets) {
@@ -84,7 +84,7 @@ export class Traffic {
       }
       if (!c.turn) {
         // the next crossing ahead: stop at its line unless green (yellow: stop if there's room to)
-        const next = r.pts.find((p) => (p.a - c.a) * c.dir > 0.01) ?? null;
+        const next = (c.dir > 0 ? r.pts.find((p) => p.a - c.a > 0.01) : r.pts.findLast((p) => c.a - p.a > 0.01)) ?? null;   // (the nearest one ahead, either way)
         if (next) {
           const line = next.a - c.dir * (r.R + 3), d = (line - c.a) * c.dir;
           if (!c.plan || c.plan.i !== next.i) c.plan = this.choose(c, next);   // (where to go at this crossing, picked on the way up)
@@ -93,6 +93,9 @@ export class Traffic {
           // this move (cars from another way in it, or no room on the road beyond)
           const red = lt === 'red' || (lt === 'yellow' && d > c.v * c.v / (2 * CAR.brake) + 1), blocked = !red && !this.clear(c, c.plan);
           if (d > -0.5 && (red || blocked)) { allow = Math.min(allow, stopIn(d - 0.3)); if (d < 6) c.why = red ? 'light' : 'crossing busy'; }
+          // about to go through on a clear crossing: claim it (cars on clashing paths now wait for this one)
+          c.res = !red && !blocked && d < CAR.claim && c.plan ? { ...this.move(c, c.plan), key: c.plan.key } : null;
+          c.signal = c.plan && !c.plan.straight && d < CAR.signalFrom ? c.plan.side : null;   // (blinker on, on the way up)
           if ((c.a - (next.a - c.dir * r.R)) * c.dir >= 0) this.startTurn(c, next);
         } else {
           // the end of the street: slow down and U-turn (once the other lane's clear there)
@@ -101,8 +104,10 @@ export class Traffic {
           const ok = this.clear(c, c.plan);
           allow = Math.min(allow, ok ? Math.max(CAR.turnSpeed * 0.6, stopIn(left) + 2) : stopIn(left - 0.5));
           if (left <= 0 && ok) this.startUturn(c);
+          c.signal = left < CAR.signalFrom ? 'L' : null;
         }
-      }
+      } else c.signal = c.turn.move?.side === 'S' ? null : (c.turn.move?.side === 'R' ? 'R' : 'L');
+      c.braking = allow < c.v - 0.05 || c.v < 0.3;   // (brake lights)
       c.v = allow < c.v ? Math.max(allow, c.v - CAR.brake * 1.5 * dt) : Math.min(allow, c.v + CAR.accel * dt);
       // jam breaker: stuck a long while, well out of your way: off it goes to a clear street elsewhere
       c.stuckT = c.v < 0.3 ? (c.stuckT ?? 0) + dt : 0;
@@ -115,6 +120,17 @@ export class Traffic {
     this.place();
   }
 
+  // what a car is doing at a crossing: which way it came in and where it's going
+  move(c, plan) { return { from: `${c.run}:${c.dir}`, run: c.run, dir: c.dir, side: plan.side ?? (plan.straight ? 'S' : 'U') }; }
+
+  // can these two moves share a crossing at the same time? (same way in: yes; head to head, going
+  // straight or turning right: yes; anything that crosses the other's path: no)
+  compatible(a, b) {
+    if (!b || a.from === b.from) return true;
+    if (a.run === b.run && a.dir === -b.dir) return (a.side === 'S' || a.side === 'R') && (b.side === 'S' || b.side === 'R');
+    return false;
+  }
+
   // put car c somewhere clear: a random street, either way, nobody within 20 m in that lane
   respawn(c) {
     for (let tries = 0; tries < 20; tries++) {
@@ -123,7 +139,7 @@ export class Traffic {
       const a = r.a0 + 10 + this.rand() * (r.a1 - r.a0 - 20), p = this.lanePos(r, dir, a);
       if (r.pts.some((q) => Math.abs(q.a - a) < r.R + 6)) continue;   // (not in or by a crossing)
       if (this.cars.some((o) => o !== c && Math.hypot(o.x - p.x, o.z - p.z) < 20)) continue;
-      Object.assign(c, { run: k, dir, a, v: 0, turn: null, plan: null, stuckT: 0 });
+      Object.assign(c, { run: k, dir, a, v: 0, turn: null, plan: null, res: null, stuckT: 0 });
       return true;
     }
     return false;
@@ -138,17 +154,22 @@ export class Traffic {
     const E = this.lanePos(r, c.dir, c.a), Xp = this.lanePos(this.runs[choice.run], choice.dir, choice.a);
     // (turning: the curve's corner is where the two lanes meet; straight on: halfway)
     const C = choice.run === c.run ? { x: (E.x + Xp.x) / 2, z: (E.z + Xp.z) / 2 } : r.alongX ? { x: Xp.x, z: E.z } : { x: E.x, z: Xp.z };
-    c.turn = { E, C, X: Xp, u: 0, len: Math.hypot(C.x - E.x, C.z - E.z) + Math.hypot(Xp.x - C.x, Xp.z - C.z), next: choice, key: `x${p.i}`, from: `${c.run}:${c.dir}`, straight: choice.straight };
+    c.turn = { E, C, X: Xp, u: 0, len: Math.hypot(C.x - E.x, C.z - E.z) + Math.hypot(Xp.x - C.x, Xp.z - C.z), next: choice, key: `x${p.i}`, from: `${c.run}:${c.dir}`, straight: choice.straight, move: this.move(c, choice) };
+    c.res = null;
   }
 
   // pick a way through crossing p: straight on (more often), or left / right if that road carries on
   choose(c, p) {
     const r = this.runs[c.run], X = this.streets.crossings[p.i], R = r.R, opts = [];
-    if (c.dir > 0 ? r.a1 > p.a + R + 1 : r.a0 < p.a - R - 1) opts.push({ i: p.i, run: c.run, dir: c.dir, a: p.a + c.dir * R, w: 2, straight: true, alongX: r.alongX });
+    if (c.dir > 0 ? r.a1 > p.a + R + 1 : r.a0 < p.a - R - 1) opts.push({ i: p.i, run: c.run, dir: c.dir, a: p.a + c.dir * R, w: 2, straight: true, alongX: r.alongX, side: 'S' });
     const ok = X.run[r.alongX ? 'z' : 'x'];
     if (ok != null) {
       const o = this.runs[ok], at = r.alongX ? X.z : X.x;
-      for (const d2 of [1, -1]) if (d2 > 0 ? o.a1 > at + R + 1 : o.a0 < at - R - 1) opts.push({ i: p.i, run: ok, dir: d2, a: at + d2 * R, w: 1, straight: false });
+      for (const d2 of [1, -1]) if (d2 > 0 ? o.a1 > at + R + 1 : o.a0 < at - R - 1) {
+        // left or right? (looking down: the way you're going turned a quarter anticlockwise is left)
+        const fx = r.alongX ? c.dir : 0, fz = r.alongX ? 0 : c.dir, ex = o.alongX ? d2 : 0, ez = o.alongX ? 0 : d2;
+        opts.push({ i: p.i, run: ok, dir: d2, a: at + d2 * R, w: 1, straight: false, side: fx * ez - fz * ex < 0 ? 'L' : 'R' });
+      }
     }
     if (!opts.length) return null;
     let pick = this.rand() * opts.reduce((s, o) => s + o.w, 0), choice = opts[0];
@@ -161,10 +182,18 @@ export class Traffic {
   // straight along the same road don't clash), and there's room on the road it's heading for
   clear(c, plan) {
     if (!plan) return true;
-    const from = `${c.run}:${c.dir}`, alongX = this.runs[c.run].alongX;
+    const me = this.move(c, plan), r = this.runs[c.run];
+    const crossA = plan.i >= 0 ? r.pts.find((q) => q.i === plan.i)?.a : null;
     for (const o of this.cars) {
       if (o === c) continue;
-      if (o.turn && o.turn.key === plan.key && o.turn.from !== from && !(o.turn.straight && plan.straight && this.runs[o.turn.next.run].alongX === alongX)) return false;
+      // someone already in the crossing, or about to go (claimed it), on a clashing path
+      if (o.turn && o.turn.key === plan.key && !this.compatible(me, o.turn.move)) return false;
+      if (o.res && o.res.key === plan.key && !this.compatible(me, o.res)) return false;
+      // turning left: wait for a gap in the oncoming traffic (unless it's turning left too)
+      if (me.side === 'L' && crossA != null && !o.turn && o.run === c.run && o.dir === -c.dir && o.v > 1) {
+        const until = (crossA - o.a) * o.dir;
+        if (until > 0 && until < r.R + CAR.gapLeft) return false;
+      }
       // (the road beyond: someone sitting just past the crossing, or about to be)
       const onExit = (!o.turn && o.run === plan.run && o.dir === plan.dir) ? (o.a - plan.a) * plan.dir : null;
       if (onExit != null && onExit > -1 && onExit < CAR.length + CAR.gap + 2 && o.v < 2) return false;
@@ -176,7 +205,7 @@ export class Traffic {
   startUturn(c) {
     const r = this.runs[c.run], E = this.lanePos(r, c.dir, c.a), Xp = this.lanePos(r, -c.dir, c.a);
     const mid = this.lanePos(r, 0, c.a + c.dir * 5);
-    c.turn = { E, C: mid, X: Xp, u: 0, len: 9, next: { run: c.run, dir: -c.dir, a: c.a }, key: `u${c.run}:${c.dir}`, from: `${c.run}:${c.dir}`, straight: false };
+    c.turn = { E, C: mid, X: Xp, u: 0, len: 9, next: { run: c.run, dir: -c.dir, a: c.a }, key: `u${c.run}:${c.dir}`, from: `${c.run}:${c.dir}`, straight: false, move: { from: `${c.run}:${c.dir}`, run: c.run, dir: c.dir, side: 'U' } };
     c.plan = null;
   }
 
