@@ -207,7 +207,10 @@ export const CONFIG = {
     //   onto; mantleMax: ledges up to this above your feet you climb (mantle); reach: how far ahead
     //   (m from your middle) a ledge is found; inset: how far onto the top you end up;
     //   stepTime / mantleTime (+ mantlePerM per metre of height): how long it takes (s)
-    onFoot: { stepDown: 0.5, stepUp: 0.5, mantleMax: 2.2, reach: 0.8, inset: 0.5, stepTime: 0.14, mantleTime: 0.18, mantlePerM: 0.1 },
+    //   jetMax: higher ledges (up to this) he reaches with a burst from the boot and hand jets, then
+    //   pulls over (jetTime + jetPerM per metre); overshoot: how far above the top the arc peaks (m)
+    onFoot: { stepDown: 0.5, stepUp: 0.5, mantleMax: 2.2, reach: 0.8, inset: 0.5, stepTime: 0.14, mantleTime: 0.18, mantlePerM: 0.1,
+              jetMax: 6, jetTime: 0.3, jetPerM: 0.05, overshoot: { step: 0.03, climb: 0.12, jet: 0.4 } },
     // leaving flight: an aggressive brake to a hover. The body swings back leanDeg past upright into
     // the wind (turnGain: how hard it whips round), hands and boots fire forward, height is held
     // (holdGain); slows at up to maxG g. fx: flame flare, camera shake and fov squeeze as it hits.

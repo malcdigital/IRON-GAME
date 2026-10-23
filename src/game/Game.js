@@ -932,9 +932,10 @@ export class Game {
       const sp = Math.hypot(wv.x, wv.z), dx = wv.x / sp, dz = wv.z / sp, feet = b.pos.y - feetH;
       const px = b.pos.x + dx * F.reach, pz = b.pos.z + dz * F.reach;
       let top = -Infinity, tooTall = false;
+      const reachable = (this.twr ?? 0) > 1.05 ? F.jetMax : F.mantleMax;   // (the jets can boost you up higher ledges)
       for (const c of this.boxesAt(px, pz)) {
-        if (c.max.y <= feet + 0.08 || c.min.y > feet + F.mantleMax) continue;   // (below your feet, or overhead)
-        if (c.max.y > feet + F.mantleMax) tooTall = true; else top = Math.max(top, c.max.y);
+        if (c.max.y <= feet + 0.08 || c.min.y > feet + reachable) continue;   // (below your feet, or overhead)
+        if (c.max.y > feet + reachable) tooTall = true; else top = Math.max(top, c.max.y);
       }
       if (!tooTall && top > feet + 0.08) {
         // where to end up: on the top (something there to stand on, room to stand up), as far in as fits
@@ -945,9 +946,11 @@ export class Game {
           if (here.some((c) => Math.abs(c.max.y - top) < 0.06) && here.every((c) => c.max.y <= top + 0.05 || c.min.y >= top + 2.1)) { ok = true; break; }
         }
         if (ok) {
-          const h = top - feet, step = h <= F.stepUp;
-          this.mantle = { t: 0, time: step ? F.stepTime : F.mantleTime + F.mantlePerM * h, kind: step ? 'step' : 'climb', h,
+          const h = top - feet, kind = h <= F.stepUp ? 'step' : h <= F.mantleMax ? 'climb' : 'jet';
+          const time = kind === 'step' ? F.stepTime : kind === 'climb' ? F.mantleTime + F.mantlePerM * h : F.jetTime + F.jetPerM * h;
+          this.mantle = { t: 0, time, kind, h, speed: sp, dir: new THREE.Vector3(dx, 0, dz),
             from: b.pos.clone(), to: new THREE.Vector3(tx, top + feetH, tz), heading: Math.atan2(-dx, -dz) };
+          if (kind === 'jet') events.emit('maneuver');
           return { ...input, ...handsOff };
         }
       }
@@ -967,18 +970,25 @@ export class Game {
     return out;
   }
 
-  // Stepping up / climbing a ledge: up first (hands on the edge, pull and push), then over onto the top
+  // Stepping up / climbing a ledge (or boosting up a high one with the jets): one smooth arc, up
+  // first and over the edge, peaking just above the top, then on at walking speed
   applyMantle(dt) {
-    const m = this.mantle, b = this.body;
+    const m = this.mantle, b = this.body, F = CONFIG.assist.onFoot;
     m.t += dt;
-    const u = Math.min(1, m.t / m.time), ease = (x) => x * x * (3 - 2 * x);
-    const rise = m.kind === 'step' ? 0.5 : 0.62;   // (share of the time spent going up)
-    const up = ease(Math.min(1, u / rise)), over = u < rise ? 0.15 * up : 0.15 + 0.85 * ease((u - rise) / (1 - rise));
-    b.pos.set(m.from.x + (m.to.x - m.from.x) * over, m.from.y + (m.to.y - m.from.y) * up, m.from.z + (m.to.z - m.from.z) * over);
+    const u = Math.min(1, m.t / m.time), s = u * u * (3 - 2 * u);
+    // (a curve from where you are, through a point above the edge, to the spot on top)
+    const peak = m.to.y + (F.overshoot?.[m.kind] ?? 0.1);
+    const cx = m.from.x + (m.to.x - m.from.x) * 0.15, cz = m.from.z + (m.to.z - m.from.z) * 0.15;
+    const a = (1 - s) * (1 - s), k = 2 * (1 - s) * s, c = s * s;
+    b.pos.set(a * m.from.x + k * cx + c * m.to.x, a * m.from.y + k * (2 * peak - (m.from.y + m.to.y) / 2) + c * m.to.y, a * m.from.z + k * cz + c * m.to.z);
     b.vel.set(0, 0, 0); b.angVel.set(0, 0, 0);
     b.quat.setFromAxisAngle(Y, m.heading);
     this.controller.heading = m.heading;
-    if (u >= 1) { this.mantle = null; this.onFoot = true; }
+    m.jet = m.kind === 'jet' ? Math.max(0, 1 - u / 0.6) : 0;   // (the jets fire for the first part)
+    if (u >= 1) {
+      this.mantle = null; this.onFoot = true;
+      b.vel.copy(m.dir).multiplyScalar(Math.min(m.speed, 3));   // (walk straight on: no dead stop)
+    }
   }
 
   // Legs keep you upright while standing

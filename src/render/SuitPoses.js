@@ -520,7 +520,10 @@ export class SuitPoser {
     mo.land = hc < 0.06 ? hc / 0.06 : hc < 0.06 + LD.heroHold ? 1 : Math.max(0, 1 - (hc - 0.06 - LD.heroHold) / LD.heroRise);
     if (flying || game.launchSeq) mo.land = 0;
     const special = { brace: this.brace, flare: mo.flare, launch: mo.launch * (1 - mo.crouch), recover: mo.recover, crouch: Math.max(mo.crouch, mo.hop * 0.7, mo.charge), aircharge: mo.airCharge, land: mo.land, knocked: this.knocked, getup: mo.getup, roll: game.groundRoll ? 1 : 0,
-      mantle: game.mantle?.kind === 'climb' ? Math.min(1, game.mantle.t / (game.mantle.time * 0.2), (game.mantle.time - game.mantle.t) / (game.mantle.time * 0.3)) : 0 };
+      mantle: game.mantle?.kind === 'climb' ? Math.min(1, game.mantle.t / (game.mantle.time * 0.2), (game.mantle.time - game.mantle.t) / (game.mantle.time * 0.3))
+        : game.mantle?.kind === 'jet' ? THREE.MathUtils.clamp(Math.min((game.mantle.t / game.mantle.time - 0.35) / 0.25, (game.mantle.time - game.mantle.t) / (game.mantle.time * 0.25)), 0, 1) : 0 };
+    // boosting up a high ledge: the launch stance (arms down, palms firing) while the jets push, then the mantle
+    if (game.mantle?.kind === 'jet') special.launch = Math.max(special.launch, game.mantle.jet ?? 0);
     // rolling along the ground and getting up: those alone (no shake-off, landing or bracing mixed in)
     if (game.groundRoll || game.getUp) { for (const k in special) if (k !== 'roll' && k !== 'getup') special[k] = 0; mo.recoverClock = 9; }
     let sp = 0;

@@ -409,11 +409,14 @@ export class SuitView {
     }
     // recovery flip after a crash: the jets flare as they drive him round
     if (game.rescue?.phase === 'flip') flare = Math.max(flare, 1.6);
+    const mantleJet = game.mantle?.jet ?? 0;   // (boosting up a high ledge: boots and hands fire)
+    if (mantleJet > 0) flare = Math.max(flare, 1 + 1.2 * mantleJet);
     const vh = this.canvas?.height ?? innerHeight;
     let hz = 0;
     for (const f of this.flames) {
       // (in flight the back and hand jets always show at least an idle burn, even when coasting)
-      const u = flying && f.comp.slot !== 'boots' ? Math.max(f.comp.throttle, TH.idleFlame) : f.comp.throttle;
+      let u = flying && f.comp.slot !== 'boots' ? Math.max(f.comp.throttle, TH.idleFlame) : f.comp.throttle;
+      if (mantleJet > 0 && f.comp.slot !== 'back') u = Math.max(u, mantleJet);
       // (the back thrusters only show in flight; in a hover the hands and boots carry the look)
       // (charging up in a hover: fists clenched, the hand jets go quiet; boots and back hold him up)
       const on = u > 0.02 && f.comp.available > 0 && !this.hideFlames && (flying || f.comp.slot !== 'back') && !(game.chargeAir && f.comp.slot === 'gauntlets');
