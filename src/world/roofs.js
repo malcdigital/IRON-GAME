@@ -8,6 +8,7 @@ import { CONFIG } from '../core/config.js';
 // solar panels or a garden with palms; tall towers get a mast with a red light.
 //
 // Pieces:  { t: 'box', list, s: [sx, sy, sz], p: [x, y, z], col, uw?, uh? }
+//          { t: 'facade', s, p }   (a block with the building's own walls and windows)
 //          { t: 'cyl' | 'cone', list, r, h, p, col, seg? }   { t: 'sphere', list, r, p, col }
 //          { t: 'panel', list, s, p, col, tilt }   (a box tipped back by tilt radians)
 // list: which merged mesh it joins (cap, room, mech, garden, glass, deck, panel, beacon)
@@ -26,6 +27,27 @@ export function layoutRoof(c, index) {
   };
   const solid = (x, z, w, d, y0, y1) => solids.push([x - w / 2, y0, z - d / 2, x + w / 2, y1, z + d / 2]);
 
+  // places on the roof, kept clear of each other and the parapet
+  const taken = [];
+  const spot = (w, d, margin = 1.2) => {
+    for (let tries = 0; tries < 12; tries++) {
+      const x = cx + (rand() - 0.5) * Math.max(0, sx - w - margin * 2), z = cz + (rand() - 0.5) * Math.max(0, sz - d - margin * 2);
+      if (taken.every((r) => Math.abs(r[0] - x) > (r[2] + w) / 2 + 0.6 || Math.abs(r[1] - z) > (r[3] + d) / 2 + 0.6)) { taken.push([x, z, w, d]); return [x, z]; }
+    }
+    return null;
+  };
+  // a stepped-back upper tier on some tall buildings (solid; its windows match the building's)
+  let tier = null;
+  if ((c.kind === 'building' || c.kind === 'skyline') && !c.spire && sy > 28 && rand() < 0.55) {
+    const tw = sx * (0.5 + rand() * 0.2), td = sz * (0.5 + rand() * 0.2), th = 4 * (2 + Math.floor(rand() * 3));
+    const tx = cx + (rand() - 0.5) * (sx - tw) * 0.6, tz = cz + (rand() - 0.5) * (sz - td) * 0.6;
+    pieces.push({ t: 'facade', s: [tw, th, td], p: [tx, top + th / 2, tz] });
+    solids.push([tx - tw / 2, top, tz - td / 2, tx + tw / 2, top + th, tz + td / 2]);
+    box('cap', tw + 0.5, 0.5, td + 0.5, tx, top + th + 0.25, tz, 0xfbf7ef, true);   // (its cornice)
+    box('deck', tw, 0.1, td, tx, top + th + 0.55, tz, 0xd2ccc2, false, 6, 6);
+    taken.push([tx, tz, tw + 1.2, td + 1.2]);
+    tier = { x: tx, z: tz, y: top + th + 0.5, w: tw, d: td };
+  }
   // deck (the building's top is the walking surface)
   const decks = [0xd9d4cc, 0xcfc8bd, 0xc9cbc6, 0xd8cdbd, 0xbfc4bd];
   box('deck', sx, 0.1, sz, cx, top + 0.05, cz, decks[Math.floor(rand() * decks.length)], false, 6, 6);
@@ -39,15 +61,6 @@ export function layoutRoof(c, index) {
     solid(cx, cz + k * (sz / 2 - t / 2 + 0.15), sx + 0.5, t + 0.2, top, top + ph + 0.12);
     solid(cx + k * (sx / 2 - t / 2 + 0.15), cz, t + 0.2, sz + 0.5, top, top + ph + 0.12);
   }
-  // places on the roof, kept clear of each other and the parapet
-  const taken = [];
-  const spot = (w, d, margin = 1.2) => {
-    for (let tries = 0; tries < 12; tries++) {
-      const x = cx + (rand() - 0.5) * Math.max(0, sx - w - margin * 2), z = cz + (rand() - 0.5) * Math.max(0, sz - d - margin * 2);
-      if (taken.every((r) => Math.abs(r[0] - x) > (r[2] + w) / 2 + 0.6 || Math.abs(r[1] - z) > (r[3] + d) / 2 + 0.6)) { taken.push([x, z, w, d]); return [x, z]; }
-    }
-    return null;
-  };
   const area = sx * sz, tall = sy > 45;
   // stair hut with a door
   const hw = Math.min(5, sx * 0.3), hd = Math.min(4, sz * 0.25), hh = 2.6;
@@ -114,12 +127,12 @@ export function layoutRoof(c, index) {
   }
   // tall towers: a mast with a red light
   if (tall || c.kind === 'skyline') {
-    const a = spot(0.6, 0.6, 2);
+    const a = tier ? [tier.x + (rand() - 0.5) * tier.w * 0.5, tier.z + (rand() - 0.5) * tier.d * 0.5] : spot(0.6, 0.6, 2), base = tier ? tier.y : top;
     if (a) {
       const h = 4 + rand() * 5;
-      pieces.push({ t: 'cyl', list: 'mech', r: 0.08, h, p: [a[0], top + h / 2, a[1]], col: 0xc9ccd2, seg: 6 });
-      pieces.push({ t: 'sphere', list: 'beacon', r: 0.22, p: [a[0], top + h + 0.1, a[1]], col: 0xff5a4a });
-      solid(a[0], a[1], 0.3, 0.3, top, top + h + 0.3);
+      pieces.push({ t: 'cyl', list: 'mech', r: 0.08, h, p: [a[0], base + h / 2, a[1]], col: 0xc9ccd2, seg: 6 });
+      pieces.push({ t: 'sphere', list: 'beacon', r: 0.22, p: [a[0], base + h + 0.1, a[1]], col: 0xff5a4a });
+      solid(a[0], a[1], 0.3, 0.3, base, base + h + 0.3);
     }
   }
   return { pieces, palms, solids };

@@ -22,7 +22,7 @@ export class WorldView {
     this.scenery = new CityScenery(scene, world, renderer);
     this.roofPalms = [];
     this.buildPad();
-    this.merge = { facade: [[], [], [], []], cap: [], garden: [], room: [], cliff: [], cliffTop: [], deck: [], mech: [], panel: [], glass: [], beacon: [] };
+    this.merge = { facade: [[], [], [], []], cap: [], garden: [], room: [], cliff: [], cliffTop: [], deck: [], mech: [], panel: [], glass: [], beacon: [], shop: [], awning: [], sign: [] };
     this.buildBoxes();
     this.buildMerged();
     this.buildStreets();
@@ -58,7 +58,8 @@ export class WorldView {
         const col = c.kind === 'skyline' ? (rand() < 0.5 ? 0xf4f1ee : W.pastels[bIndex % W.pastels.length]) : W.pastels[(bIndex * 7 + Math.floor(rand() * 3)) % W.pastels.length];
         this.merge.facade[variant].push(worldBox(size, c.center, col, variant === 3 ? 8 : 6, 4));
         bIndex++;
-        this.roof(c);
+        this.roof(c, variant, col);
+        this.buildingDetail(c, size, variant, col);
         if (c.kind === 'skyline' && c.spire) this.spire(c, size);
         continue;
       }
@@ -124,7 +125,7 @@ export class WorldView {
     this.merge.facade.forEach((list, v) => {
       if (!list.length) return;
       const f = facades[v];
-      const mat = new THREE.MeshStandardMaterial({ map: f.map, emissiveMap: f.lit, emissive: 0xffc68a, emissiveIntensity: 0.9, vertexColors: true, roughness: v === 3 ? 0.35 : 0.85, metalness: v === 3 ? 0.25 : 0 });
+      const mat = new THREE.MeshStandardMaterial({ map: f.map, emissiveMap: f.lit, normalMap: f.normal, normalScale: new THREE.Vector2(1.2, 1.2), emissive: 0xffc68a, emissiveIntensity: 0.9, vertexColors: true, roughness: v === 3 ? 0.35 : 0.85, metalness: v === 3 ? 0.25 : 0 });
       const mesh = new THREE.Mesh(mergeGeometries(list), mat);
       mesh.castShadow = mesh.receiveShadow = true;
       this.group.add(mesh);
@@ -140,6 +141,13 @@ export class WorldView {
       mesh.castShadow = mesh.receiveShadow = true;
       this.group.add(mesh);
     }
+    // street level: the shop band, awnings and signs
+    if (this.merge.shop.length) {
+      const st = shopTextures();
+      this.group.add(Object.assign(new THREE.Mesh(mergeGeometries(this.merge.shop), new THREE.MeshStandardMaterial({ map: st.map, emissiveMap: st.lit, emissive: 0xffd9a0, emissiveIntensity: 1.1, normalMap: st.normal, vertexColors: true, roughness: 0.5 })), { castShadow: true, receiveShadow: true }));
+    }
+    if (this.merge.awning.length) this.group.add(Object.assign(new THREE.Mesh(mergeGeometries(this.merge.awning), new THREE.MeshStandardMaterial({ map: stripeTexture(), vertexColors: true, roughness: 0.9 })), { castShadow: true, receiveShadow: true }));
+    if (this.merge.sign.length) this.group.add(new THREE.Mesh(mergeGeometries(this.merge.sign), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.4, emissive: 0xffffff, emissiveIntensity: 0.15 })));
     // rooftops: the membrane, the machinery, solar panels, skylights and the red lights on the masts
     const roofMats = {
       deck: new THREE.MeshStandardMaterial({ map: roofTexture(), vertexColors: true, roughness: 0.95 }),
@@ -190,11 +198,12 @@ export class WorldView {
   }
 
   // A rooftop: drawn from the world's roof layout (src/world/roofs.js), which the physics shares
-  roof(c) {
+  roof(c, variant = 0, col = 0xffffff) {
     if (!c.roof) return;
     const M = this.merge, V = (a) => new THREE.Vector3(a[0], a[1], a[2]);
     for (const q of c.roof.pieces) {
       const list = M[q.list];
+      if (q.t === 'facade') { M.facade[variant].push(worldBox(V(q.s), V(q.p), col, variant === 3 ? 8 : 6, 4)); continue; }
       if (q.t === 'box') list.push(worldBox(V(q.s), V(q.p), q.col, q.uw, q.uh));
       else if (q.t === 'cyl') list.push(worldCyl(q.r, q.h, V(q.p), q.col, q.seg));
       else if (q.t === 'cone') list.push(worldCone(q.r, q.h, V(q.p), q.col));
@@ -202,6 +211,53 @@ export class WorldView {
       else if (q.t === 'panel') list.push(colorize(new THREE.BoxGeometry(q.s[0], q.s[1], q.s[2]).rotateX(q.tilt).translate(q.p[0], q.p[1], q.p[2]), q.col));
     }
     for (const pl of c.roof.palms) this.roofPalms.push(pl);
+  }
+
+  // The street level and the top of a building: a band of shops round the ground floor (big lit
+  // windows and doors), striped awnings and signs over some of them, a cornice at the top, and
+  // balconies up some of the faces
+  buildingDetail(c, size, variant, col) {
+    const M = this.merge, V = (x, y, z) => new THREE.Vector3(x, y, z), W = CONFIG.world;
+    const top = c.max.y, cx = c.center.x, cz = c.center.z, ground = c.min.y;
+    const glass = variant === 3, city = ground < 0.5 && !String(c.id).startsWith('isl-');
+    // cornice (a projecting band just under the roof line)
+    M.cap.push(worldBox(V(size.x + 0.7, 0.45, size.z + 0.7), V(cx, top - 0.5, cz), 0xf6f0e4));
+    if (!glass && variant === 1 && size.y > 12) M.cap.push(worldBox(V(size.x + 0.35, 0.25, size.z + 0.35), V(cx, ground + 8.4, cz), 0xf2ebdd));   // (a string course over the first floors)
+    if (!city) return;
+    // shop band round the ground floor (just proud of the wall)
+    const sh = 4.4;
+    M.shop.push(worldBox(V(size.x + 0.16, sh, size.z + 0.16), V(cx, ground + sh / 2, cz), glass ? 0xd8e2ea : 0xffffff, 6, sh));
+    M.cap.push(worldBox(V(size.x + 0.5, 0.35, size.z + 0.5), V(cx, ground + sh + 0.17, cz), 0xf4ede0));   // (the shop band's cap)
+    // awnings and signs on two faces (bays every 6 m)
+    const faces = [[1, 0], [-1, 0], [0, 1], [0, -1]].sort(() => rand() - 0.5).slice(0, glass ? 0 : 2);
+    const stripes = [0xe86a5a, 0x4f8fc0, 0x6fae6a, 0xe8a23c, 0xb46ec8, 0x3fa7a0];
+    for (const [fx, fz] of faces) {
+      const len = fx ? size.z : size.x, n = Math.max(1, Math.floor(len / 6)), ac = stripes[Math.floor(rand() * stripes.length)];
+      for (let k = 0; k < n; k++) {
+        if (rand() < 0.3) continue;
+        const along = -len / 2 + (k + 0.5) * (len / n), w = len / n - 1;
+        const ox = fx ? fx * (size.x / 2 + 0.75) : along, oz = fz ? fz * (size.z / 2 + 0.75) : along;
+        // awning: a slab tipped down and out from the wall
+        const g = new THREE.BoxGeometry(fx ? 1.5 : w, 0.08, fx ? w : 1.5);
+        if (fx) g.rotateZ(-fx * 0.35); else g.rotateX(fz * 0.35);
+        g.translate(cx + ox, ground + 3.3, cz + oz);
+        M.awning.push(colorize(g, ac));
+        // sign over it
+        const sx2 = fx ? 0.12 : w * 0.7, sz2 = fx ? w * 0.7 : 0.12;
+        M.sign.push(worldBox(V(sx2, 0.6, sz2), V(cx + (fx ? fx * (size.x / 2 + 0.12) : along), ground + 4.05, cz + (fz ? fz * (size.z / 2 + 0.12) : along)), stripes[Math.floor(rand() * stripes.length)]));
+      }
+    }
+    // balconies (slabs with a rail) up one face of some mid-rise buildings
+    if (!glass && size.y > 14 && size.y < 60 && rand() < 0.4) {
+      const [fx, fz] = [[1, 0], [-1, 0], [0, 1], [0, -1]][Math.floor(rand() * 4)];
+      const len = fx ? size.z : size.x, n = Math.max(1, Math.floor(len / 6));
+      for (let y = ground + 8; y < top - 3; y += 4) for (let k = 0; k < n; k++) {
+        const along = -len / 2 + (k + 0.5) * (len / n), w = Math.min(3, len / n - 1.4);
+        const px = cx + (fx ? fx * (size.x / 2 + 0.6) : along), pz = cz + (fz ? fz * (size.z / 2 + 0.6) : along);
+        M.cap.push(worldBox(V(fx ? 1.2 : w, 0.18, fx ? w : 1.2), V(px, y, pz), 0xf3eee5));
+        M.cap.push(worldBox(V(fx ? 0.08 : w, 0.9, fx ? w : 0.08), V(px + fx * 0.56, y + 0.5, pz + fz * 0.56), 0xe9e2d6));
+      }
+    }
   }
 
   spire(c, size) {
@@ -283,28 +339,106 @@ export class WorldView {
   }
 }
 
-// Facade textures: pale wall (tinted by the building colour) with rows of windows, and a matching
-// glow map where some windows are lit warm (the sun is going down). glass: the skyline's curtain walls.
+// Facade textures (one floor, 6 m wide; tinted by the building colour): stucco wall with framed,
+// recessed windows (sills, lintels, mullions), a matching glow map (some windows lit warm at sunset)
+// and a bump map so the windows sit back into the wall. glass: the skyline's curtain walls.
 function facadeTextures(variant, glass = false) {
-  const W = 64, H = 64;
-  const c = document.createElement('canvas'), l = document.createElement('canvas');
-  c.width = l.width = W; c.height = l.height = H;
-  const g = c.getContext('2d'), gl = l.getContext('2d');
-  g.fillStyle = glass ? '#c9d8e4' : '#ffffff'; g.fillRect(0, 0, W, H);
-  gl.fillStyle = '#000'; gl.fillRect(0, 0, W, H);
-  const cols = glass ? 4 : [2, 3, 2][variant], rows = glass ? 4 : 2;
-  const cw = W / cols, rh = H / rows;
-  for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
-    const wx = x * cw + (glass ? 1 : cw * 0.22), wy = y * rh + (glass ? 1 : rh * 0.25), ww = glass ? cw - 2 : cw * 0.56, wh = glass ? rh - 2 : rh * 0.5;
-    g.fillStyle = glass ? (Math.random() < 0.5 ? '#7fa3c2' : '#9cb8cf') : '#6e8fae';
-    g.fillRect(wx, wy, ww, wh);
-    if (!glass) { g.fillStyle = 'rgba(255,255,255,0.35)'; g.fillRect(wx, wy + wh, ww, 2); }   // (sill)
-    if (Math.random() < CONFIG.world.litWindows) { gl.fillStyle = Math.random() < 0.5 ? '#ffcf8a' : '#ffb766'; gl.fillRect(wx, wy, ww, wh); }
+  const S = 256, c = document.createElement('canvas'), l = document.createElement('canvas'), hgt = document.createElement('canvas');
+  c.width = c.height = l.width = l.height = hgt.width = hgt.height = S;
+  const g = c.getContext('2d'), gl = l.getContext('2d'), gh = hgt.getContext('2d');
+  gl.fillStyle = '#000'; gl.fillRect(0, 0, S, S);
+  gh.fillStyle = 'rgb(128,128,128)'; gh.fillRect(0, 0, S, S);
+  const rect = (ctx, col, x, y, w, h) => { ctx.fillStyle = col; ctx.fillRect(x, y, w, h); };
+  if (glass) {
+    rect(g, '#c9d8e4', 0, 0, S, S);
+    const cols = 4, rows = 2, cw = S / cols, rh = S / rows;
+    for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
+      const tint = 110 + Math.random() * 40;
+      rect(g, `rgb(${tint - 20},${tint + 15},${tint + 50})`, x * cw + 4, y * rh + 4, cw - 8, rh * 0.72);
+      rect(g, '#9fb3c4', x * cw + 4, y * rh + rh * 0.72 + 4, cw - 8, rh * 0.28 - 8);   // (spandrel)
+      rect(gh, 'rgb(100,100,100)', x * cw + 4, y * rh + 4, cw - 8, rh * 0.72);
+      if (Math.random() < CONFIG.world.litWindows) rect(gl, Math.random() < 0.5 ? '#ffcf8a' : '#ffb766', x * cw + 4, y * rh + 4, cw - 8, rh * 0.72);
+    }
+    for (let x = 0; x <= S; x += S / 4) { rect(g, '#e8eef3', x - 3, 0, 6, S); rect(gh, 'rgb(170,170,170)', x - 3, 0, 6, S); }   // (mullions)
+  } else {
+    rect(g, '#ffffff', 0, 0, S, S);
+    for (let i = 0; i < 2500; i++) { const v = 225 + Math.random() * 30; g.fillStyle = `rgba(${v},${v - 4},${v - 8},0.45)`; g.fillRect(Math.random() * S, Math.random() * S, 2, 2); }   // (stucco)
+    rect(g, 'rgba(0,0,0,0.05)', 0, S - 10, S, 10); rect(gh, 'rgb(150,150,150)', 0, S - 10, S, 10);   // (floor band)
+    const cols = [2, 3, 1][variant], cw = S / cols;
+    for (let x = 0; x < cols; x++) {
+      const ribbon = variant === 2;
+      const ww = ribbon ? cw * 0.86 : cw * (cols === 3 ? 0.5 : 0.44), wh = ribbon ? S * 0.4 : S * 0.5;
+      const wx = x * cw + (cw - ww) / 2, wy = S * (ribbon ? 0.3 : 0.2);
+      rect(g, '#f4efe6', wx - 6, wy - 6, ww + 12, wh + 12);   // (frame)
+      rect(gh, 'rgb(170,170,170)', wx - 6, wy - 6, ww + 12, wh + 12);
+      const grd = g.createLinearGradient(0, wy, 0, wy + wh);
+      grd.addColorStop(0, '#8fb0cc'); grd.addColorStop(1, '#5d7d9c');
+      g.fillStyle = grd; g.fillRect(wx, wy, ww, wh);
+      rect(gh, 'rgb(40,40,40)', wx, wy, ww, wh);   // (recessed glass)
+      rect(g, 'rgba(255,255,255,0.25)', wx + 3, wy + 3, ww * 0.35, wh * 0.5);   // (a glint)
+      // mullions
+      rect(g, '#efe9df', wx + ww / 2 - 2, wy, 4, wh); rect(gh, 'rgb(120,120,120)', wx + ww / 2 - 2, wy, 4, wh);
+      if (!ribbon) { rect(g, '#efe9df', wx, wy + wh * 0.35, ww, 4); rect(gh, 'rgb(120,120,120)', wx, wy + wh * 0.35, ww, 4); }
+      // sill and lintel
+      rect(g, '#fbf8f2', wx - 10, wy + wh + 6, ww + 20, 8); rect(gh, 'rgb(215,215,215)', wx - 10, wy + wh + 6, ww + 20, 8);
+      rect(g, 'rgba(0,0,0,0.12)', wx - 10, wy + wh + 14, ww + 20, 4);   // (its shadow)
+      if (!ribbon) { rect(g, '#f6f1e8', wx - 8, wy - 16, ww + 16, 10); rect(gh, 'rgb(190,190,190)', wx - 8, wy - 16, ww + 16, 10); }
+      if (Math.random() < CONFIG.world.litWindows * 1.3) { gl.fillStyle = Math.random() < 0.5 ? '#ffcf8a' : '#ffb766'; gl.fillRect(wx, wy, ww, wh); }
+    }
+    if (variant === 1) { rect(g, 'rgba(0,0,0,0.07)', 0, 4, S, 6); rect(gh, 'rgb(175,175,175)', 0, 2, S, 8); }   // (a ledge)
   }
-  if (!glass && variant === 1) { g.fillStyle = 'rgba(0,0,0,0.06)'; g.fillRect(0, H / 2 - 2, W, 3); }   // (a ledge)
-  const map = new THREE.CanvasTexture(c), lit = new THREE.CanvasTexture(l);
-  for (const t of [map, lit]) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.magFilter = THREE.LinearFilter; }
-  return { map, lit };
+  const map = new THREE.CanvasTexture(c), lit = new THREE.CanvasTexture(l), normal = heightToNormal(hgt, 3);
+  for (const t of [map, lit, normal]) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; }
+  map.colorSpace = lit.colorSpace = THREE.SRGBColorSpace;
+  return { map, lit, normal };
+}
+
+// Shop fronts (ground floor, 6 m bays): a big window (some lit warm), a door, a kick plate
+function shopTextures() {
+  const S = 256, c = document.createElement('canvas'), l = document.createElement('canvas'), hgt = document.createElement('canvas');
+  c.width = c.height = l.width = l.height = hgt.width = hgt.height = S;
+  const g = c.getContext('2d'), gl = l.getContext('2d'), gh = hgt.getContext('2d');
+  const rect = (ctx, col, x, y, w, h) => { ctx.fillStyle = col; ctx.fillRect(x, y, w, h); };
+  rect(g, '#f2ece2', 0, 0, S, S); rect(gl, '#000', 0, 0, S, S); rect(gh, 'rgb(128,128,128)', 0, 0, S, S);
+  // window
+  const grd = g.createLinearGradient(0, 40, 0, 220); grd.addColorStop(0, '#7f9fb8'); grd.addColorStop(1, '#4a6178');
+  g.fillStyle = grd; g.fillRect(14, 40, 160, 180); rect(gh, 'rgb(50,50,50)', 14, 40, 160, 180);
+  rect(g, '#3b3f48', 10, 36, 168, 4); rect(g, '#3b3f48', 10, 220, 168, 6); rect(g, '#3b3f48', 92, 40, 4, 180);
+  rect(g, 'rgba(255,255,255,0.18)', 20, 46, 60, 90);
+  if (Math.random() < 0.7) { gl.fillStyle = '#ffd7a0'; gl.fillRect(14, 40, 160, 180); }
+  // door
+  rect(g, '#2f3540', 190, 60, 52, 170); rect(gh, 'rgb(60,60,60)', 190, 60, 52, 170);
+  rect(g, '#7f9fb8', 198, 70, 36, 110); rect(g, '#c9a24a', 230, 140, 6, 14);
+  rect(gl, '#ffcf8a', 198, 70, 36, 110);
+  rect(g, '#cfc6b8', 0, 226, S, 30); rect(gh, 'rgb(150,150,150)', 0, 226, S, 30);   // (kick plate)
+  const map = new THREE.CanvasTexture(c), lit = new THREE.CanvasTexture(l), normal = heightToNormal(hgt, 3);
+  for (const t of [map, lit, normal]) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; }
+  map.colorSpace = lit.colorSpace = THREE.SRGBColorSpace;
+  return { map, lit, normal };
+}
+
+// Awning canvas: bold stripes on white (tinted by the awning colour)
+function stripeTexture() {
+  const c = document.createElement('canvas'); c.width = 64; c.height = 8;
+  const g = c.getContext('2d');
+  for (let x = 0; x < 64; x += 16) { g.fillStyle = '#ffffff'; g.fillRect(x, 0, 8, 8); g.fillStyle = '#d8d0c8'; g.fillRect(x + 8, 0, 8, 8); }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+// A height canvas (grey: 128 = flat) to a normal map (Sobel slopes)
+function heightToNormal(canvas, strength = 2) {
+  const S = canvas.width, H = canvas.height, src = canvas.getContext('2d').getImageData(0, 0, S, H).data;
+  const out = document.createElement('canvas'); out.width = S; out.height = H;
+  const og = out.getContext('2d'), img = og.createImageData(S, H), d = img.data;
+  const h = (x, y) => src[(((y + H) % H) * S + ((x + S) % S)) * 4] / 255;
+  for (let y = 0; y < H; y++) for (let x = 0; x < S; x++) {
+    const dx = (h(x + 1, y) - h(x - 1, y)) * strength, dy = (h(x, y + 1) - h(x, y - 1)) * strength;
+    const n = 1 / Math.hypot(dx, dy, 1), i = (y * S + x) * 4;
+    d[i] = (-dx * n * 0.5 + 0.5) * 255; d[i + 1] = (dy * n * 0.5 + 0.5) * 255; d[i + 2] = (n * 0.5 + 0.5) * 255; d[i + 3] = 255;
+  }
+  og.putImageData(img, 0, 0);
+  return new THREE.CanvasTexture(out);
 }
 
 // A box as geometry placed in the world, with its colour in the vertex colours and its texture
